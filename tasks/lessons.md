@@ -7,3 +7,4 @@
 - Before moving to the next milestone, add short Chinese Python comments at the top of the most relevant code files using `q1/a1`, `q2/a2` style interview notes. Important business/security modules may include more than one Q&A.
 - Code-top interview notes should read like an interviewer can understand without seeing the surrounding code: start from product/business context, then implementation, then follow-up questions.
 - At the end of each phase, write a richer HTML review note under `docs/notes/phaseN.html` that explains the phase from business requirement, architecture, safety boundary, verification, and interview angles.
+- For HTML review notes, keep navigation sticky during scroll and make code blocks readable without relying on dark, low-contrast styling. Borrow the "HTML artifact as teaching material" style, but preserve this project's own visual identity.

@@ -48,10 +48,16 @@
       }
 
       aside {
+        background: rgba(250, 249, 245, 0.92);
+        border-bottom: 1.5px solid var(--g300);
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
         padding: 26px 0 0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
       }
 
       aside strong {
@@ -328,8 +334,9 @@
       pre {
         overflow: auto;
         border-radius: 10px;
-        background: #111827;
-        color: #e5e7eb;
+        background: #fffdfa;
+        border: 1.5px solid var(--g300);
+        color: var(--slate);
         padding: 16px;
       }
 

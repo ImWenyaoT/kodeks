@@ -1,3 +1,10 @@
+# q1: coding agent 为什么需要 shell harness？
+# a1: 只会读写文件还不够，agent 还需要运行测试、格式化、lint、启动服务等命令，才能形成“修改代码 -> 验证结果 -> 继续修复”的工程闭环。
+# q2: 为什么不能把系统 shell 直接暴露给模型？
+# a2: shell 可以删除文件、修改权限、联网执行脚本，甚至让进程长期卡住；所以这里先用 service 层统一限制工作目录、超时和危险命令拦截。
+# q3: 第一版危险命令识别解决了什么业务风险？还有什么局限？
+# a3: 它先把 rm/sudo/git reset/curl|sh 等明显高风险命令转成 approval_required，避免 agent 静默破坏 workspace；但 regex 只是 MVP guardrail，后续还要做 approval id、审计日志和更严格的命令解析。
+
 import re
 import subprocess
 from dataclasses import dataclass

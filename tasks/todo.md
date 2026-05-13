@@ -29,10 +29,12 @@
 
 ## Phase 3: OpenAI Chat Baseline
 
-- [ ] 封装 OpenAI client。
-- [ ] 实现非流式普通聊天接口。
-- [ ] 明确 message/request/response 的 Pydantic schema。
-- [ ] 验证 Responses API 最小调用成功。
+- [ ] 阅读官方 Responses API 最小调用方式，并确定本项目第一版请求/响应边界。
+- [ ] 新建 OpenAI client/service 层，让 API route 不直接依赖 SDK 细节。
+- [ ] 明确 chat request/response 的 Pydantic schema。
+- [ ] 实现非流式普通聊天接口，先只支持纯文本输入输出。
+- [ ] 处理缺少 `OPENAI_API_KEY` 的错误，让失败信息对开发者可读。
+- [ ] 验证 Responses API 最小调用成功，记录真实请求结果或环境阻塞原因。
 
 ## Phase 4: Streaming
 
@@ -81,4 +83,5 @@
 - Phase 2 验证记录：`pwd` 返回 workspace root，`ls` 返回项目文件，长时间命令返回 408 timeout。
 - 危险命令验证记录：`rm -rf`、`rm -fr`、`sudo`、`git reset --hard`、`git clean -fd`、`chmod -R`、`curl | sh/bash`、`wget | sh/bash` 均返回 `approval_required=true`，不执行。
 - Phase 2 完成态：shell harness 已具备受控工作目录、timeout、结构化输出和第一版危险命令拦截。
-- 下一步：为 Phase 2 写 `docs/notes/phase2.html` 复盘，然后进入 Phase 3 OpenAI Chat Baseline。
+- Phase 2 复盘文档：`docs/notes/phase2.html` 已记录 shell harness 的业务需求、架构设计、安全边界、验证结果和面试表达。
+- 下一步：进入 Phase 3 OpenAI Chat Baseline。第一版目标不是 agent loop，而是先证明后端能稳定调用 OpenAI Responses API 并返回纯文本结果。
