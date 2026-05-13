@@ -12,12 +12,12 @@
 
 ## Phase 1: Workspace Tools Without AI
 
-- [ ] 实现 workspace root 配置。
-- [ ] 实现安全路径解析，只允许访问 workspace 内文件。
-- [ ] 实现文件列表接口。
-- [ ] 实现 `read_file` 工具。
-- [ ] 实现 `write_file` 工具。
-- [ ] 为路径逃逸、文件不存在、写入成功补测试或手动验证记录。
+- [x] 实现 workspace root 配置。
+- [x] 实现安全路径解析，只允许访问 workspace 内文件。
+- [x] 实现文件列表接口。
+- [x] 实现 `read_file` 工具。
+- [x] 实现 `write_file` 工具。
+- [x] 为路径逃逸、文件不存在、写入成功补测试或手动验证记录。
 
 ## Phase 2: Shell Harness Without AI
 
@@ -70,4 +70,11 @@
 
 - 当前状态：Phase 0 已完成。`src/kodeks/` package、FastAPI app、route 拆分、`/health` 都已跑通。
 - 验证记录：`env PYTHONPATH=src UV_CACHE_DIR=/tmp/uv-cache uv run python -m uvicorn kodeks.main:app --port 8010` 启动成功，`curl http://127.0.0.1:8010/health` 返回 `{"status":"ok"}`。
-- 下一步：进入 Phase 1，只做 workspace 文件工具，不接 OpenAI。
+- Phase 1 当前状态：workspace root 已指向 repo 根目录，`/api/workspace/files` 已能返回过滤后的相对文件列表。
+- 当前工程意义：已经做出 coding agent 的第一层 workspace boundary，让后续 agent 不直接面对整台机器文件系统。
+- `read_file` 验证记录：`README.md` 返回 200，`missing.txt` 返回 404，`../../.ssh/id_rsa` 返回 403。
+- 面试表达：我把模型可操作范围限制在 workspace 内，通过 resolved path containment check 防止路径逃逸。
+- `write_file` 验证记录：临时 workspace 内 `output/probe.txt` 写入成功并可读回，`../../.ssh/id_rsa` 返回 403，`.git/config` read/write 均返回 403。
+- Phase 1 完成态：list/read/write 已共用 workspace containment + internal path blocking 策略。
+- Phase 1 复盘文档：`docs/notes/phase1.html` 已记录业务需求、架构设计、安全边界、验证结果和面试表达。
+- 下一步：进入 Phase 2，实现 shell harness。先做只读/低风险命令执行，再加危险命令 approval。
