@@ -21,11 +21,11 @@
 
 ## Phase 2: Shell Harness Without AI
 
-- [ ] 实现 `run_shell` 服务，使用受控工作目录执行命令。
-- [ ] 实现命令超时、stdout、stderr、exit code 返回。
-- [ ] 实现危险命令识别。
-- [ ] 危险命令先返回 `approval_required`，不直接执行。
-- [ ] 为安全命令和危险命令补验证记录。
+- [x] 实现 `run_shell` 服务，使用受控工作目录执行命令。
+- [x] 实现命令超时、stdout、stderr、exit code 返回。
+- [x] 实现危险命令识别。
+- [x] 危险命令先返回 `approval_required`，不直接执行。
+- [x] 为安全命令和危险命令补验证记录。
 
 ## Phase 3: OpenAI Chat Baseline
 
@@ -77,4 +77,8 @@
 - `write_file` 验证记录：临时 workspace 内 `output/probe.txt` 写入成功并可读回，`../../.ssh/id_rsa` 返回 403，`.git/config` read/write 均返回 403。
 - Phase 1 完成态：list/read/write 已共用 workspace containment + internal path blocking 策略。
 - Phase 1 复盘文档：`docs/notes/phase1.html` 已记录业务需求、架构设计、安全边界、验证结果和面试表达。
-- 下一步：进入 Phase 2，实现 shell harness。先做只读/低风险命令执行，再加危险命令 approval。
+- Phase 2 当前状态：基础 shell harness 已能在 workspace root 执行命令，并返回 command、exit_code、stdout、stderr。
+- Phase 2 验证记录：`pwd` 返回 workspace root，`ls` 返回项目文件，长时间命令返回 408 timeout。
+- 危险命令验证记录：`rm -rf`、`rm -fr`、`sudo`、`git reset --hard`、`git clean -fd`、`chmod -R`、`curl | sh/bash`、`wget | sh/bash` 均返回 `approval_required=true`，不执行。
+- Phase 2 完成态：shell harness 已具备受控工作目录、timeout、结构化输出和第一版危险命令拦截。
+- 下一步：为 Phase 2 写 `docs/notes/phase2.html` 复盘，然后进入 Phase 3 OpenAI Chat Baseline。

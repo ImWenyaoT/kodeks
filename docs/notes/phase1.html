@@ -6,16 +6,26 @@
     <title>Phase 1 复盘：Workspace 文件能力</title>
     <style>
       :root {
-        --ink: #172033;
-        --muted: #65758b;
-        --line: #d9e1ec;
-        --panel: #ffffff;
-        --soft: #f6f8fb;
-        --blue: #2563eb;
+        --ivory: #faf9f5;
+        --paper: #ffffff;
+        --slate: #141413;
+        --clay: #d97757;
+        --clay-d: #b85c3e;
+        --oat: #e3dacc;
+        --olive: #788c5d;
+        --g100: #f0eee6;
+        --g200: #e6e3da;
+        --g300: #d1cfc5;
+        --g500: #87867f;
+        --g700: #3d3d3a;
+        --line: #d1cfc5;
+        --muted: #87867f;
         --green: #12805c;
         --amber: #b7791f;
         --red: #c2410c;
-        --purple: #7653d3;
+        --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
       }
 
       * {
@@ -24,48 +34,48 @@
 
       body {
         margin: 0;
-        background:
-          linear-gradient(180deg, #eef4ff 0, #ffffff 280px),
-          #ffffff;
-        color: var(--ink);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.65;
+        background: var(--ivory);
+        color: var(--slate);
+        font-family: var(--sans);
+        line-height: 1.58;
+        -webkit-font-smoothing: antialiased;
       }
 
       .shell {
-        display: grid;
-        grid-template-columns: 220px minmax(0, 1fr);
-        gap: 28px;
-        max-width: 1180px;
+        max-width: 1120px;
         margin: 0 auto;
-        padding: 32px 24px 64px;
+        padding: 0 32px 96px;
       }
 
       aside {
-        position: sticky;
-        top: 24px;
-        align-self: start;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.86);
-        padding: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 26px 0 0;
       }
 
       aside strong {
-        display: block;
-        margin-bottom: 10px;
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        margin-right: 6px;
+        padding: 7px 0;
+        text-transform: uppercase;
       }
 
       aside a {
-        display: block;
-        color: var(--muted);
+        border: 1.5px solid var(--g300);
+        border-radius: 999px;
+        color: var(--g700);
         text-decoration: none;
-        padding: 7px 0;
-        font-size: 14px;
+        padding: 7px 14px;
+        font-size: 12.5px;
       }
 
       aside a:hover {
-        color: var(--blue);
+        border-color: var(--clay);
+        color: var(--clay-d);
       }
 
       main {
@@ -73,21 +83,38 @@
       }
 
       header {
-        padding: 12px 0 24px;
+        border-bottom: 1.5px solid var(--g300);
+        margin-bottom: 12px;
+        padding: 80px 0 56px;
       }
 
       .eyebrow {
-        color: var(--blue);
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+        align-items: center;
+        color: var(--g500);
+        display: flex;
+        font-family: var(--mono);
         font-size: 13px;
+        gap: 12px;
+        letter-spacing: 0.12em;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        background: var(--clay);
+        content: "";
+        height: 1.5px;
+        width: 24px;
       }
 
       h1 {
-        margin: 8px 0 12px;
-        font-size: 42px;
-        line-height: 1.08;
+        font-family: var(--serif);
+        font-size: clamp(38px, 5.4vw, 62px);
+        font-weight: 500;
+        letter-spacing: -0.018em;
+        line-height: 1.06;
+        margin: 0 0 8px;
+        max-width: 17ch;
       }
 
       h2 {
@@ -106,16 +133,92 @@
 
       section {
         margin-top: 24px;
-        border: 1px solid var(--line);
+        border: 1.5px solid var(--g300);
         border-radius: 12px;
-        background: var(--panel);
+        background: var(--paper);
         padding: 24px;
       }
 
       .lead {
-        max-width: 780px;
-        color: #324256;
-        font-size: 18px;
+        color: var(--g700);
+        font-size: 16.5px;
+        max-width: 620px;
+      }
+
+      .hero-grid {
+        align-items: end;
+        display: grid;
+        gap: 48px;
+        grid-template-columns: 1fr 340px;
+      }
+
+      .hero-fig {
+        align-items: end;
+        display: grid;
+        gap: 14px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .hero-fig .pane {
+        aspect-ratio: 4 / 5;
+        background: var(--paper);
+        border: 1.5px solid var(--g300);
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        padding: 14px;
+        position: relative;
+      }
+
+      .hero-fig .pane.md {
+        background: var(--g100);
+        transform: rotate(-2.5deg) translateY(6px);
+      }
+
+      .hero-fig .pane.html {
+        border-color: var(--slate);
+        box-shadow: 0 12px 32px rgba(20, 20, 19, 0.10);
+        transform: rotate(1.5deg);
+      }
+
+      .hero-fig .tag {
+        background: var(--ivory);
+        border: 1.5px solid var(--g300);
+        border-radius: 6px;
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 9.5px;
+        left: 12px;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        position: absolute;
+        text-transform: uppercase;
+        top: -10px;
+      }
+
+      .hero-fig .pane.html .tag {
+        border-color: var(--slate);
+        color: var(--slate);
+      }
+
+      .hero-fig .l {
+        background: var(--g300);
+        border-radius: 3px;
+        height: 6px;
+      }
+
+      .hero-fig .w90 { width: 90%; }
+      .hero-fig .w75 { width: 75%; }
+      .hero-fig .w60 { width: 60%; }
+      .hero-fig .w82 { width: 82%; }
+      .hero-fig .w70 { width: 70%; }
+      .hero-fig .w50 { width: 50%; }
+
+      .hero-fig .blk {
+        background: linear-gradient(135deg, var(--oat), #ece1cf);
+        border-radius: 5px;
+        flex: 1;
       }
 
       .cards {
@@ -126,14 +229,14 @@
       }
 
       .card {
-        border: 1px solid var(--line);
+        border: 1.5px solid var(--g300);
         border-radius: 10px;
-        background: var(--soft);
+        background: var(--g100);
         padding: 16px;
       }
 
       .card .label {
-        color: var(--muted);
+        color: var(--g500);
         font-size: 13px;
       }
 
@@ -158,8 +261,8 @@
       }
 
       .tag.blue {
-        background: #eaf1ff;
-        color: var(--blue);
+        background: #f4ede3;
+        color: var(--clay-d);
       }
 
       .tag.amber {
@@ -180,10 +283,10 @@
       }
 
       .step {
-        border: 1px solid var(--line);
+        border: 1.5px solid var(--g300);
         border-radius: 10px;
         padding: 14px;
-        background: #fbfcff;
+        background: #fffdfa;
         min-height: 116px;
       }
 
@@ -193,7 +296,7 @@
       }
 
       .step span {
-        color: var(--muted);
+        color: var(--g500);
         font-size: 14px;
       }
 
@@ -217,7 +320,7 @@
       }
 
       code {
-        background: #eef2f7;
+        background: var(--g100);
         border-radius: 5px;
         padding: 2px 5px;
       }
@@ -237,7 +340,7 @@
       }
 
       .qa {
-        border: 1px solid var(--line);
+        border: 1.5px solid var(--g300);
         border-radius: 10px;
         padding: 16px;
         margin: 12px 0;
@@ -246,12 +349,12 @@
       .qa strong {
         display: block;
         margin-bottom: 7px;
-        color: var(--purple);
+        color: var(--clay-d);
       }
 
       .callout {
-        border-left: 4px solid var(--blue);
-        background: #eff6ff;
+        border-left: 4px solid var(--clay);
+        background: #fff7ed;
         border-radius: 8px;
         padding: 14px 16px;
       }
@@ -262,18 +365,12 @@
       }
 
       .source a {
-        color: var(--blue);
+        color: var(--clay-d);
       }
 
       @media (max-width: 860px) {
         .shell {
-          display: block;
-          padding: 24px 16px 48px;
-        }
-
-        aside {
-          position: static;
-          margin-bottom: 18px;
+          padding: 0 18px 56px;
         }
 
         h1 {
@@ -282,8 +379,13 @@
 
         .cards,
         .flow,
-        .split {
+        .split,
+        .hero-grid {
           grid-template-columns: 1fr;
+        }
+
+        .hero-fig {
+          max-width: 400px;
         }
       }
     </style>
@@ -303,13 +405,36 @@
 
       <main>
         <header id="summary">
-          <div class="eyebrow">kodeks · Phase 1</div>
-          <h1>Workspace 文件能力：让 agent 有手，但只能伸到该伸的地方</h1>
-          <p class="lead">
-            这一阶段不是普通 CRUD，而是在构建 coding agent runtime 的第一层能力：
-            agent 可以看到、读取、写入项目文件，但必须被限制在 workspace 内，并且不能碰
-            <code>.git</code>、<code>.venv</code>、缓存目录等内部路径。
-          </p>
+          <div class="hero-grid">
+            <div>
+              <div class="eyebrow">kodeks · Phase 1</div>
+              <h1>Workspace 文件能力：让 agent 有手，但只能伸到该伸的地方</h1>
+              <p class="lead">
+                这一阶段不是普通 CRUD，而是在构建 coding agent runtime 的第一层能力：
+                agent 可以看到、读取、写入项目文件，但必须被限制在 workspace 内，并且不能碰
+                <code>.git</code>、<code>.venv</code>、缓存目录等内部路径。
+              </p>
+            </div>
+
+            <div class="hero-fig" aria-label="Markdown note versus HTML artifact">
+              <div class="pane md">
+                <span class="tag">Markdown</span>
+                <div class="l w90"></div>
+                <div class="l w75"></div>
+                <div class="l w60"></div>
+                <div class="l w82"></div>
+                <div class="l w70"></div>
+                <div class="l w50"></div>
+              </div>
+              <div class="pane html">
+                <span class="tag">HTML artifact</span>
+                <div class="l w90"></div>
+                <div class="blk"></div>
+                <div class="l w70"></div>
+                <div class="l w50"></div>
+              </div>
+            </div>
+          </div>
 
           <div class="cards">
             <div class="card">
