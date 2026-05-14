@@ -521,10 +521,11 @@ core/config.py
       </section>
 
       <section id="handoff">
-        <h2>6. Phase 3 Handoff：OpenAI Chat Baseline</h2>
+        <h2>6. Phase 3 Handoff：Streaming-First Event Baseline</h2>
         <p>
           Phase 1 和 Phase 2 已经把 agent 的“身体”做出来：能读写文件、能运行命令、能阻止明显危险操作。
-          Phase 3 才开始接 OpenAI Responses API，先做最小普通聊天，不接 tools，不做 streaming。
+          Phase 3 接入 OpenAI Responses API 时不再先做普通 blocking chat，而是直接定义 streaming event contract。
+          这是因为 coding agent 后续要持续报告文本、工具调用、工具结果和错误状态。
         </p>
         <table>
           <thead>
@@ -536,19 +537,19 @@ core/config.py
           </thead>
           <tbody>
             <tr>
-              <td>封装 OpenAI client</td>
-              <td>把模型供应商调用集中管理。</td>
-              <td>能创建 client，环境变量缺失时有清晰错误。</td>
+              <td>封装 outbound API client</td>
+              <td>把 OpenAI Responses API 细节隔离在 <code>services/api</code> 层。</td>
+              <td>缺 key、空 stream、失败 stream 都能映射成 kodeks event。</td>
             </tr>
             <tr>
-              <td>普通聊天接口</td>
-              <td>让后端可以完成一次最小模型请求。</td>
-              <td><code>POST /api/chat</code> 返回 assistant 文本。</td>
+              <td>SSE chat stream</td>
+              <td>让前端或 CLI 可以边生成边渲染。</td>
+              <td><code>POST /api/chat/stream</code> 返回 <code>text_delta</code> 和终态事件。</td>
             </tr>
             <tr>
-              <td>请求/响应 schema</td>
-              <td>为后续 streaming 和 tool loop 打基础。</td>
-              <td>message 输入结构稳定。</td>
+              <td>runtime event contract</td>
+              <td>为 Phase 4 session 和 Phase 5 tool loop 打基础。</td>
+              <td>事件类型包含 <code>text_delta</code>、<code>response_completed</code>、<code>error</code>，并预留工具事件。</td>
             </tr>
           </tbody>
         </table>

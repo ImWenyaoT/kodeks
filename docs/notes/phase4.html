@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Phase 4 复盘：Conversation State</title>
+    <style>
+      :root {
+        --ivory: #faf9f5;
+        --paper: #ffffff;
+        --slate: #171714;
+        --clay: #d97757;
+        --clay-d: #b85c3e;
+        --g300: #d1cfc5;
+        --g500: #87867f;
+        --g700: #3d3d3a;
+        --green: #12805c;
+        --amber: #b7791f;
+        --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--ivory);
+        color: var(--slate);
+        font-family: var(--sans);
+        line-height: 1.6;
+      }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 32px 88px;
+      }
+
+      nav {
+        background: rgba(250, 249, 245, 0.92);
+        border-bottom: 1.5px solid var(--g300);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 24px 0 10px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+      }
+
+      nav strong {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        margin-right: 6px;
+        padding: 7px 0;
+        text-transform: uppercase;
+      }
+
+      nav a {
+        border: 1.5px solid var(--g300);
+        border-radius: 999px;
+        color: var(--g700);
+        font-size: 12.5px;
+        padding: 7px 14px;
+        text-decoration: none;
+      }
+
+      header {
+        border-bottom: 1.5px solid var(--g300);
+        padding: 72px 0 46px;
+      }
+
+      .eyebrow {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-family: var(--serif);
+        font-size: clamp(38px, 5.4vw, 60px);
+        font-weight: 500;
+        line-height: 1.06;
+        margin: 0 0 14px;
+        max-width: 18ch;
+      }
+
+      h2 {
+        font-family: var(--serif);
+        font-size: 32px;
+        font-weight: 500;
+        margin: 0 0 18px;
+      }
+
+      p { margin: 0 0 16px; }
+
+      section {
+        border-bottom: 1.5px solid var(--g300);
+        padding: 44px 0;
+      }
+
+      .lead {
+        color: var(--g700);
+        font-size: 18px;
+        max-width: 760px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .panel,
+      .qa {
+        background: var(--paper);
+        border: 1.5px solid var(--g300);
+        border-radius: 8px;
+        padding: 22px;
+      }
+
+      .panel strong,
+      .qa strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      code,
+      pre {
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+
+      pre {
+        background: var(--slate);
+        border-radius: 8px;
+        color: #f8f5ed;
+        overflow-x: auto;
+        padding: 18px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--g300);
+        padding: 13px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .tag {
+        border-radius: 999px;
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 3px 9px;
+      }
+
+      .green { background: #dff3ea; color: var(--green); }
+      .amber { background: #f9edcc; color: var(--amber); }
+
+      @media (max-width: 760px) {
+        .wrap { padding: 0 18px 72px; }
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav>
+        <strong>Phase 4</strong>
+        <a href="#goal">Goal</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#rules">Rules</a>
+        <a href="#verification">Verification</a>
+        <a href="#interview">Interview</a>
+        <a href="#handoff">Phase 5</a>
+      </nav>
+
+      <header>
+        <div class="eyebrow">kodeks · conversation state</div>
+        <h1>让 coding agent 从单轮输出进入连续任务</h1>
+        <p class="lead">
+          Phase 4 把 OpenAI 的 <code>previous_response_id</code> 包成 kodeks 自己的 session runtime。
+          用户可以用同一个 <code>session_id</code> 连续交代任务，后端会自动续上上一轮响应。
+        </p>
+      </header>
+
+      <section id="goal">
+        <h2>1. 真实业务问题</h2>
+        <div class="grid">
+          <div class="panel">
+            <strong>用户场景</strong>
+            <p>用户不会只问一次。他会让 agent 先读代码、再解释、再修改、再验证。</p>
+          </div>
+          <div class="panel">
+            <strong>没有状态的问题</strong>
+            <p>每轮都变成一次性问答，模型不知道上一轮做了什么，多步任务会断裂。</p>
+          </div>
+          <div class="panel">
+            <strong>本阶段解法</strong>
+            <p>用 SQLite store 维护 <code>session_id -> previous_response_id</code>，同时把存储细节隔离在接口后面。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2>2. 架构边界</h2>
+        <pre><code>api/routes/chat.py
+  复用进程级 ChatRuntime，负责 SSE 传输
+
+runtime/chat_runtime.py
+  解析 session_id，选择 previous_response_id，更新 session store
+
+runtime/session_state.py
+  SessionStateStore 协议，SQLite 默认持久化，InMemory 用于测试
+
+services/api/openai_responses.py
+  outbound API client，只负责调用 OpenAI Responses API</code></pre>
+        <p>
+          这里的关键不是 SQLite 本身，而是把“会话策略”放在 runtime 层。
+          route 不知道 OpenAI 和 SQL 细节，OpenAI client 也不知道业务 session 规则。
+        </p>
+      </section>
+
+      <section id="rules">
+        <h2>3. 状态规则</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>规则</th>
+              <th>原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>显式 <code>previous_response_id</code> 优先。</td>
+              <td>客户端显式指定上下文时，不能被服务端缓存覆盖。</td>
+            </tr>
+            <tr>
+              <td>没传 <code>previous_response_id</code> 时，用 <code>session_id</code> 查 store。</td>
+              <td>这让同一个会话能自然连续。</td>
+            </tr>
+            <tr>
+              <td>没传 <code>session_id</code> 时，runtime 生成 <code>session_created</code> 事件。</td>
+              <td>客户端能拿到新会话 id，并在下一轮继续使用。</td>
+            </tr>
+            <tr>
+              <td>只有 <code>response_completed</code> 才更新 store。</td>
+              <td>失败请求不能污染有效上下文。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>4. 验证记录</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>验证项</th>
+              <th>结果</th>
+              <th>意义</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>store 单测</td>
+              <td><span class="tag green">通过</span></td>
+              <td>覆盖 get/set/clear/覆盖更新，以及 SQLite 跨实例持久化。</td>
+            </tr>
+            <tr>
+              <td>runtime 单测</td>
+              <td><span class="tag green">通过</span></td>
+              <td>覆盖显式 previous 优先、store fallback、completed 更新、error 不更新、自动创建 session。</td>
+            </tr>
+            <tr>
+              <td>route 单测</td>
+              <td><span class="tag green">通过</span></td>
+              <td>同一个 <code>session_id</code> 第二轮会带上第一轮 <code>response_id</code>。</td>
+            </tr>
+            <tr>
+              <td>真实 OpenAI key</td>
+              <td><span class="tag amber">未消耗</span></td>
+              <td>本阶段先锁定 runtime 行为；真实 provider 仍需兼容 Responses streaming。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="interview">
+        <h2>5. 面试问答</h2>
+        <div class="qa">
+          <strong>q1: Phase 4 解决了什么真实业务问题？</strong>
+          <p>
+            a1: 它让 coding agent 支持连续多轮任务。用户不需要每轮重复上下文，
+            服务端会把上一轮 response_id 作为下一轮上下文。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q2: 为什么 Phase 4 可以用 SQLite？</strong>
+          <p>
+            a2: 因为它解决的是很真实的产品问题：服务重启后 session 仍可恢复。
+            但 runtime 只依赖 <code>SessionStateStore</code> 协议，所以未来换成 Conversations API、Redis 或 Postgres 也不需要改业务编排。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q3: 这和 memory/RAG 有什么区别？</strong>
+          <p>
+            a3: conversation state 解决同一任务链路里的上下文延续；memory 是跨任务长期偏好；
+            RAG 是外部知识注入。Phase 4 只解决第一类问题。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q4: 这如何体现“驾驭 AI、提升产出”？</strong>
+          <p>
+            a4: 我不是只调用模型 API，而是把 API 的 state 能力产品化成自己的 session runtime，
+            并用测试锁定失败边界，让 AI 能稳定参与多步工程任务。
+          </p>
+        </div>
+      </section>
+
+      <section id="handoff">
+        <h2>6. Phase 5 Handoff：Tool Orchestration</h2>
+        <p>
+          下一步进入 tool loop：把 workspace/shell 能力包装成模型可调用的 tools，并把
+          <code>tool_call</code> / <code>tool_result</code> 也作为 runtime event stream 出去。
+        </p>
+      </section>
+    </div>
+  </body>
+</html>

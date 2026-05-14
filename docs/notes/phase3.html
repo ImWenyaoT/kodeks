@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Phase 3 复盘：Streaming-First Event Baseline</title>
+    <style>
+      :root {
+        --ivory: #faf9f5;
+        --paper: #ffffff;
+        --slate: #171714;
+        --clay: #d97757;
+        --clay-d: #b85c3e;
+        --oat: #e3dacc;
+        --g100: #f0eee6;
+        --g300: #d1cfc5;
+        --g500: #87867f;
+        --g700: #3d3d3a;
+        --green: #12805c;
+        --amber: #b7791f;
+        --red: #c2410c;
+        --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--ivory);
+        color: var(--slate);
+        font-family: var(--sans);
+        line-height: 1.6;
+      }
+
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 32px 96px;
+      }
+
+      nav {
+        background: rgba(250, 249, 245, 0.92);
+        border-bottom: 1.5px solid var(--g300);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 26px 0 10px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+      }
+
+      nav strong {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        margin-right: 6px;
+        padding: 7px 0;
+        text-transform: uppercase;
+      }
+
+      nav a {
+        border: 1.5px solid var(--g300);
+        border-radius: 999px;
+        color: var(--g700);
+        font-size: 12.5px;
+        padding: 7px 14px;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        border-color: var(--clay);
+        color: var(--clay-d);
+      }
+
+      header {
+        border-bottom: 1.5px solid var(--g300);
+        padding: 72px 0 48px;
+      }
+
+      .eyebrow {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-family: var(--serif);
+        font-size: clamp(38px, 5.4vw, 60px);
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        line-height: 1.06;
+        margin: 0 0 14px;
+        max-width: 18ch;
+      }
+
+      h2 {
+        font-family: var(--serif);
+        font-size: 32px;
+        font-weight: 500;
+        margin: 0 0 18px;
+      }
+
+      p { margin: 0 0 16px; }
+
+      section {
+        border-bottom: 1.5px solid var(--g300);
+        padding: 46px 0;
+      }
+
+      .lead {
+        color: var(--g700);
+        font-size: 18px;
+        max-width: 760px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .panel,
+      .qa {
+        background: var(--paper);
+        border: 1.5px solid var(--g300);
+        border-radius: 8px;
+        padding: 22px;
+      }
+
+      .panel strong,
+      .qa strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      code,
+      pre {
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+
+      pre {
+        background: var(--slate);
+        border-radius: 8px;
+        color: #f8f5ed;
+        overflow-x: auto;
+        padding: 18px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--g300);
+        padding: 13px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--g500);
+        font-family: var(--mono);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .tag {
+        border-radius: 999px;
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 3px 9px;
+      }
+
+      .green { background: #dff3ea; color: var(--green); }
+      .amber { background: #f9edcc; color: var(--amber); }
+
+      @media (max-width: 760px) {
+        .wrap { padding: 0 18px 72px; }
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav>
+        <strong>Phase 3</strong>
+        <a href="#goal">Goal</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#contract">Event Contract</a>
+        <a href="#verification">Verification</a>
+        <a href="#interview">Interview</a>
+        <a href="#handoff">Phase 4</a>
+      </nav>
+
+      <header>
+        <div class="eyebrow">kodeks · streaming-first baseline</div>
+        <h1>把模型输出变成 coding agent runtime 事件</h1>
+        <p class="lead">
+          Phase 3 的目标不是做一个普通聊天接口，而是定义一个后续 session、memory、tool loop、
+          approval 和 subagent 都能复用的 streaming event baseline。
+        </p>
+      </header>
+
+      <section id="goal">
+        <h2>1. 业务目标</h2>
+        <div class="grid">
+          <div class="panel">
+            <strong>真实需求</strong>
+            <p>
+              coding agent 不能等所有输出生成完才响应。它需要边生成、边展示、边报告工具状态，
+              这样用户才能理解 agent 正在做什么。
+            </p>
+          </div>
+          <div class="panel">
+            <strong>本阶段边界</strong>
+            <p>
+              只接文本 streaming，不接工具调用。工具事件先在 contract 里预留，Phase 5 再真正执行。
+            </p>
+          </div>
+          <div class="panel">
+            <strong>为什么先做事件</strong>
+            <p>
+              事件协议是后续 CLI、TUI、Web UI 的共同语言。先稳定协议，比先堆 UI 更重要。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2>2. 架构边界</h2>
+        <pre><code>api/routes/chat.py
+  HTTP/SSE adapter，只负责请求和响应
+
+runtime/events.py
+  kodeks 自己的 agent event contract
+
+runtime/chat_runtime.py
+  业务编排层，Phase 4 会在这里加入 session state
+
+services/api/openai_responses.py
+  outbound API client，把 OpenAI SDK event 翻译成 kodeks event</code></pre>
+        <p>
+          这次重排的核心是高内聚低耦合：route 不知道 OpenAI，<code>services/api</code>
+          不知道 HTTP 入站细节，runtime 负责把它们组合成一个 coding-agent turn。
+          这个命名也借鉴了 Claude Code 的 <code>services/api</code> 形态：它表示 outbound API client，
+          不是 FastAPI route。
+        </p>
+      </section>
+
+      <section id="contract">
+        <h2>3. Event Contract</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>事件</th>
+              <th>含义</th>
+              <th>后续用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>text_delta</code></td>
+              <td>模型正在输出文本片段。</td>
+              <td>CLI/TUI/Web 可以逐字或逐块渲染。</td>
+            </tr>
+            <tr>
+              <td><code>response_completed</code></td>
+              <td>一次模型 turn 正常完成，并带回 <code>response_id</code>。</td>
+              <td>Phase 4 用它更新 <code>session_id -> previous_response_id</code>。</td>
+            </tr>
+            <tr>
+              <td><code>error</code></td>
+              <td>缺 key、provider 失败、空 stream、无终态 stream 等异常。</td>
+              <td>调用方能清楚知道 turn 没有稳定完成。</td>
+            </tr>
+            <tr>
+              <td><code>tool_call</code> / <code>tool_result</code></td>
+              <td>暂时预留，还没有执行。</td>
+              <td>Phase 5 接 workspace/shell tools 时使用。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>4. 验证记录</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>验证项</th>
+              <th>结果</th>
+              <th>意义</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>compileall</code></td>
+              <td><span class="tag green">通过</span></td>
+              <td>新模块拆分后没有语法/import 错误。</td>
+            </tr>
+            <tr>
+              <td><code>unittest discover</code></td>
+              <td><span class="tag green">通过</span></td>
+              <td>6 个 fake stream 测试覆盖正常、缺 key、空 stream、incomplete 和无终态。</td>
+            </tr>
+            <tr>
+              <td><code>curl /api/chat/stream</code></td>
+              <td><span class="tag green">通过</span></td>
+              <td>FastAPI route 能输出 SSE error event，证明 HTTP adapter 仍可用。</td>
+            </tr>
+            <tr>
+              <td>真实 OpenAI key</td>
+              <td><span class="tag amber">未消耗</span></td>
+              <td>本阶段用 fake outbound API client 锁定 runtime 行为；真实 API client 需确认 base URL 支持 Responses streaming。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="interview">
+        <h2>5. 面试问答</h2>
+        <div class="qa">
+          <strong>q1: Phase 3 解决了什么工程问题？</strong>
+          <p>
+            a1: 它把模型 streaming 输出统一成项目内部事件协议，让后续 UI、CLI、session、tool loop
+            都能围绕同一套事件工作。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q2: 为什么不用普通 blocking chat API 起步？</strong>
+          <p>
+            a2: coding agent 的核心体验是持续反馈：文本、工具调用、工具结果、approval pause 都是事件。
+            如果先做 blocking chat，后面还要推翻一次接口。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q3: 这次结构重排体现了什么设计能力？</strong>
+          <p>
+            a3: 我把 HTTP transport、agent runtime、OpenAI outbound API client 三层分开。这样未来换 CLI、
+            换模型 API、加 session state，都只改对应层。
+          </p>
+        </div>
+        <div class="qa">
+          <strong>q4: Phase 3 和 RAG 有什么关系？</strong>
+          <p>
+            a4: 没有直接关系。Phase 3 是 runtime event 基础设施；RAG 是外部知识注入策略。
+            这个项目先做 coding-agent loop，检索以后可以作为 tool 或 context provider 插进来。
+          </p>
+        </div>
+      </section>
+
+      <section id="handoff">
+        <h2>6. Phase 4 Handoff：Conversation State</h2>
+        <p>
+          下一阶段不要急着做长期 memory。先做最小 <code>session_id -> previous_response_id</code>
+          状态存储，让同一个 session 的第二轮请求能自动续上第一轮 response。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>下一步</th>
+              <th>业务价值</th>
+              <th>验收</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>内存 session store</td>
+              <td>让服务端能记住每个 session 的最后一个 OpenAI response。</td>
+              <td>完成事件后写入 store，错误事件不写入。</td>
+            </tr>
+            <tr>
+              <td>previous id 选择规则</td>
+              <td>支持客户端显式传入，也支持服务端自动续接。</td>
+              <td>显式 <code>previous_response_id</code> 优先于 session store。</td>
+            </tr>
+            <tr>
+              <td>连续对话测试</td>
+              <td>证明 kodeks 已经从单 turn stream 进入 multi-session runtime。</td>
+              <td>同一个 <code>session_id</code> 第二轮会带上第一轮 <code>response_id</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </body>
+</html>

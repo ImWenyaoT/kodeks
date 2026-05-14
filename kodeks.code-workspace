@@ -11,6 +11,9 @@
 		{
 			"name": "opencode",
 			"path": "../opencode"
+		},
+		{
+			"path": "../src"
 		}
 	],
 	"settings": {
