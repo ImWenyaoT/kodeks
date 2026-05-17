@@ -82,15 +82,31 @@
 - [x] 更新 `docs/notes/phase4.html`，按真实业务问题、方案取舍、边界、验证、面试表达复盘。
 - [x] 面试讲法：我把 OpenAI 的 `previous_response_id` 包成自己的 session runtime，让 coding agent 从 single-turn stream 升级成 multi-turn workflow；这展示了我能把 API 能力产品化，而不是只会调用模型。
 
-## Phase 5: Tool Orchestration
+## Phase 5A: Read-file-only Tool Loop
 
-- [ ] 建立 tool registry，把 Python 函数暴露成 Responses API function tools。
-- [ ] 支持模型调用 `read_file`。
-- [ ] 支持模型调用 `write_file`。
-- [ ] 支持模型调用 `run_shell`。
-- [ ] 实现 streaming 中的 tool call -> 执行工具 -> tool output -> 继续调用模型的循环。
-- [ ] 把工具执行过程也作为 SSE event 发给前端，而不是只返回最终答案。
-- [ ] 验证一个完整任务：用户要求读文件、模型调用工具、最终回答文件内容。
+课程目标：先做一个最小、完整、可验证的 agent tool loop。只暴露 `read_file`，让模型能提出工具调用，runtime 执行本地读取，再把 `function_call_output` 回传给模型生成最终回答。
+
+- [ ] 建立最小 tool registry，只注册 `read_file`。
+- [ ] 定义 `read_file` tool schema，并通过 provider adapter 发给 Responses API。
+- [ ] 在 runtime 中捕获 `tool_call` event，并按 `tool_name` 找到本地工具。
+- [ ] 执行 `workspace_service.read_file`，复用现有 workspace path boundary 和 `.kodeks` / `.git` blocklist。
+- [ ] 向客户端发出 `tool_result` SSE event，让用户看到 agent 做了什么。
+- [ ] 把 `function_call_output` 连同 `previous_response_id` 回传给 provider，继续 streaming 最终回答。
+- [ ] 验证一个完整任务：用户要求读文件、模型调用 `read_file`、最终回答文件内容。
+
+### Phase 5A Teaching Focus
+
+- 学会区分 `tool definition`、`tool_call event`、本地 `tool execution`、`function_call_output` 四个概念。
+- 学会为什么 tool loop 必须由 runtime 编排，而不是 route 或 provider 自己偷偷执行。
+- 学会把安全边界复用到 agent tool：工具不是新的文件系统入口，而是 `workspace_service.read_file` 的模型调用包装。
+- 学会小步交付：先完成只读闭环，再谈写文件、跑命令和 approval。
+
+## Phase 5B: Mutating Tools And Shell Preparation
+
+- [ ] 支持模型调用 `write_file`，但要先明确 diff / overwrite 策略。
+- [ ] 支持模型请求 `run_shell` 前，先补 command policy、approval id、审计记录。
+- [ ] 把危险 shell 命令 pause 成 approval flow，而不是直接执行或只靠 regex。
+- [ ] 验证 `write_file`、`run_shell` 都不会绕过 workspace boundary 和 approval boundary。
 
 ## Phase 6: Approval Flow
 
@@ -109,6 +125,32 @@
 - [ ] 准备面试讲法：agent loop、tool registry、workspace sandbox、approval。
 
 ## Review
+
+- 2026-05-17 教案、课程安排和笔记同步计划：
+  - [x] 把 Phase 5 课程安排拆成 `Phase 5A: read_file-only tool loop` 和后续 tool 扩展，避免一次性铺开所有工具。
+  - [x] 更新 PRD，让 MVP/Current Phase/Acceptance Criteria 和最新安全边界一致。
+  - [x] 更新 Phase 4 复盘 handoff，明确 shell/write_file 暂不进入 Phase 5A。
+  - [x] 新增 Phase 5A 教案笔记，覆盖业务需求、课程目标、实现步骤、验证方式、面试讲法。
+  - [x] 跑文档/测试验证，记录结果。
+  - 验证记录：`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m compileall -q src tests` 通过；`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -v` 通过 28 个测试；`python3 -m html.parser docs/notes/phase1.html docs/notes/phase2.html docs/notes/phase3.html docs/notes/phase4.html docs/notes/phase5a.html` 通过；`git diff --check` 通过。
+
+- 2026-05-17 follow-up review issues 修复计划：
+  - [x] 阻止 workspace 工具暴露 `.kodeks/session_state.sqlite3` 等 runtime 私有状态。
+  - [x] 让 OpenAI Responses function tool schema 在 `strict=True` 时自动满足 strict schema 基础约束。
+  - [x] 避免 `ChatRuntime` 原地修改 provider 产出的 event。
+  - [x] 明确 Phase 5A 只接 `read_file`，`run_shell` 等到 approval/audit 边界更完整后再暴露。
+  - [x] 补对应测试并跑 `compileall`、完整 unittest、`git diff --check`。
+  - 验证记录：`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m compileall -q src tests` 通过；`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -v` 通过 28 个测试；`git diff --check` 通过；`list_files()` 已不再返回 `.kodeks` 路径。
+
+- 2026-05-17 P1 code review 修复计划：
+  - [x] 强化 `ChatStreamEvent`，让 `tool_call` / `tool_result` 有明确字段和校验，不再只是松散预留 type。
+  - [x] 升级 `ChatProvider` interface，用结构化 provider request 承载 `input`、`previous_response_id`、未来 tool definitions 和 tool outputs。
+  - [x] 拆分测试文件，并补齐 workspace/shell service 的安全边界测试。
+  - [x] 给 src-layout 项目补稳定测试入口，让 `uv run python -m unittest discover -s tests -v` 不需要手写 `PYTHONPATH=src`。
+  - [x] 补 README/PRD，写清楚运行方式、测试方式、架构分层和下一步 Phase 5A 边界。
+  - [x] 验证 `compileall`、默认 unittest、关键行为测试全部通过。
+  - 验证记录：`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m compileall -q src tests` 通过；`env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -v` 通过 25 个测试；`git diff --check` 通过。
+  - 沙箱边界：当前 Codex 沙箱不能写 `/Users/edward/.cache/uv`，所以验证命令使用临时 `UV_CACHE_DIR`；项目自身已通过可安装 package 配置消除了手写 `PYTHONPATH=src` 的要求。
 
 - 2026-05-14 Phase 3 结构重排计划：
   - [x] 拆出 `runtime/events.py`，让 kodeks 自己的 stream event contract 不再放在 API schema 里。

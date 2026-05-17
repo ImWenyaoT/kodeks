@@ -13,3 +13,4 @@
 - For interview-oriented coaching, frame each phase as solving a real business problem while showing analysis ability, structured thinking, learning speed, and the ability to use AI to raise output quality. Do not only describe implementation tasks.
 - In coaching mode, tests and verification are the coach/reviewer responsibility. Do not assign the user to write unit tests; I should add or fix tests when reviewing or accepting a phase.
 - Do not reject SQLite for Phase 4 conversation state just because an in-memory store is simpler. SQLite is a reasonable beginner-friendly persistent implementation when the store interface stays clean and runtime logic remains decoupled from storage details.
+- After code review fixes change the project direction or phase boundary, update the teaching artifacts in the same pass: `tasks/todo.md`, `docs/PRD.md`, and the relevant `docs/notes/phase*.html`. Do not leave the course plan describing an older architecture.

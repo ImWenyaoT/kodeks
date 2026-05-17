@@ -14,6 +14,7 @@ from kodeks.core.config import WORKSPACE_ROOT
 
 BLOCKED_PATH_PARTS = {
     ".git",
+    ".kodeks",
     ".venv",
     "__pycache__",
     ".pytest_cache",

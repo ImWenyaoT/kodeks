@@ -339,10 +339,17 @@ services/api/openai_responses.py
       </section>
 
       <section id="handoff">
-        <h2>6. Phase 5 Handoff：Tool Orchestration</h2>
+        <h2>6. Phase 5A Handoff：Read-file-only Tool Loop</h2>
         <p>
-          下一步进入 tool loop：把 workspace/shell 能力包装成模型可调用的 tools，并把
-          <code>tool_call</code> / <code>tool_result</code> 也作为 runtime event stream 出去。
+          下一步不是一次性把所有 workspace/shell 能力都交给模型，而是先做最小闭环：
+          只注册 <code>read_file</code>，让模型发出 <code>tool_call</code>，runtime 复用
+          <code>workspace_service.read_file</code> 读取文件，再把 <code>tool_result</code>
+          作为 SSE event 发给客户端，并用 <code>function_call_output</code> 继续模型回答。
+        </p>
+        <p>
+          <code>write_file</code> 和 <code>run_shell</code> 暂时不进入 Phase 5A。
+          它们会修改项目或执行命令，需要先补 diff/overwrite 策略、approval id、审计日志和更强的 command policy。
+          这个取舍体现的是 agent 工程里的安全边界：先打穿只读 tool loop，再扩展高风险工具。
         </p>
       </section>
     </div>

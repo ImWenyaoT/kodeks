@@ -660,7 +660,8 @@ core/config.py
             <strong>q4: 只防路径逃逸够不够？</strong>
             <p>
               a4: 不够。workspace 内也有不应该给 agent 访问的路径，比如 <code>.git</code> 和
-              <code>.venv</code>。所以我额外做了 internal path blocking。
+              <code>.venv</code>，以及 Phase 4 之后出现的 <code>.kodeks</code> runtime state。
+              所以我额外做了 internal path blocking。
             </p>
           </div>
 
@@ -675,8 +676,9 @@ core/config.py
           <div class="qa">
             <strong>q6: 这个设计后面怎么接 Responses API？</strong>
             <p>
-              a6: 后面会把 <code>read_file</code>、<code>write_file</code> 作为 function tools 注册给模型。
-              模型只产生工具调用意图，真正执行仍然走这套 workspace service。
+              a6: Phase 5A 先把 <code>read_file</code> 作为 function tool 注册给模型，打穿只读闭环。
+              <code>write_file</code> 会等 diff/overwrite 策略清楚后再接入。模型只产生工具调用意图，
+              真正执行仍然走这套 workspace service。
             </p>
           </div>
         </section>

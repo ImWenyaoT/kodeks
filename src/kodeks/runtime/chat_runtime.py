@@ -4,23 +4,12 @@
 # a2: 普通 chatbot 往往直接 request -> model -> response；coding agent runtime 会逐步承载 session、tool loop、approval、plan mode 等工作流状态。
 
 from collections.abc import AsyncIterator
-from typing import Protocol
 from uuid import uuid4
 
 from kodeks.runtime.events import ChatStreamEvent
+from kodeks.runtime.provider import ChatProvider, ChatProviderRequest
 from kodeks.runtime.session_state import InMemorySessionStateStore, SessionStateStore
 from kodeks.schemas.chat import ChatStreamRequest
-
-
-class ChatProvider(Protocol):
-    """Provider interface required by the chat runtime."""
-
-    def stream_response(
-        self,
-        user_input: str,
-        previous_response_id: str | None = None,
-    ) -> AsyncIterator[ChatStreamEvent]:
-        """Stream one model turn as kodeks runtime events."""
 
 
 class ChatRuntime:
@@ -60,12 +49,14 @@ class ChatRuntime:
             previous_response_id = self._session_store.get_previous_response_id(session_id)
 
         # 4. Provider 调用层：runtime 把 resolved previous_response_id 交给 provider
-        async for event in self._provider.stream_response(
+        provider_request = ChatProviderRequest(
             user_input=request.input,
             previous_response_id=previous_response_id,
-        ):
+        )
+
+        async for event in self._provider.stream_response(provider_request):
             # 5. 协议增强层：所有事件都带 session_id，方便前端知道属于哪个会话
-            event.session_id = session_id
+            event = event.model_copy(update={"session_id": session_id})
 
             # 6. 状态更新层：只有 response_completed 才写回最新 response_id
             if (

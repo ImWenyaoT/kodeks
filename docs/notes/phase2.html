@@ -397,7 +397,8 @@ core/config.py
   config 层：workspace root，命令默认在这里执行</code></pre>
         <p>
           这个分层让 shell 能力和 HTTP 表达解耦。后续进入 OpenAI tool calling 时，
-          agent tool 可以直接复用 <code>run_command</code>，不用重新实现命令执行策略。
+          <code>run_command</code> 可以复用为 agent tool 的底层能力，但不会在 Phase 5A 直接暴露给模型。
+          shell 工具要等 approval id、审计日志和更强 command policy 完成后再接入。
         </p>
       </section>
 

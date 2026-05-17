@@ -226,7 +226,8 @@
           <div class="panel">
             <strong>本阶段边界</strong>
             <p>
-              只接文本 streaming，不接工具调用。工具事件先在 contract 里预留，Phase 5 再真正执行。
+              只接文本 streaming，不接工具调用。工具事件先在 contract 里预留，Phase 5A 再从
+              <code>read_file</code> 单工具闭环开始真正执行。
             </p>
           </div>
           <div class="panel">
@@ -288,7 +289,7 @@ services/api/openai_responses.py
             <tr>
               <td><code>tool_call</code> / <code>tool_result</code></td>
               <td>暂时预留，还没有执行。</td>
-              <td>Phase 5 接 workspace/shell tools 时使用。</td>
+              <td>Phase 5A 先接 <code>read_file</code>；shell 等高风险工具后置。</td>
             </tr>
           </tbody>
         </table>

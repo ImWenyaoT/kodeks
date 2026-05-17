@@ -3,12 +3,15 @@
 # q2: 面试里怎么解释这层？
 # a2: 这是 anti-corruption layer。它把外部 API 形状翻译成项目内部协议，后续换 provider 或接本地模型时，不需要重写 HTTP route 和 agent runtime。
 
+import json
 import os
 from collections.abc import AsyncIterator
+from typing import Any
 
 from openai import AsyncOpenAI
 
 from kodeks.runtime.events import ChatStreamEvent
+from kodeks.runtime.provider import ChatProviderRequest, ToolDefinition
 
 
 class OpenAIResponsesProvider:
@@ -16,8 +19,7 @@ class OpenAIResponsesProvider:
 
     async def stream_response(
         self,
-        user_input: str,
-        previous_response_id: str | None = None,
+        request: ChatProviderRequest,
     ) -> AsyncIterator[ChatStreamEvent]:
         """Stream one Responses API turn as kodeks runtime events."""
 
@@ -36,12 +38,15 @@ class OpenAIResponsesProvider:
             client = AsyncOpenAI(api_key=api_key, base_url=base_url)
             kwargs = {
                 "model": model,
-                "input": user_input,
+                "input": self._input_payload(request),
                 "stream": True,
             }
 
-            if previous_response_id:
-                kwargs["previous_response_id"] = previous_response_id
+            if request.previous_response_id:
+                kwargs["previous_response_id"] = request.previous_response_id
+
+            if request.tools:
+                kwargs["tools"] = [self._tool_payload(tool) for tool in request.tools]
 
             stream = await client.responses.create(**kwargs)
             event_count = 0
@@ -70,6 +75,11 @@ class OpenAIResponsesProvider:
                         message=self._error_message(event),
                     )
 
+                elif event.type == "response.output_item.done":
+                    tool_call_event = self._tool_call_event(event)
+                    if tool_call_event is not None:
+                        yield tool_call_event
+
             if event_count == 0:
                 yield ChatStreamEvent(
                     type="error",
@@ -86,6 +96,117 @@ class OpenAIResponsesProvider:
                 type="error",
                 message=str(exc),
             )
+
+    def _input_payload(self, request: ChatProviderRequest) -> object:
+        """Build the Responses API input payload for text or tool-output turns."""
+
+        if not request.tool_outputs:
+            return request.user_input
+
+        return [
+            {
+                "type": "function_call_output",
+                "call_id": tool_output.tool_call_id,
+                "output": tool_output.output,
+            }
+            for tool_output in request.tool_outputs
+        ]
+
+    def _tool_payload(self, tool: ToolDefinition) -> dict[str, object]:
+        """Build one Responses API function tool payload from a neutral tool definition."""
+
+        parameters = tool.parameters
+        if tool.strict:
+            parameters = self._strict_json_schema(parameters)
+
+        return {
+            "type": "function",
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": parameters,
+            "strict": tool.strict,
+        }
+
+    def _strict_json_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        """Normalize object schemas for OpenAI strict function calling."""
+
+        normalized = dict(schema)
+        schema_type = normalized.get("type")
+        properties = normalized.get("properties")
+        is_object_schema = (
+            schema_type == "object"
+            or (isinstance(schema_type, list) and "object" in schema_type)
+            or isinstance(properties, dict)
+        )
+
+        if isinstance(properties, dict):
+            normalized["properties"] = {
+                name: self._strict_json_schema(property_schema)
+                if isinstance(property_schema, dict)
+                else property_schema
+                for name, property_schema in properties.items()
+            }
+
+        items = normalized.get("items")
+        if isinstance(items, dict):
+            normalized["items"] = self._strict_json_schema(items)
+
+        for keyword in ("anyOf", "oneOf", "allOf"):
+            variants = normalized.get(keyword)
+            if isinstance(variants, list):
+                normalized[keyword] = [
+                    self._strict_json_schema(variant)
+                    if isinstance(variant, dict)
+                    else variant
+                    for variant in variants
+                ]
+
+        if is_object_schema:
+            normalized["additionalProperties"] = False
+            if isinstance(properties, dict):
+                normalized["required"] = list(properties.keys())
+
+        return normalized
+
+    def _tool_call_event(self, event: object) -> ChatStreamEvent | None:
+        """Translate a completed Responses function_call output item into a runtime event."""
+
+        item = getattr(event, "item", None)
+        if getattr(item, "type", None) != "function_call":
+            return None
+
+        tool_call_id = getattr(item, "call_id", None)
+        tool_name = getattr(item, "name", None)
+        raw_arguments = getattr(item, "arguments", "{}")
+
+        if not tool_call_id or not tool_name:
+            return None
+
+        return ChatStreamEvent(
+            type="tool_call",
+            tool_call_id=tool_call_id,
+            tool_name=tool_name,
+            tool_arguments=self._tool_arguments(raw_arguments),
+        )
+
+    def _tool_arguments(self, raw_arguments: object) -> dict[str, object]:
+        """Parse tool arguments from the JSON string returned by the provider."""
+
+        if isinstance(raw_arguments, dict):
+            return raw_arguments
+
+        if not isinstance(raw_arguments, str) or not raw_arguments:
+            return {}
+
+        try:
+            parsed = json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            return {"_raw": raw_arguments}
+
+        if isinstance(parsed, dict):
+            return parsed
+
+        return {"_value": parsed}
 
     def _error_message(self, event: object) -> str:
         """Extract a useful provider error without exposing SDK event classes."""
