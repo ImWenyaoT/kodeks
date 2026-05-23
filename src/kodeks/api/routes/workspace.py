@@ -1,4 +1,4 @@
-# q1: 为什么 workspace 文件能力要先做成 API，而不是直接塞进 OpenAI tool calling？
+# q1: 为什么 workspace 文件能力要先做成 API，而不是直接塞进模型 tool calling？
 # a1: 先做 API 能独立验证产品能力和安全边界；等 API 稳定后，再把同一套 service 暴露给 agent tools。
 # q2: route 层和 service 层怎么分工？
 # a2: route 层负责 HTTP 入参、状态码和错误映射；service 层负责真正的文件系统规则和安全策略。

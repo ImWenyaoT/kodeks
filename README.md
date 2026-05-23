@@ -2,13 +2,13 @@
 
 `kodeks` 是一个教学型 Python coding-agent 项目：目标是为了实习面试，写出一个能讲清楚架构、边界和取舍的 mini opencode/codex。
 
-技术栈固定为 Python、FastAPI、uv、OpenAI Python SDK 和 Responses API。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
+技术栈固定为 Python、FastAPI、uv、OpenAI-compatible Python SDK 和 DeepSeek chat-completions API。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
 
 ## Reference Sources
 
 参考源按职责分层，不能混用：
 
-- `/Users/edward/Documents/openai-responses-starter-app`: OpenAI Responses API 官方 starter app，对照 streaming、tool/function calling、MCP/connectors、前端 tool-call 展示。
+- DeepSeek API docs: 对照 chat-completions streaming、function calling 和 stateless multi-round messages。
 - `/Users/edward/Documents/src`: agent 产品设计主参考，对照 memory、multi-session、context window、plan mode、tool orchestration、subagent。
 - `/Users/edward/Documents/opencode`: coding-agent 结构副参考，对照 session、agent、tool、provider abstraction、plan tool 和权限边界。
 
@@ -20,7 +20,7 @@
 
 - workspace file boundary with blocked internal paths
 - shell harness with timeout and dangerous command detection
-- streaming Responses API baseline
+- streaming DeepSeek chat-completions baseline
 - persistent conversation state with SQLite
 - `read_file` / `write_file` / `run_shell` tool loop through runtime orchestration
 - pending approval audit records for dangerous shell commands
@@ -51,11 +51,26 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
   -d '{"input":"hello","session_id":"s_demo"}'
 ```
 
+Frontend chat demo:
+
+```bash
+cd frontend
+proxy_off  # if your shell has proxy enabled and npm is slow
+npm install
+npm run dev
+```
+
+Then open `http://127.0.0.1:3000`. The Next.js UI proxies chat requests to the
+FastAPI backend at `http://127.0.0.1:8000` by default. Override it with
+`KODEKS_API_BASE_URL` if the backend runs elsewhere.
+For a cleaner production-style preview after `npm run build`, use
+`npm run start`.
+
 Provider configuration:
 
-- `LLM_API_KEY` or `OPENAI_API_KEY`
-- optional `LLM_BASE_URL` or `OPENAI_BASE_URL`
-- optional `LLM_MODEL`, default `gpt-5.4-mini`
+- `LLM_API_KEY` or `DEEPSEEK_API_KEY`
+- optional `LLM_BASE_URL` or `DEEPSEEK_BASE_URL`
+- optional `LLM_MODEL`, default `deepseek-v4-flash`
 
 ## Test
 
@@ -75,7 +90,7 @@ UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -
 
 - `src/kodeks/api/routes/`: inbound FastAPI routes. Routes translate HTTP/SSE only.
 - `src/kodeks/runtime/`: agent runtime contracts, event protocol, session state, and provider interface.
-- `src/kodeks/services/api/`: outbound API adapters, currently OpenAI Responses API.
+- `src/kodeks/services/api/`: outbound API adapters, currently DeepSeek chat completions.
 - `src/kodeks/services/`: local workspace, shell, and audit capabilities.
 - `src/kodeks/tools/`: model-callable tool registry and local execution wrappers.
 - `src/kodeks/schemas/`: HTTP request/response schemas.
@@ -83,14 +98,14 @@ UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -
 Important runtime contracts:
 
 - `ChatStreamEvent`: internal event contract for `text_delta`, `response_completed`, `error`, `tool_call`, and `tool_result`.
-- `ChatProviderRequest`: provider-neutral request carrying user input, `previous_response_id`, tool definitions, and tool outputs.
-- `SessionStateStore`: storage abstraction for `session_id -> previous_response_id`.
+- `ChatProviderRequest`: provider-neutral request carrying user input, chat messages, tool definitions, and tool outputs.
+- `SessionStateStore`: storage abstraction for session transcript plus a compatibility latest completion id.
 - `ToolRegistry`: maps model tool calls to workspace/shell services while preserving safety boundaries.
 
 ## Interview Narrative
 
 一句话讲法：
 
-> I built a Python/FastAPI mini coding-agent inspired by opencode/codex. It streams Responses API events, preserves multi-turn session state, lets the model call workspace and shell tools through a registry, and gates dangerous shell actions behind a one-shot auditable approval flow.
+> I built a Python/FastAPI mini coding-agent inspired by opencode/codex. It streams DeepSeek chat-completions events, preserves multi-turn session state through explicit messages, lets the model call workspace and shell tools through a registry, and gates dangerous shell actions behind a one-shot auditable approval flow.
 
 Phase 7 要把当前短期 session context 升级出长期 memory：只保存可解释、可审计、可更新的用户偏好、项目事实和 lessons，避免模型把临时信息静默写进永久状态。

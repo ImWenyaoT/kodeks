@@ -190,6 +190,35 @@ class ChatRuntimeSessionStateTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("User prefers pytest", provider.calls[0].user_input)
         self.assertIn("write pytest coverage", provider.calls[0].user_input)
 
+    async def test_runtime_builds_chat_messages_from_transcript(self) -> None:
+        """Verify chat-completions providers receive resumable message history."""
+
+        store = InMemorySessionStateStore()
+        await store.append_transcript_event("s1", "user", "previous question")
+        await store.append_transcript_event("s1", "assistant", "previous answer")
+        provider = FakeProvider(
+            [
+                ChatStreamEvent(type="response_completed", response_id="resp_1"),
+            ]
+        )
+        runtime = ChatRuntime(provider=provider, session_store=store)
+
+        [
+            event
+            async for event in runtime.stream_chat(
+                ChatStreamRequest(input="next question", session_id="s1")
+            )
+        ]
+
+        self.assertEqual(
+            [message.model_dump(exclude_none=True) for message in provider.calls[0].messages],
+            [
+                {"role": "user", "content": "previous question"},
+                {"role": "assistant", "content": "previous answer"},
+                {"role": "user", "content": "next question"},
+            ],
+        )
+
     async def test_plan_mode_exposes_only_non_mutating_tools(self) -> None:
         """Verify plan mode prevents the model from receiving mutating tools."""
 
@@ -271,7 +300,22 @@ class ChatRuntimeSessionStateTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[1].tool_status, "completed")
         self.assertIn("# kodeks", events[1].tool_output or "")
         self.assertEqual(provider.calls[0].tools[0].name, "read_file")
-        self.assertEqual(provider.calls[1].previous_response_id, "resp_tool")
+        self.assertEqual(
+            provider.calls[1].messages[-1].model_dump(exclude_none=True),
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "read_file",
+                            "arguments": '{"path":"README.md"}',
+                        },
+                    }
+                ],
+            },
+        )
         self.assertEqual(provider.calls[1].tool_outputs[0].tool_call_id, "call_1")
         self.assertIn("# kodeks", provider.calls[1].tool_outputs[0].output)
         self.assertEqual(await store.get_previous_response_id("s1"), "resp_final")

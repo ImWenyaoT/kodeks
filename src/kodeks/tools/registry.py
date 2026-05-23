@@ -528,6 +528,6 @@ def _failed_output(message: str, path: str | None = None) -> ToolExecutionResult
 
 
 def _json_output(payload: dict[str, object]) -> str:
-    """Serialize tool output as compact JSON for function_call_output."""
+    """Serialize tool output as compact JSON for provider tool-result messages."""
 
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

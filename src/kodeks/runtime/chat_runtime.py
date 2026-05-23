@@ -5,14 +5,15 @@
 # q3: Phase 5A 为什么把 tool loop 放在 runtime？
 # a3: 因为 tool loop 是 agent 工作流编排：模型请求工具、本地执行、回传 tool output、继续生成最终回答。provider 只翻译外部 API，route 只传输 SSE，都不应该偷偷执行本地工具。
 # q4: runtime 的设计参考谁？
-# a4: 编排思路优先参考 /Users/edward/Documents/src 的 tool orchestration / session 设计，再用 opencode 的 session/agent/tool 结构做第二对照；代码实现仍保持 Python + OpenAI Responses API。
+# a4: 编排思路优先参考 /Users/edward/Documents/src 的 tool orchestration / session 设计，再用 opencode 的 session/agent/tool 结构做第二对照；代码实现保持 provider-neutral，再由 DeepSeek chat-completions adapter 翻译外部 API。
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
 from kodeks.runtime.events import ChatStreamEvent
-from kodeks.runtime.provider import ChatProvider, ChatProviderRequest, ToolOutput
+from kodeks.runtime.provider import ChatMessage, ChatProvider, ChatProviderRequest, ToolOutput
 from kodeks.runtime.session_state import InMemorySessionStateStore, SessionStateStore
 from kodeks.schemas.chat import ChatStreamRequest
 from kodeks.services.memory_service import InMemoryMemoryStore, JSONLMemoryStore
@@ -32,7 +33,7 @@ class ChatRuntime:
         # Provider 层：只负责模型 streaming，不负责 session 状态
         self._provider = provider
 
-        # Runtime 状态层：负责 session_id -> previous_response_id
+        # Runtime 状态层：负责 session transcript 和兼容性的 latest completion id
         self._session_store = session_store or InMemorySessionStateStore()
 
         # Tool 层：Phase 5A 只暴露 read_file，后续工具从 registry 扩展
@@ -59,10 +60,11 @@ class ChatRuntime:
         # 2. 状态解析层：显式 previous_response_id 优先
         previous_response_id = request.previous_response_id
 
-        # 3. 状态回填层：如果没显式传，就用 session_id 查上一轮 response_id
+        # 3. 状态回填层：如果没显式传，就用 session_id 查上一轮 completion id
         if previous_response_id is None:
             previous_response_id = await self._session_store.get_previous_response_id(session_id)
 
+        transcript = await self._session_store.get_transcript(session_id)
         await self._session_store.append_transcript_event(
             session_id,
             "user",
@@ -77,6 +79,7 @@ class ChatRuntime:
         # 4. Provider 调用层：把当前模式允许的工具定义交给模型
         provider_request = ChatProviderRequest(
             user_input=assembled_user_input,
+            messages=self._chat_messages(transcript, assembled_user_input),
             previous_response_id=previous_response_id,
             tools=self._tool_registry.definitions(read_only_only=request.mode == "plan"),
         )
@@ -155,6 +158,10 @@ class ChatRuntime:
 
         follow_up_request = ChatProviderRequest(
             user_input="",
+            messages=[
+                *provider_request.messages,
+                self._assistant_tool_calls_message(tool_call_events),
+            ],
             previous_response_id=first_response_completed.response_id,
             tool_outputs=tool_outputs,
         )
@@ -200,6 +207,59 @@ class ChatRuntime:
 
         sections.append(request.input)
         return "\n\n".join(sections)
+
+    def _chat_messages(
+        self,
+        transcript: list[dict[str, str]],
+        user_input: str,
+    ) -> list[ChatMessage]:
+        """Build chat-completions messages from stored transcript and current input."""
+
+        messages: list[ChatMessage] = []
+        for item in transcript:
+            role = item.get("role")
+            if role not in {"user", "assistant"}:
+                continue
+            messages.append(
+                ChatMessage(
+                    role=role,
+                    content=item.get("content", ""),
+                )
+            )
+
+        messages.append(ChatMessage(role="user", content=user_input))
+        return messages
+
+    def _assistant_tool_calls_message(
+        self,
+        tool_call_events: list[ChatStreamEvent],
+    ) -> ChatMessage:
+        """Build the assistant tool_calls message required by chat completions."""
+
+        tool_calls = []
+        for tool_call in tool_call_events:
+            tool_arguments = tool_call.tool_arguments or {}
+            tool_calls.append(
+                {
+                    "id": tool_call.tool_call_id or "",
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.tool_name or "",
+                        "arguments": self._tool_arguments_json(tool_arguments),
+                    },
+                }
+            )
+
+        return ChatMessage(role="assistant", content=None, tool_calls=tool_calls)
+
+    def _tool_arguments_json(self, tool_arguments: dict[str, object]) -> str:
+        """Serialize tool arguments in the compact JSON shape providers expect."""
+
+        return json.dumps(
+            tool_arguments,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
     async def _remember_assistant_text(
         self,

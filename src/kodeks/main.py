@@ -1,7 +1,7 @@
 # q1: main.py 在架构里负责什么？
 # a1: 它只组装 FastAPI app 和 route，不承载 agent runtime、provider、tool、session 的业务逻辑。
 # q2: 这和新参考源规则有什么关系？
-# a2: /src 和 opencode 都把入口层和 runtime/agent 编排层分开；kodeks 用 FastAPI 落地这个边界，OpenAI SDK 只在 outbound provider adapter 里出现。
+# a2: /src 和 opencode 都把入口层和 runtime/agent 编排层分开；kodeks 用 FastAPI 落地这个边界，DeepSeek SDK 细节只在 outbound provider adapter 里出现。
 
 from dotenv import load_dotenv
 from fastapi import FastAPI

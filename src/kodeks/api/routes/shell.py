@@ -1,5 +1,5 @@
 # q1: shell route 在产品上暴露的是什么能力？
-# a1: 它把“运行项目命令并返回结构化结果”做成稳定 API，后续可以复用为 OpenAI tool。
+# a1: 它把“运行项目命令并返回结构化结果”做成稳定 API，后续可以复用为模型 tool。
 # q2: route 层为什么要把超时转成 HTTP 408？
 # a2: 调用方需要区分“命令执行失败”和“命令卡死超时”，这样 agent loop 才能做不同决策。
 # q3: 为什么 shell route 不等于 shell tool？

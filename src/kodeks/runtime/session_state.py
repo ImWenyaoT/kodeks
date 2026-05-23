@@ -1,9 +1,9 @@
 # q1: Phase 4 用 SQLite 保存 session state 合理吗？
-# a1: 合理。SQLite 让 session_id -> previous_response_id 能跨进程重启保留，更接近真实业务里的 multi-session/resume 需求；关键是把 SQLite 细节隔离在 store adapter 后面。
+# a1: 合理。SQLite 让 session transcript 和 latest completion id 能跨进程重启保留，更接近真实业务里的 multi-session/resume 需求；关键是把 SQLite 细节隔离在 store adapter 后面。
 # q2: 为什么还保留 InMemorySessionStateStore？
 # a2: 内存 store 适合单测和轻量替换。runtime 依赖的是 SessionStateStore 协议，不关心底层是 dict、SQLite，还是未来的远端数据库。
 # q3: 这和 /src、opencode 的 multi-session/resume 有什么关系？
-# a3: 当前只是最小 conversation state。后续要参考 /src 的 transcript/resume/session storage 设计，并用 opencode 的 session/v2/session 结构做对照，逐步从 response_id store 扩成真正的 session 层。
+# a3: 当前只是最小 conversation state。后续要参考 /src 的 transcript/resume/session storage 设计，并用 opencode 的 session/v2/session 结构做对照，逐步扩成真正的 session 层。
 
 import asyncio
 import sqlite3
@@ -15,7 +15,7 @@ from kodeks.core.config import SESSION_STATE_DB_PATH
 
 
 class SessionStateStore(Protocol):
-    """Store the latest model response ID for each kodeks session."""
+    """Store transcript and compatibility completion state for each session."""
 
     async def get_previous_response_id(self, session_id: str) -> str | None:
         """Return the latest response ID for a session, if known."""
