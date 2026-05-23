@@ -1,7 +1,9 @@
 # q1: 为什么 OpenAI Responses API 放在 services/api，而不是 runtime 或 api/routes？
-# a1: 这里的 api 是 outbound API client，和 Claude Code 的 services/api 类似；它负责调用外部模型服务，不负责 FastAPI 入站路由。
+# a1: 这里的 api 是 outbound API client；coding/API 层按 OpenAI Python SDK 和 Responses API 实现，不把 SDK 细节泄漏给 runtime。
 # q2: 面试里怎么解释这层？
 # a2: 这是 anti-corruption layer。它把外部 API 形状翻译成项目内部协议，后续换 provider 或接本地模型时，不需要重写 HTTP route 和 agent runtime。
+# q3: 这层参考哪些 repo？
+# a3: API 用法先对照 OpenAI 官方文档和 openai-responses-starter-app；adapter 分层优先参考 /src/services/api，再用 opencode/packages/llm 的 provider abstraction 做第二对照。
 
 import json
 import os
@@ -17,6 +19,10 @@ from kodeks.runtime.provider import ChatProviderRequest, ToolDefinition
 class OpenAIResponsesProvider:
     """Translate OpenAI Responses API streams into kodeks runtime events."""
 
+    def __init__(self, client: object | None = None) -> None:
+        self._client = client
+        self._tool_payload_cache: dict[str, dict[str, object]] = {}
+
     async def stream_response(
         self,
         request: ChatProviderRequest,
@@ -27,7 +33,7 @@ class OpenAIResponsesProvider:
         base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL")
         model = os.getenv("LLM_MODEL", "gpt-5.4-mini")
 
-        if not api_key:
+        if not api_key and self._client is None:
             yield ChatStreamEvent(
                 type="error",
                 message="LLM_API_KEY or OPENAI_API_KEY is not set",
@@ -35,7 +41,10 @@ class OpenAIResponsesProvider:
             return
 
         try:
-            client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            client = self._client
+            if client is None:
+                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+                self._client = client
             kwargs = {
                 "model": model,
                 "input": self._input_payload(request),
@@ -91,10 +100,10 @@ class OpenAIResponsesProvider:
                     message="LLM stream ended without a terminal event",
                 )
 
-        except Exception as exc:
+        except Exception:
             yield ChatStreamEvent(
                 type="error",
-                message=str(exc),
+                message="LLM provider request failed",
             )
 
     def _input_payload(self, request: ChatProviderRequest) -> object:
@@ -115,17 +124,33 @@ class OpenAIResponsesProvider:
     def _tool_payload(self, tool: ToolDefinition) -> dict[str, object]:
         """Build one Responses API function tool payload from a neutral tool definition."""
 
+        cache_key = self._tool_payload_cache_key(tool)
+        cached_payload = self._tool_payload_cache.get(cache_key)
+        if cached_payload is not None:
+            return cached_payload
+
         parameters = tool.parameters
         if tool.strict:
             parameters = self._strict_json_schema(parameters)
 
-        return {
+        payload: dict[str, object] = {
             "type": "function",
             "name": tool.name,
             "description": tool.description,
             "parameters": parameters,
             "strict": tool.strict,
         }
+        self._tool_payload_cache[cache_key] = payload
+        return payload
+
+    def _tool_payload_cache_key(self, tool: ToolDefinition) -> str:
+        """Return a stable cache key for a provider-neutral tool definition."""
+
+        return json.dumps(
+            tool.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
 
     def _strict_json_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
         """Normalize object schemas for OpenAI strict function calling."""

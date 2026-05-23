@@ -189,8 +189,10 @@
         <a href="#goal">Goal</a>
         <a href="#scope">Scope</a>
         <a href="#flow">Flow</a>
+        <a href="#sources">Sources</a>
         <a href="#tasks">Tasks</a>
         <a href="#verification">Verification</a>
+        <a href="#core-map">Core Map</a>
         <a href="#interview">Interview</a>
       </nav>
 
@@ -267,8 +269,54 @@
         </p>
       </section>
 
+      <section id="sources">
+        <h2>4. 参考源分工</h2>
+        <p>
+          Phase 5A 的 coding/API 层使用 OpenAI Python SDK 和 Responses API，并参考
+          <code>/Users/edward/Documents/openai-responses-starter-app</code> 的 streaming、function tools 和
+          <code>function_call_output</code> 示例。tool loop 的 agent 设计边界优先参考
+          <code>/Users/edward/Documents/src/services/tools/toolOrchestration.ts</code>，同时用
+          <code>/Users/edward/Documents/opencode</code> 做第二参考。优先级是 OpenAI API 用法先对齐官方/starter app，
+          agent 产品设计优先 <code>/src</code>，结构对照再看 <code>opencode</code>。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>设计问题</th>
+              <th>API / starter 参考</th>
+              <th>agent 设计优先参考</th>
+              <th>结构第二参考</th>
+              <th>kodeks 处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>谁执行工具</td>
+              <td><code>openai-responses-starter-app/lib/tools/tools-handling.ts</code></td>
+              <td><code>services/tools/toolOrchestration.ts</code></td>
+              <td><code>packages/opencode/src/tool/tool.ts</code></td>
+              <td><code>ChatRuntime</code> 编排，<code>ToolRegistry</code> 执行，provider 不碰本地文件系统。</td>
+            </tr>
+            <tr>
+              <td>哪些工具能并发或后置</td>
+              <td><code>parallel_tool_calls: false</code> 的 starter app 示例</td>
+              <td><code>partitionToolCalls</code> 把只读工具和非只读工具分批。</td>
+              <td><code>packages/llm/src/tool-runtime.ts</code></td>
+              <td>Phase 5A 只做 <code>read_file</code>；Phase 5B 再接 <code>write_file</code>、<code>run_shell</code> 和 pending approval audit。</td>
+            </tr>
+            <tr>
+              <td>工具结果如何回到模型</td>
+              <td><code>openai-responses-starter-app/lib/assistant.ts</code></td>
+              <td><code>runToolUse</code> / tool result message flow。</td>
+              <td><code>packages/llm/src/protocols/utils/tool-stream.ts</code></td>
+              <td>用 Responses API 的 <code>function_call_output</code> 作为第二轮 provider input。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       <section id="tasks">
-        <h2>4. 课程步骤</h2>
+        <h2>5. 课程步骤</h2>
         <table>
           <thead>
             <tr>
@@ -303,7 +351,7 @@
       </section>
 
       <section id="verification">
-        <h2>5. 验证方式</h2>
+        <h2>6. 验证方式</h2>
         <pre><code>uv run python -m compileall -q src tests
 uv run python -m unittest discover -s tests -v
 
@@ -316,8 +364,57 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
         </p>
       </section>
 
+      <section id="core-map">
+        <h2>7. 核心能力在教案里的位置</h2>
+        <p>
+          这些能力不是 Phase 5A 才加入教案。kodeks 的长期目标从一开始就是带 memory、multi-session、
+          plan mode、subagent 的 coding agent；下面的 phase 只说明实现顺序。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>组件</th>
+              <th>课程位置</th>
+              <th>当前边界</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>protocol</code></td>
+              <td>Phase 3 已建立事件协议，Phase 5A 继续使用 <code>tool_call</code> / <code>tool_result</code>。</td>
+              <td>协议是 agent 的共同语言，不绑定 HTTP route 或某个 UI。</td>
+            </tr>
+            <tr>
+              <td><code>multi-session/context</code></td>
+              <td>Phase 4 已实现 <code>session_id -> previous_response_id</code>。</td>
+              <td>解决同一任务链路里的连续上下文，不等同于长期记忆。</td>
+            </tr>
+            <tr>
+              <td><code>tools</code></td>
+              <td>Phase 5A 从 <code>read_file</code> 单工具闭环开始。</td>
+              <td>先证明工具编排，再扩展写文件、shell 和 approval。</td>
+            </tr>
+            <tr>
+              <td><code>memory</code></td>
+              <td>Phase 4 已讲清和 context 的区别，Phase 7 进入长期 memory 设计。</td>
+              <td>长期 memory 必须可解释、可审计，不能让模型静默污染永久状态。</td>
+            </tr>
+            <tr>
+              <td><code>planning/plan mode</code></td>
+              <td>Phase 8 进入最小 plan mode。</td>
+              <td>规划负责拆解步骤和失败后 re-plan，不直接替代工具执行。</td>
+            </tr>
+            <tr>
+              <td><code>subagent</code></td>
+              <td>Phase 9 进入子代理编排。</td>
+              <td>子代理用于独立探索、并行分析或验证，再把结果汇总回主计划。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       <section id="interview">
-        <h2>6. 面试讲法</h2>
+        <h2>8. 面试讲法</h2>
         <div class="qa">
           <strong>q1: 你做的 tool loop 本质是什么？</strong>
           <p>
@@ -329,7 +426,8 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
           <strong>q2: 为什么不一开始就接 write_file 和 shell？</strong>
           <p>
             a2: 因为只读、写入、命令执行的风险等级不同。先用 <code>read_file</code> 打穿编排闭环，
-            再给高风险工具补 approval、审计和 diff 策略，这是更稳的工程顺序。
+            再给高风险工具补 approval、审计和明确的写入语义，这是更稳的工程顺序。Phase 5B 已按这个 handoff
+            接入 <code>write_file</code> 与 <code>run_shell</code>，并把危险 shell 暂停为 pending approval。
           </p>
         </div>
         <div class="qa">

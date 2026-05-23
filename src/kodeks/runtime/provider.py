@@ -2,6 +2,8 @@
 # a1: coding agent 不是永远只有 user_input；工具循环还需要 tools、tool_outputs、previous_response_id 等上下文。单独建模能避免 provider interface 被字符串参数绑死。
 # q2: 这层和 OpenAI Responses API 的 tools 有什么关系？
 # a2: 这是 kodeks 自己的 provider contract；OpenAI adapter 负责把它翻译成 Responses API 参数，runtime 不直接依赖外部 SDK 形状。
+# q3: 为什么不直接照搬 OpenAI 或 opencode 的 request 类型？
+# a3: kodeks 需要自己的 provider-neutral contract。API 细节按 OpenAI SDK 落地；抽象边界优先参考 /src 的分层，再用 opencode/packages/llm 的 provider/tool 类型做结构对照。
 
 from collections.abc import AsyncIterator
 from typing import Any, Protocol

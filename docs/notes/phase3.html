@@ -255,8 +255,9 @@ services/api/openai_responses.py
         <p>
           这次重排的核心是高内聚低耦合：route 不知道 OpenAI，<code>services/api</code>
           不知道 HTTP 入站细节，runtime 负责把它们组合成一个 coding-agent turn。
-          这个命名也借鉴了 Claude Code 的 <code>services/api</code> 形态：它表示 outbound API client，
-          不是 FastAPI route。
+          这个命名优先参考 <code>/Users/edward/Documents/src/services/api</code> 的 outbound adapter 分层，
+          并用 opencode 的 provider abstraction 做第二对照：这里的 <code>api</code> 表示 outbound API client，
+          不是 FastAPI route；具体 API surface 仍然按 OpenAI Python SDK 和 Responses API 落地。
         </p>
       </section>
 
