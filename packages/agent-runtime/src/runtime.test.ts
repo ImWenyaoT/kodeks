@@ -32,11 +32,11 @@ afterEach(async () => {
 
 describe("runChatTurn", () => {
   it("streams text events and stores resumable transcript", async () => {
-    const model = new FakeModelClient([
+    const model = new FakeModelClient([[
       { type: "text_delta", text: "Hello" },
       { type: "text_delta", text: " world" },
       { type: "response_completed", responseId: "resp_1" }
-    ]);
+    ]]);
 
     const events = await collectEvents(
       runChatTurn({
@@ -62,13 +62,15 @@ describe("runChatTurn", () => {
 
   it("executes tool calls and emits tool result events", async () => {
     const model = new FakeModelClient([
-      {
-        type: "tool_call",
-        id: "call_1",
-        name: "write_file",
-        args: { path: "notes.txt", content: "from tool" }
-      },
-      { type: "response_completed", responseId: "resp_2" }
+      [
+        {
+          type: "tool_call",
+          id: "call_1",
+          name: "write_file",
+          args: { path: "notes.txt", content: "from tool" }
+        }
+      ],
+      [{ type: "response_completed", responseId: "resp_2" }]
     ]);
 
     const events = await collectEvents(
@@ -100,10 +102,15 @@ describe("runChatTurn", () => {
       { type: "response_completed", sessionId: "s1", responseId: "resp_2" }
     ]);
     await expect(workspace.readFile("notes.txt")).resolves.toBe("from tool");
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]?.messages.at(-1)).toMatchObject({
+      role: "tool",
+      toolCallId: "call_1"
+    });
   });
 
   it("filters mutating tools in plan mode", async () => {
-    const model = new FakeModelClient([{ type: "response_completed", responseId: "resp_3" }]);
+    const model = new FakeModelClient([[{ type: "response_completed", responseId: "resp_3" }]]);
 
     await collectEvents(
       runChatTurn({
@@ -130,7 +137,7 @@ describe("runChatTurn", () => {
       scope: "project",
       content: "Kodeks uses plan mode for read-only planning."
     });
-    const model = new FakeModelClient([{ type: "response_completed", responseId: "resp_4" }]);
+    const model = new FakeModelClient([[{ type: "response_completed", responseId: "resp_4" }]]);
 
     const events = await collectEvents(
       runChatTurn({
@@ -172,12 +179,13 @@ describe("buildAgentsSdkBuildAgent", () => {
 class FakeModelClient implements ModelClient {
   readonly requests: ModelTurnRequest[] = [];
 
-  constructor(private readonly events: ModelTurnStreamEvent[]) {}
+  constructor(private readonly turns: ModelTurnStreamEvent[][]) {}
 
   // Streams preconfigured events while capturing the runtime request.
   async *streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent> {
     this.requests.push(request);
-    for (const event of this.events) {
+    const turnEvents = this.turns[this.requests.length - 1] ?? [];
+    for (const event of turnEvents) {
       yield event;
     }
   }

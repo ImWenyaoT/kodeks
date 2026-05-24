@@ -93,68 +93,95 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
   });
   let assistantText = "";
 
-  for await (const modelEvent of input.model.streamTurn(request)) {
+  let pendingRequest: ModelTurnRequest | null = request;
+
+  while (pendingRequest !== null) {
+    const toolMessages: Array<{ toolCallId: string; name: string; output: string }> = [];
+    let responseCompleted = false;
+
+    for await (const modelEvent of input.model.streamTurn(pendingRequest)) {
     if (modelEvent.type === "text_delta") {
       assistantText += modelEvent.text;
       yield { type: "text_delta", text: modelEvent.text, sessionId };
       continue;
     }
 
-    if (modelEvent.type === "tool_call") {
-      yield {
-        type: "tool_call",
-        id: modelEvent.id,
-        name: modelEvent.name,
-        args: modelEvent.args,
-        sessionId
-      };
-      const result = await registry.execute(
-        modelEvent.name,
-        modelEvent.args,
-        new ToolExecutionContext(sessionId, modelEvent.id)
-      );
-      const mappedStatus = mapToolStatus(result.status);
-      yield {
-        type: "tool_result",
-        id: modelEvent.id,
-        name: modelEvent.name,
-        output: result.output,
-        status: mappedStatus,
-        sessionId
-      };
-      if (mappedStatus === "approval_required") {
-        const parsedOutput = parseToolOutput(result.output);
+      if (modelEvent.type === "tool_call") {
         yield {
-          type: "approval_required",
-          approvalId: stringFromParsed(parsedOutput.approvalId),
-          toolCallId: modelEvent.id,
-          reason: stringFromParsed(parsedOutput.reason),
+          type: "tool_call",
+          id: modelEvent.id,
+          name: modelEvent.name,
+          args: modelEvent.args,
           sessionId
         };
+        const result = await registry.execute(
+          modelEvent.name,
+          modelEvent.args,
+          new ToolExecutionContext(sessionId, modelEvent.id)
+        );
+        const mappedStatus = mapToolStatus(result.status);
+        yield {
+          type: "tool_result",
+          id: modelEvent.id,
+          name: modelEvent.name,
+          output: result.output,
+          status: mappedStatus,
+          sessionId
+        };
+        toolMessages.push({ toolCallId: modelEvent.id, name: modelEvent.name, output: result.output });
+        if (mappedStatus === "approval_required") {
+          const parsedOutput = parseToolOutput(result.output);
+          yield {
+            type: "approval_required",
+            approvalId: stringFromParsed(parsedOutput.approvalId),
+            toolCallId: modelEvent.id,
+            reason: stringFromParsed(parsedOutput.reason),
+            sessionId
+          };
+        }
+        continue;
       }
-      continue;
-    }
 
-    if (modelEvent.type === "response_completed") {
-      if (assistantText.length > 0) {
-        await input.database.sessions.appendMessage({
+      if (modelEvent.type === "response_completed") {
+        responseCompleted = true;
+        if (assistantText.length > 0) {
+          await input.database.sessions.appendMessage({
+            sessionId,
+            role: "assistant",
+            content: { text: assistantText }
+          });
+        }
+        yield {
+          type: "response_completed",
           sessionId,
-          role: "assistant",
-          content: { text: assistantText }
-        });
+          responseId: modelEvent.responseId
+        };
+        continue;
       }
+
       yield {
-        type: "response_completed",
-        sessionId,
-        responseId: modelEvent.responseId
+        type: "error",
+        message: modelEvent.message,
+        sessionId
       };
+    }
+
+    if (responseCompleted || toolMessages.length === 0) {
+      pendingRequest = null;
       continue;
     }
 
-    yield {
-      type: "error",
-      message: modelEvent.message,
-      sessionId
+    pendingRequest = {
+      ...pendingRequest,
+      messages: [
+        ...pendingRequest.messages,
+        ...toolMessages.map((message) => ({
+          role: "tool" as const,
+          content: message.output,
+          toolCallId: message.toolCallId,
+          name: message.name
+        }))
+      ]
     };
   }
 }

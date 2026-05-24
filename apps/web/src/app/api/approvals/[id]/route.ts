@@ -29,7 +29,13 @@ export async function GET(_request: NextRequest, context: RouteContext): Promise
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
   const { id } = await context.params;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const decision = body.decision === "reject" ? "reject" : "approve";
+  const decision = parseApprovalDecision(body.decision);
+  if (decision === null) {
+    return Response.json(
+      { error: "Invalid decision. Expected \"approve\" or \"reject\"." },
+      { status: 400 }
+    );
+  }
   const database = getKodeksDatabase();
 
   try {
@@ -74,6 +80,14 @@ export async function POST(request: NextRequest, context: RouteContext): Promise
     }
     return approvalErrorResponse(error);
   }
+}
+
+// Parses an explicit approval decision value.
+export function parseApprovalDecision(decision: unknown): "approve" | "reject" | null {
+  if (decision === "approve" || decision === "reject") {
+    return decision;
+  }
+  return null;
 }
 
 // Extracts the command string from a structured approval payload.
