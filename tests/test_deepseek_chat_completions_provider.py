@@ -182,6 +182,26 @@ class DeepSeekChatCompletionsProviderTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("strict", FakeOpenAI.calls[0]["tools"][0]["function"])
 
+    def test_strict_json_schema_preserves_optional_properties(self) -> None:
+        """Verify strict-schema normalization keeps optional fields optional."""
+
+        provider = deepseek_module.DeepSeekChatCompletionsProvider()
+        schema = {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "limit": {"type": "integer"},
+                "scope": {"type": "string"},
+            },
+            "required": ["path"],
+        }
+
+        normalized = provider._strict_json_schema(schema)
+
+        self.assertEqual(normalized["required"], ["path"])
+        self.assertEqual(normalized["properties"]["limit"]["type"], "integer")
+        self.assertFalse("context" in normalized.get("required", []))
+
     async def test_streamed_tool_call_chunks_become_tool_call_event(self) -> None:
         """Verify DeepSeek streamed tool call deltas are accumulated before execution."""
 

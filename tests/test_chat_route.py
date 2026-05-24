@@ -45,6 +45,22 @@ class ChatRouteTest(unittest.TestCase):
         self.assertEqual(first_frame, second_frame)
         self.assertEqual(len(chat_route_module._SSE_FRAME_CACHE), 1)
 
+    def test_to_sse_error_cache_key_includes_session_id(self) -> None:
+        """Verify cached static errors do not leak session identifiers across requests."""
+
+        chat_route_module._SSE_FRAME_CACHE.clear()
+        first_frame = to_sse(
+            ChatStreamEvent(type="error", message="static error", session_id="session-a")
+        )
+        second_frame = to_sse(
+            ChatStreamEvent(type="error", message="static error", session_id="session-b")
+        )
+
+        self.assertNotEqual(first_frame, second_frame)
+        self.assertIn('"session_id":"session-a"', first_frame)
+        self.assertIn('"session_id":"session-b"', second_frame)
+        self.assertEqual(len(chat_route_module._SSE_FRAME_CACHE), 2)
+
     def test_route_reuses_session_state_across_requests(self) -> None:
         """Verify /api/chat/stream resumes a session through the shared runtime."""
 
