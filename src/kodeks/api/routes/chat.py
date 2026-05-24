@@ -17,7 +17,7 @@ from kodeks.schemas.chat import ChatStreamRequest
 from kodeks.services.api.deepseek_chat_completions import DeepSeekChatCompletionsProvider
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-_SSE_FRAME_CACHE: dict[tuple[str, str], str] = {}
+_SSE_FRAME_CACHE: dict[tuple[str, str, str], str] = {}
 
 # 进程级单例：同一个 FastAPI 进程内复用 runtime 和 SQLite store
 chat_runtime = ChatRuntime(
@@ -41,7 +41,7 @@ def to_sse(event: ChatStreamEvent) -> str:
     return frame
 
 
-def _sse_cache_key(event: ChatStreamEvent) -> tuple[str, str] | None:
+def _sse_cache_key(event: ChatStreamEvent) -> tuple[str, str, str] | None:
     """Return a cache key for static SSE events that do not contain request ids."""
 
     if (
@@ -53,7 +53,7 @@ def _sse_cache_key(event: ChatStreamEvent) -> tuple[str, str] | None:
         and event.tool_name is None
         and event.tool_arguments is None
     ):
-        return (event.type, event.message)
+        return (event.type, event.message, event.session_id or "")
     return None
 
 

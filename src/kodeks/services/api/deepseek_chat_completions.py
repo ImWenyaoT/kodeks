@@ -242,8 +242,11 @@ class DeepSeekChatCompletionsProvider:
 
         if is_object_schema:
             normalized["additionalProperties"] = False
-            if isinstance(properties, dict):
-                normalized["required"] = list(properties.keys())
+            existing_required = normalized.get("required")
+            if isinstance(existing_required, list):
+                normalized["required"] = [
+                    field for field in existing_required if isinstance(field, str)
+                ]
 
         return normalized
 
