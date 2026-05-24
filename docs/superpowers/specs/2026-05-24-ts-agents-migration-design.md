@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented on branch `codex/ts-agents-migration`. This document froze the migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter.
+Implemented on branch `codex/ts-agents-migration`. This document froze the original migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter. A later change superseded the model API note below: the main TypeScript runtime now uses OpenAI Responses API, not Chat Completions.
 
 ## Goal
 
@@ -14,7 +14,7 @@ The migrated project should be strong enough to publish as an open-source resume
 
 - Do not change the core product scope in `docs/PRD.md`.
 - Do not keep Python and TypeScript as long-term peer backends.
-- Do not introduce Responses API, Ark, MCP, cloud sandbox, plugin marketplace, multi-user auth, or WebSocket transport in the MVP.
+- Do not introduce Ark, MCP, cloud sandbox, plugin marketplace, multi-user auth, or WebSocket transport in the MVP.
 - Do not use Vercel AI SDK as the agent tool-loop owner.
 - Do not introduce Drizzle in the MVP. Use SQLite behind async repository modules.
 - Do not make subagents mutate workspace state in the MVP.
@@ -34,7 +34,7 @@ The migration should translate patterns into a smaller TypeScript design. It sho
 - pnpm workspace
 - Next.js App Router
 - OpenAI Agents SDK for agent loop, tool execution, streaming, tracing, and subagent patterns
-- OpenAI JS SDK for Chat Completions client and future provider-compatible base URLs
+- OpenAI JS SDK for the Responses API client and configurable OpenAI base URLs
 - Vercel AI SDK for React chat state and UI stream helpers only
 - SQLite for local durable state
 - zod for runtime schemas
@@ -86,7 +86,7 @@ packages/agent-runtime
 
 packages/model
   openai-client.ts
-  chat-completions-model.ts
+  responses-model.ts
 
 packages/tools
   registry.ts
@@ -125,7 +125,7 @@ packages/shared
 
 The default coding agent. It can read files, search, write files within the workspace, request shell execution, remember facts, and ask for an explore subagent.
 
-The Build Agent uses OpenAI Agents SDK with Chat Completions model support. It receives session transcript, recalled memory, workspace summary, current mode, and tool policy context.
+The Build Agent receives session transcript, recalled memory, workspace summary, current mode, and tool policy context. The main model adapter uses OpenAI Responses API streaming and maps response text/tool events into the stable `AgentEvent` contract.
 
 ### Plan Agent
 
@@ -304,7 +304,7 @@ Use Vercel AI SDK for React chat state and stream handling where it fits, but do
 
 - Implement OpenAI Agents SDK tool wrappers.
 - Implement Build Agent, Plan Agent, and Explore Agent.
-- Implement Chat Completions model configuration with OpenAI JS SDK.
+- Implement Responses API model configuration with OpenAI JS SDK.
 - Implement `runChatTurn()` and `AgentEvent` mapping.
 
 ### Phase 4: API and UI
@@ -375,5 +375,5 @@ API/UI:
 ## Deferred Decisions
 
 - Python files stay in place during migration. After TS parity, move them to a clearly marked legacy archive or remove them in a dedicated cleanup change.
-- The first TS MVP uses OpenAI Agents SDK with OpenAI JS SDK and Chat Completions model support. DeepSeek-compatible Chat Completions can be added as a later provider-compatible adapter after the OpenAI path is stable.
+- The first TS MVP now uses OpenAI JS SDK Responses API support for the main model path. DeepSeek-compatible Chat Completions would require a separate provider adapter rather than sharing the Responses client.
 - Plan artifacts are stored in SQLite and mirrored to `.kodeks/plans/` in the MVP.

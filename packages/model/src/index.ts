@@ -1,5 +1,11 @@
 import OpenAI from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type {
+  EasyInputMessage,
+  FunctionTool,
+  ResponseInput,
+  ResponseOutputText,
+  ResponseStreamEvent
+} from "openai/resources/responses/responses";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -8,6 +14,11 @@ export type ChatMessage = {
   content: string;
   toolCallId?: string;
   name?: string;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+  }>;
 };
 
 export type ChatToolDefinition = {
@@ -27,109 +38,171 @@ export type ModelTurnStreamEvent =
   | { type: "response_completed"; responseId: string }
   | { type: "error"; message: string };
 
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+
 export interface ModelClient {
   streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent>;
 }
 
-export type OpenAIChatCompletionsClientOptions = {
+export type OpenAIResponsesClientOptions = {
   apiKey?: string;
   baseURL?: string;
   model: string;
+  reasoningEffort?: ReasoningEffort;
+  client?: OpenAIResponsesApiClient;
 };
 
-// Converts internal tool definitions to OpenAI Chat Completions function tools.
-export function toOpenAIChatTools(tools: ChatToolDefinition[]): Array<{
-  type: "function";
-  function: ChatToolDefinition;
-}> {
+type ResponsesCreatePayload = {
+  model: string;
+  instructions?: string;
+  input: ResponseInput;
+  tools: FunctionTool[];
+  reasoning?: {
+    effort: ReasoningEffort;
+  };
+  stream: true;
+};
+
+type OpenAIResponsesApiClient = {
+  responses: {
+    create(payload: ResponsesCreatePayload): PromiseLike<AsyncIterable<unknown>> | AsyncIterable<unknown>;
+  };
+};
+
+// Converts internal tool definitions to OpenAI Responses API function tools.
+export function toOpenAIResponsesTools(tools: ChatToolDefinition[]): FunctionTool[] {
   return tools.map((definition) => ({
     type: "function",
-    function: definition
+    name: definition.name,
+    description: definition.description,
+    parameters: definition.parameters,
+    strict: false
   }));
 }
 
-export class OpenAIChatCompletionsClient implements ModelClient {
-  private readonly client: OpenAI;
+export class OpenAIResponsesClient implements ModelClient {
+  private readonly client: OpenAIResponsesApiClient;
   private readonly model: string;
+  private readonly reasoningEffort?: ReasoningEffort;
 
-  // Creates an OpenAI-compatible Chat Completions streaming client.
-  constructor(options: OpenAIChatCompletionsClientOptions) {
-    this.client = new OpenAI({
+  // Creates a Responses API streaming client.
+  constructor(options: OpenAIResponsesClientOptions) {
+    this.client = options.client ?? new OpenAI({
       apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
       baseURL: options.baseURL
     });
     this.model = options.model;
+    this.reasoningEffort = options.reasoningEffort;
   }
 
   // Streams one model turn and maps deltas into the runtime event contract.
   async *streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent> {
-    const stream = await this.client.chat.completions.create({
+    const mappedInput = toOpenAIResponsesInput(request.messages);
+    const payload: ResponsesCreatePayload = {
       model: this.model,
-      messages: request.messages.map(toOpenAIChatMessage),
-      tools: toOpenAIChatTools(request.tools),
+      ...mappedInput,
+      tools: toOpenAIResponsesTools(request.tools),
+      ...(this.reasoningEffort === undefined ? {} : { reasoning: { effort: this.reasoningEffort } }),
       stream: true
-    });
-
-    const toolCalls = new Map<number, { id: string; name: string; argumentsText: string }>();
-    let responseId = "";
+    };
+    const stream = await this.client.responses.create(payload);
+    let sawToolCall = false;
 
     for await (const chunk of stream) {
-      responseId = chunk.id || responseId;
-      const choice = chunk.choices[0];
-      const delta = choice?.delta;
-      if (delta?.content !== undefined && delta.content !== null) {
-        yield { type: "text_delta", text: delta.content };
+      const event = chunk as ResponseStreamEvent;
+      if (event.type === "response.output_text.delta") {
+        yield { type: "text_delta", text: event.delta };
+        continue;
       }
-      for (const toolCall of delta?.tool_calls ?? []) {
-        const index = toolCall.index;
-        const current = toolCalls.get(index) ?? { id: "", name: "", argumentsText: "" };
-        current.id = toolCall.id ?? current.id;
-        current.name = toolCall.function?.name ?? current.name;
-        current.argumentsText += toolCall.function?.arguments ?? "";
-        toolCalls.set(index, current);
+
+      if (event.type === "response.output_item.done" && event.item.type === "function_call") {
+        sawToolCall = true;
+        yield {
+          type: "tool_call",
+          id: event.item.call_id,
+          name: event.item.name,
+          args: parseToolArguments(event.item.arguments)
+        };
+        continue;
       }
-      if (choice?.finish_reason === "tool_calls") {
-        for (const toolCall of toolCalls.values()) {
-          yield {
-            type: "tool_call",
-            id: toolCall.id,
-            name: toolCall.name,
-            args: parseToolArguments(toolCall.argumentsText)
-          };
+
+      if (event.type === "response.completed") {
+        if (!sawToolCall) {
+          yield { type: "response_completed", responseId: event.response.id };
         }
-        toolCalls.clear();
+        continue;
       }
-      if (choice?.finish_reason === "stop") {
-        yield { type: "response_completed", responseId };
+
+      if (event.type === "error") {
+        yield { type: "error", message: event.message };
+        continue;
+      }
+
+      if (event.type === "response.failed") {
+        yield { type: "error", message: event.response.error?.message ?? "Response failed." };
       }
     }
   }
 }
 
-// Converts internal messages to OpenAI's role-specific chat message union.
-function toOpenAIChatMessage(message: ChatMessage): ChatCompletionMessageParam {
-  if (message.role === "tool") {
-    return {
-      role: "tool",
-      content: message.content,
-      tool_call_id: message.toolCallId ?? ""
-    };
+// Converts internal transcript messages to Responses API instructions and input items.
+export function toOpenAIResponsesInput(messages: ChatMessage[]): { instructions?: string; input: ResponseInput } {
+  const instructions = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const input: ResponseInput = [];
+
+  for (const message of messages) {
+    if (message.role === "system") {
+      continue;
+    }
+
+    if (message.role === "tool") {
+      input.push({
+        type: "function_call_output",
+        call_id: message.toolCallId ?? "",
+        output: message.content
+      });
+      continue;
+    }
+
+    if (message.role === "assistant" && message.toolCalls !== undefined && message.toolCalls.length > 0) {
+      if (message.content.trim().length > 0) {
+        input.push(toResponsesMessage(message));
+      }
+      for (const toolCall of message.toolCalls) {
+        input.push({
+          type: "function_call",
+          call_id: toolCall.id,
+          name: toolCall.name,
+          arguments: JSON.stringify(toolCall.args)
+        });
+      }
+      continue;
+    }
+
+    input.push(toResponsesMessage(message));
   }
+
+  return instructions.length > 0 ? { instructions, input } : { input };
+}
+
+// Converts a text-only user or assistant message into a Responses API message item.
+function toResponsesMessage(message: ChatMessage): EasyInputMessage {
   if (message.role === "assistant") {
-    return {
+    const assistantMessage = {
+      type: "message",
       role: "assistant",
-      content: message.content
+      content: [{ type: "output_text", text: message.content, annotations: [] } satisfies ResponseOutputText]
     };
+    return assistantMessage as unknown as EasyInputMessage;
   }
-  if (message.role === "system") {
-    return {
-      role: "system",
-      content: message.content
-    };
-  }
+
   return {
+    type: "message",
     role: "user",
-    content: message.content
+    content: [{ type: "input_text", text: message.content }]
   };
 }
 

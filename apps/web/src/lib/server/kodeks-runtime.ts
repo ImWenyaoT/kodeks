@@ -1,8 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { loadEnvConfig } from "@next/env";
 import { runChatTurn, type AgentEvent } from "@kodeks/agent-runtime";
-import { OpenAIChatCompletionsClient } from "@kodeks/model";
+import { OpenAIResponsesClient, type ReasoningEffort } from "@kodeks/model";
 import { KodeksDatabase } from "@kodeks/storage";
 import { WorkspaceService } from "@kodeks/workspace";
 import {
@@ -18,10 +19,26 @@ type ChatStreamRequest = {
   input?: unknown;
   session_id?: unknown;
   mode?: unknown;
+  reasoning_effort?: unknown;
 };
+
+type ModelClientOptions = {
+  apiKey: string;
+  baseURL?: string;
+  model: string;
+  reasoningEffort: ReasoningEffort;
+  provider: "openai";
+};
+
+type RuntimeEnv = Record<string, string | undefined>;
+
+const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
+const SUPPORTED_REASONING_EFFORTS = new Set<ReasoningEffort>(["none", "low", "medium", "high", "xhigh"]);
 
 type KodeksUIDataParts = {
   session: { sessionId: string };
+  status: { message: string; sessionId: string };
   memory: { memoryIds: string[]; sessionId: string };
   approval: { approvalId: string; toolCallId: string; reason: string; sessionId: string };
   subagent: { runId: string; agent?: "explore"; summary?: string; sessionId: string };
@@ -31,6 +48,7 @@ type KodeksUIDataParts = {
 type KodeksUIMessage = UIMessage<{ sessionId?: string }, KodeksUIDataParts>;
 
 let database: KodeksDatabase | null = null;
+let workspaceEnvLoaded = false;
 
 // Streams one chat turn through the TypeScript runtime as SSE bytes.
 export function streamKodeksChat(body: ChatStreamRequest): ReadableStream<Uint8Array> {
@@ -78,6 +96,8 @@ export function createKodeksUIMessageResponse(body: ChatStreamRequest): Response
 
 // Runs the shared Kodeks chat pipeline used by both SSE and Vercel AI SDK routes.
 async function* runKodeksChatEvents(body: ChatStreamRequest): AsyncIterable<AgentEvent> {
+  loadWorkspaceEnv();
+
   const sessionId = readSessionId(body);
   const input = typeof body.input === "string" ? body.input : "";
   const mode: ChatMode = body.mode === "plan" ? "plan" : "act";
@@ -87,20 +107,23 @@ async function* runKodeksChatEvents(body: ChatStreamRequest): AsyncIterable<Agen
     return;
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  const modelOptions = resolveModelClientOptions(process.env, body.reasoning_effort);
+  if (modelOptions === null) {
     yield {
       type: "error",
-      message: "OPENAI_API_KEY is required to run the TypeScript agent runtime.",
+      message:
+        "An OpenAI API key is required for the Responses API client. Set OPENAI_API_KEY before sending chat messages.",
       sessionId: sessionId ?? ""
     };
     return;
   }
 
   const workspaceRoot = resolveWorkspaceRoot();
-  const model = new OpenAIChatCompletionsClient({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL,
-    model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini"
+  const model = new OpenAIResponsesClient({
+    apiKey: modelOptions.apiKey,
+    baseURL: modelOptions.baseURL,
+    model: modelOptions.model,
+    reasoningEffort: modelOptions.reasoningEffort
   });
 
   yield* runChatTurn({
@@ -111,6 +134,54 @@ async function* runKodeksChatEvents(body: ChatStreamRequest): AsyncIterable<Agen
     database: getKodeksDatabase(),
     model
   });
+}
+
+// Loads env files from the monorepo workspace root once for nested Next.js apps.
+function loadWorkspaceEnv(): void {
+  if (workspaceEnvLoaded) {
+    return;
+  }
+
+  if (process.env.NODE_ENV !== "test") {
+    loadEnvConfig(resolveWorkspaceRoot(), process.env.NODE_ENV !== "production", undefined, true);
+  }
+  workspaceEnvLoaded = true;
+}
+
+// Resolves the OpenAI Responses provider config accepted by the local runtime.
+export function resolveModelClientOptions(
+  env: RuntimeEnv = process.env,
+  requestedReasoningEffort?: unknown
+): ModelClientOptions | null {
+  if (env.OPENAI_API_KEY) {
+    return {
+      apiKey: env.OPENAI_API_KEY,
+      baseURL: env.OPENAI_BASE_URL,
+      model: env.OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL,
+      reasoningEffort: resolveReasoningEffort(requestedReasoningEffort, env.OPENAI_REASONING_EFFORT),
+      provider: "openai"
+    };
+  }
+
+  return null;
+}
+
+// Resolves request-level reasoning strength while falling back to env and the product default.
+function resolveReasoningEffort(requested: unknown, configured: string | undefined): ReasoningEffort {
+  if (typeof requested === "string" && isReasoningEffort(requested)) {
+    return requested;
+  }
+
+  if (configured !== undefined && isReasoningEffort(configured)) {
+    return configured;
+  }
+
+  return DEFAULT_REASONING_EFFORT;
+}
+
+// Checks whether a loose value is one of the Responses API reasoning effort values Kodeks exposes.
+function isReasoningEffort(value: string): value is ReasoningEffort {
+  return SUPPORTED_REASONING_EFFORTS.has(value as ReasoningEffort);
 }
 
 // Reads a normalized session id from loose HTTP request payloads.
@@ -162,6 +233,15 @@ async function writeKodeksUIMessageChunks(
 
     if (event.type === "session_created") {
       writer.write({ type: "data-session", data: { sessionId: event.sessionId }, transient: true });
+      continue;
+    }
+
+    if (event.type === "assistant_status") {
+      writer.write({
+        type: "data-status",
+        data: { message: event.message, sessionId: event.sessionId },
+        transient: true
+      });
       continue;
     }
 
@@ -235,6 +315,9 @@ function toSseFrame(event: AgentEvent): string {
 function toWirePayload(event: AgentEvent): Record<string, unknown> {
   if (event.type === "session_created") {
     return { type: "session_created", session_id: event.sessionId };
+  }
+  if (event.type === "assistant_status") {
+    return { type: "assistant_status", message: event.message, session_id: event.sessionId };
   }
   if (event.type === "text_delta") {
     return { type: "text_delta", delta: event.text, session_id: event.sessionId };

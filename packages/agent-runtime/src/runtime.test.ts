@@ -86,6 +86,11 @@ describe("runChatTurn", () => {
 
     expect(events).toEqual([
       {
+        type: "assistant_status",
+        message: "Using write_file",
+        sessionId: "s1"
+      },
+      {
         type: "tool_call",
         id: "call_1",
         name: "write_file",
@@ -107,6 +112,69 @@ describe("runChatTurn", () => {
       role: "tool",
       toolCallId: "call_1"
     });
+    expect(model.requests[1]?.messages.at(-2)).toMatchObject({
+      role: "assistant",
+      toolCalls: [
+        {
+          id: "call_1",
+          name: "write_file",
+          args: { path: "notes.txt", content: "from tool" }
+        }
+      ]
+    });
+  });
+
+  it("pauses after approval-required tool results instead of sending orphan tool messages", async () => {
+    const model = new FakeModelClient([
+      [
+        {
+          type: "tool_call",
+          id: "call_shell",
+          name: "run_shell",
+          args: { command: "cat package.json | head" }
+        }
+      ],
+      [{ type: "response_completed", responseId: "should_not_run" }]
+    ]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "run a command",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events).toEqual([
+      {
+        type: "assistant_status",
+        message: "Using run_shell",
+        sessionId: "s1"
+      },
+      {
+        type: "tool_call",
+        id: "call_shell",
+        name: "run_shell",
+        args: { command: "cat package.json | head" },
+        sessionId: "s1"
+      },
+      expect.objectContaining({
+        type: "tool_result",
+        id: "call_shell",
+        name: "run_shell",
+        status: "approval_required",
+        sessionId: "s1"
+      }),
+      expect.objectContaining({
+        type: "approval_required",
+        toolCallId: "call_shell",
+        sessionId: "s1"
+      })
+    ]);
+    expect(model.requests).toHaveLength(1);
   });
 
   it("filters mutating tools in plan mode", async () => {
@@ -160,6 +228,30 @@ describe("runChatTurn", () => {
       content: expect.stringContaining("Kodeks uses plan mode")
     });
   });
+
+  it("builds a simple coding-agent system prompt contract", async () => {
+    const model = new FakeModelClient([[{ type: "response_completed", responseId: "resp_prompt" }]]);
+
+    await collectEvents(
+      runChatTurn({
+        input: "请帮我看一下这个文件",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    const systemPrompt = model.requests[0]?.messages[0]?.content ?? "";
+    expect(systemPrompt).toContain("You are Kodeks");
+    expect(systemPrompt).toContain("Reply in the user's language");
+    expect(systemPrompt).toContain("Do not reveal hidden reasoning");
+    expect(systemPrompt).toContain("read files");
+    expect(systemPrompt).toContain("write files");
+    expect(systemPrompt).toContain("run shell commands");
+    expect(systemPrompt).toContain("Do not claim you opened a URL");
+  });
 });
 
 describe("buildAgentsSdkBuildAgent", () => {
@@ -168,7 +260,7 @@ describe("buildAgentsSdkBuildAgent", () => {
       workspace,
       database,
       mode: "act",
-      model: "gpt-4.1-mini"
+      model: "gpt-5.4-mini"
     });
 
     expect(agent.name).toBe("Kodeks Build Agent");

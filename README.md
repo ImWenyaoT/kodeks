@@ -14,7 +14,7 @@ The original Python implementation is archived under [`legacy/python/`](./legacy
 
 - Next.js App Router web app and API routes.
 - Streaming chat over Server-Sent Events.
-- OpenAI-compatible Chat Completions adapter.
+- OpenAI Responses API adapter with function tool streaming.
 - OpenAI Agents SDK wrapper construction for agents and tools.
 - Workspace-scoped file tools with internal path blocking.
 - Shell execution harness with timeout and dangerous command detection.
@@ -62,7 +62,8 @@ Required:
 Optional:
 
 - `OPENAI_BASE_URL`
-- `OPENAI_MODEL` defaults to `gpt-4.1-mini`
+- `OPENAI_MODEL` defaults to `gpt-5.4-mini`
+- `OPENAI_REASONING_EFFORT` defaults to `medium`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
 
@@ -81,7 +82,7 @@ The repository uses `pnpm` workspaces:
 
 - `apps/web`: UI, API routes, and stream adapters.
 - `packages/agent-runtime`: turn orchestration, context assembly, plan mode, and agent/tool wrappers.
-- `packages/model`: OpenAI-compatible model clients.
+- `packages/model`: OpenAI Responses API model client.
 - `packages/tools`: model-callable tool registry and policy wrappers.
 - `packages/workspace`: workspace path policy, file access, and shell execution.
 - `packages/storage`: SQLite repositories.

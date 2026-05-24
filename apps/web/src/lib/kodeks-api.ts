@@ -4,6 +4,7 @@ export type SendChatMessageInput = {
   input: string;
   sessionId: string;
   mode: ChatMode;
+  reasoningEffort: "low" | "medium" | "high" | "xhigh";
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
   onEvent: (event: ChatStreamEvent) => void;
@@ -14,6 +15,7 @@ export async function sendChatMessage({
   input,
   sessionId,
   mode,
+  reasoningEffort,
   signal,
   onDelta,
   onEvent
@@ -26,7 +28,8 @@ export async function sendChatMessage({
     body: JSON.stringify({
       input,
       session_id: sessionId,
-      mode
+      mode,
+      reasoning_effort: reasoningEffort
     }),
     signal
   });

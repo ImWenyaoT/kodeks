@@ -28,6 +28,38 @@ describe("parseSseFrames", () => {
       { type: "approval_required", approvalId: "appr_1", message: "danger", sessionId: "s1" }
     ]);
   });
+
+  it("parses assistant status without treating it as answer text", async () => {
+    const frames = [
+      'event: assistant_status\ndata: {"type":"assistant_status","message":"正在读取文件","session_id":"s1"}\n\n',
+      'event: text_delta\ndata: {"type":"text_delta","delta":"完成","session_id":"s1"}\n\n'
+    ];
+    const events: unknown[] = [];
+    const deltas: string[] = [];
+
+    await collectChatStream(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(frames.join("")));
+          controller.close();
+        }
+      }),
+      {
+        onDelta(delta) {
+          deltas.push(delta);
+        },
+        onEvent(event) {
+          events.push(event);
+        }
+      }
+    );
+
+    expect(events).toEqual([
+      { type: "assistant_status", message: "正在读取文件", sessionId: "s1" },
+      { type: "text_delta", delta: "完成", sessionId: "s1" }
+    ]);
+    expect(deltas).toEqual(["完成"]);
+  });
 });
 
 describe("collectChatStream", () => {

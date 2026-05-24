@@ -2,6 +2,11 @@ export type ChatMode = "act" | "plan";
 
 export type ChatStreamEvent =
   | {
+      type: "assistant_status";
+      message: string;
+      sessionId?: string;
+    }
+  | {
       type: "text_delta";
       delta: string;
       sessionId?: string;
@@ -139,6 +144,14 @@ export async function collectChatStream(
 
 // Converts backend snake_case event payloads into a compact frontend contract.
 function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null {
+  if (rawEvent.type === "assistant_status") {
+    return {
+      type: "assistant_status",
+      message: rawEvent.message ?? "",
+      sessionId: rawEvent.session_id
+    };
+  }
+
   if (rawEvent.type === "text_delta") {
     return {
       type: "text_delta",

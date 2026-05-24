@@ -52,6 +52,7 @@ Thumbs.db
 # Keep product docs and Superpowers specs synced for handoff.
 docs/*
 !docs/PRD.md
+!docs/2026-05-24-agent-feedback-retrospective.md
 !docs/superpowers/
 !docs/superpowers/**
 

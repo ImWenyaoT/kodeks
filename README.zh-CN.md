@@ -14,7 +14,7 @@ kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实
 
 - Next.js App Router Web 应用和 API routes。
 - 基于 Server-Sent Events 的流式对话。
-- OpenAI-compatible Chat Completions adapter。
+- OpenAI Responses API adapter，支持 function tool streaming。
 - OpenAI Agents SDK 的 agent/tool wrapper 构造。
 - 受 workspace policy 约束的文件工具，并阻止内部路径访问。
 - 带 timeout 和危险命令检测的 shell harness。
@@ -62,7 +62,8 @@ curl -N -X POST http://127.0.0.1:3000/api/chat/ui-stream \
 可选：
 
 - `OPENAI_BASE_URL`
-- `OPENAI_MODEL`，默认是 `gpt-4.1-mini`
+- `OPENAI_MODEL`，默认是 `gpt-5.4-mini`
+- `OPENAI_REASONING_EFFORT`，默认是 `medium`；支持 `none`、`low`、`medium`、`high`、`xhigh`
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
 
@@ -81,7 +82,7 @@ pnpm build
 
 - `apps/web`: UI、API routes 和 stream adapters。
 - `packages/agent-runtime`: turn orchestration、context assembly、plan mode 和 agent/tool wrappers。
-- `packages/model`: OpenAI-compatible model clients。
+- `packages/model`: OpenAI Responses API model client。
 - `packages/tools`: model-callable tool registry 和 policy wrappers。
 - `packages/workspace`: workspace path policy、file access 和 shell execution。
 - `packages/storage`: SQLite repositories。

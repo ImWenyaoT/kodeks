@@ -11,6 +11,7 @@ import type { WorkspaceService } from "@kodeks/workspace";
 
 export type AgentEvent =
   | { type: "session_created"; sessionId: string }
+  | { type: "assistant_status"; message: string; sessionId: string }
   | { type: "text_delta"; text: string; sessionId: string }
   | { type: "tool_call"; id: string; name: string; args: unknown; sessionId: string }
   | {
@@ -97,16 +98,24 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
 
   while (pendingRequest !== null) {
     const toolMessages: Array<{ toolCallId: string; name: string; output: string }> = [];
+    const toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
     let responseCompleted = false;
+    let waitingForApproval = false;
 
     for await (const modelEvent of input.model.streamTurn(pendingRequest)) {
-    if (modelEvent.type === "text_delta") {
-      assistantText += modelEvent.text;
-      yield { type: "text_delta", text: modelEvent.text, sessionId };
-      continue;
-    }
+      if (modelEvent.type === "text_delta") {
+        assistantText += modelEvent.text;
+        yield { type: "text_delta", text: modelEvent.text, sessionId };
+        continue;
+      }
 
       if (modelEvent.type === "tool_call") {
+        toolCalls.push({ id: modelEvent.id, name: modelEvent.name, args: modelEvent.args });
+        yield {
+          type: "assistant_status",
+          message: `Using ${modelEvent.name}`,
+          sessionId
+        };
         yield {
           type: "tool_call",
           id: modelEvent.id,
@@ -138,6 +147,7 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
             reason: stringFromParsed(parsedOutput.reason),
             sessionId
           };
+          waitingForApproval = true;
         }
         continue;
       }
@@ -166,7 +176,7 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
       };
     }
 
-    if (responseCompleted || toolMessages.length === 0) {
+    if (responseCompleted || toolMessages.length === 0 || waitingForApproval) {
       pendingRequest = null;
       continue;
     }
@@ -175,6 +185,11 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
       ...pendingRequest,
       messages: [
         ...pendingRequest.messages,
+        {
+          role: "assistant" as const,
+          content: "",
+          toolCalls
+        },
         ...toolMessages.map((message) => ({
           role: "tool" as const,
           content: message.output,
@@ -249,9 +264,26 @@ function toAgentsSdkTool(definition: ToolDefinition, registry: ToolRegistry): Fu
 // Builds mode-specific system instructions for the Agents SDK agent.
 function buildAgentInstructions(mode: SessionMode): string {
   if (mode === "plan") {
-    return "You are Kodeks Plan Agent. Inspect the workspace and produce a plan. Do not mutate files or run shell commands.";
+    return [
+      "You are Kodeks Plan Agent.",
+      "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
+      "Inspect the workspace and produce a short, practical plan.",
+      "Do not mutate files or run shell commands.",
+      "Do not reveal hidden reasoning or private scratchpad text.",
+      "Do not claim you opened a URL unless a tool result proves it."
+    ].join("\n");
   }
-  return "You are Kodeks Build Agent. Help with coding tasks using the provided workspace, memory, shell, and subagent tools.";
+  return [
+    "You are Kodeks Build Agent.",
+    "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
+    "Help with coding tasks by using simple workspace tools: read files, write files, and run shell commands.",
+    "Use memory and subagent tools only when they clearly help the task.",
+    "Ask for approval before dangerous shell commands or risky writes.",
+    "Do not reveal hidden reasoning or private scratchpad text.",
+    "Do not write self-talk like \"Let me explore\" as the final answer.",
+    "Do not claim you opened a URL unless a tool result proves it.",
+    "Keep final answers concise: say what changed, how it was verified, and any remaining risk."
+  ].join("\n");
 }
 
 // Builds system context for the model client request.
