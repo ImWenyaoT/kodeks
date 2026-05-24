@@ -701,6 +701,20 @@ button {
   line-height: 1.45;
 }
 
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approval-actions .icon-button {
+  color: var(--fixed-white);
+  background: var(--system-blue);
+}
+
+.approval-actions .icon-button.stop {
+  background: var(--danger);
+}
+
 .activity-heading {
   margin-bottom: 12px;
   display: inline-flex;

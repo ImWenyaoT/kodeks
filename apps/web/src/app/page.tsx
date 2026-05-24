@@ -5,6 +5,7 @@ import {
   AppWindow,
   Bot,
   CalendarDays,
+  Check,
   ChevronDown,
   CircleStop,
   Code2,
@@ -17,7 +18,8 @@ import {
   Sparkles,
   Terminal,
   UserRound,
-  Wrench
+  Wrench,
+  X
 } from "lucide-react";
 
 import { type ChatMode, type ChatStreamEvent } from "@/lib/chat-stream";
@@ -35,6 +37,11 @@ type ActivityItem = {
   detail: string;
 };
 
+type PendingApproval = {
+  id: string;
+  reason: string;
+};
+
 const modelOptions = ["Pro", "Reasoner", "Lite"] as const;
 
 type ModelOption = (typeof modelOptions)[number];
@@ -45,7 +52,7 @@ export default function Home() {
     {
       id: "welcome",
       role: "assistant",
-      content: "我是 Kodeks 的最小聊天界面。输入一条消息，我会通过本地 FastAPI 后端流式回复。"
+      content: "我是 Kodeks 的最小聊天界面。输入一条消息，我会通过本地 TypeScript runtime 流式回复。"
     }
   ]);
   const [input, setInput] = useState("");
@@ -55,6 +62,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState("s_demo");
   const [isStreaming, setIsStreaming] = useState(false);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const canSend = input.trim().length > 0 && !isStreaming;
@@ -116,7 +124,7 @@ export default function Home() {
                   ...message,
                   content:
                     message.content ||
-                    "请求失败了。确认 FastAPI 后端还在 http://127.0.0.1:8000 运行。"
+                    "请求失败了。确认本地 Next.js runtime 还在 http://127.0.0.1:3000 运行。"
                 }
               : message
           )
@@ -151,9 +159,57 @@ export default function Home() {
       return;
     }
 
+    if (streamEvent.type === "approval_required") {
+      setPendingApproval({
+        id: streamEvent.approvalId,
+        reason: streamEvent.message
+      });
+      appendActivity("Approval", streamEvent.message);
+      return;
+    }
+
+    if (streamEvent.type === "memory_recalled") {
+      appendActivity("Memory", `${streamEvent.memoryIds.length} recalled`);
+      return;
+    }
+
+    if (streamEvent.type === "subagent_started") {
+      appendActivity("Subagent", `${streamEvent.agent} started`);
+      return;
+    }
+
+    if (streamEvent.type === "subagent_completed") {
+      appendActivity("Subagent", streamEvent.summary);
+      return;
+    }
+
     if (streamEvent.type === "error") {
       appendActivity("Error", streamEvent.message);
     }
+  }
+
+  // Sends an approval decision to the local TS approval API.
+  async function decideApproval(decision: "approve" | "reject") {
+    if (pendingApproval === null) {
+      return;
+    }
+
+    const approvalId = pendingApproval.id;
+    const response = await fetch(`/api/approvals/${approvalId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ decision })
+    });
+
+    if (response.ok) {
+      appendActivity(decision === "approve" ? "Approved" : "Rejected", approvalId);
+      setPendingApproval(null);
+      return;
+    }
+
+    appendActivity("Approval error", `HTTP ${response.status}`);
   }
 
   // Appends one telemetry row, keeping the panel short and readable.
@@ -339,6 +395,21 @@ export default function Home() {
               <p>Use a stable session id to test multi-turn memory and resume behavior.</p>
             </section>
 
+            {pendingApproval !== null ? (
+              <section className="detail-card">
+                <label>Approval</label>
+                <p>{pendingApproval.reason}</p>
+                <div className="approval-actions">
+                  <button className="icon-button" onClick={() => decideApproval("approve")} type="button" aria-label="Approve">
+                    <Check size={17} />
+                  </button>
+                  <button className="icon-button stop" onClick={() => decideApproval("reject")} type="button" aria-label="Reject">
+                    <X size={17} />
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             <section className="activity-card">
               <div className="activity-heading">
                 <Cpu size={16} />
@@ -361,7 +432,7 @@ export default function Home() {
             <section className="runtime-card" id="runtime">
               <div>
                 <AppWindow size={17} />
-                <span>FastAPI backend</span>
+                <span>TypeScript runtime</span>
               </div>
               <div>
                 <Wrench size={17} />

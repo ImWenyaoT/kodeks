@@ -11,7 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kodeks/agent-runtime": "workspace:*",
+    "@kodeks/model": "workspace:*",
     "@kodeks/shared": "workspace:*",
+    "@kodeks/storage": "workspace:*",
+    "@kodeks/workspace": "workspace:*",
     "@next/swc-darwin-arm64": "^16.2.6",
     "ai": "^6.0.182",
     "lucide-react": "^1.16.0",

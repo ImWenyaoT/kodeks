@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -17,9 +20,21 @@ importers:
 
   apps/web:
     dependencies:
+      '@kodeks/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@kodeks/model':
+        specifier: workspace:*
+        version: link:../../packages/model
       '@kodeks/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@kodeks/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@kodeks/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
       '@next/swc-darwin-arm64':
         specifier: ^16.2.6
         version: 16.2.6
@@ -66,9 +81,21 @@ importers:
 
   packages/agent-runtime:
     dependencies:
+      '@kodeks/model':
+        specifier: workspace:*
+        version: link:../model
       '@kodeks/shared':
         specifier: workspace:*
         version: link:../shared
+      '@kodeks/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@kodeks/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@kodeks/workspace':
+        specifier: workspace:*
+        version: link:../workspace
       '@openai/agents':
         specifier: ^0.8.3
         version: 0.8.5(ws@8.21.0)(zod@4.4.3)
@@ -129,6 +156,9 @@ importers:
       '@kodeks/shared':
         specifier: workspace:*
         version: link:../shared
+      '@kodeks/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@kodeks/workspace':
         specifier: workspace:*
         version: link:../workspace
@@ -3732,7 +3762,7 @@ snapshots:
       eslint: 9.39.4
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint@9.39.4))(eslint@9.39.4)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint@9.39.4))(eslint@9.39.4))(eslint@9.39.4)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4)
       eslint-plugin-react: 7.37.5(eslint@9.39.4)
       eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4)
@@ -3765,7 +3795,7 @@ snapshots:
       tinyglobby: 0.2.16
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint@9.39.4))(eslint@9.39.4))(eslint@9.39.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -3780,7 +3810,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.4(eslint@9.39.4)(typescript@6.0.3))(eslint@9.39.4))(eslint@9.39.4))(eslint@9.39.4):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9

@@ -1,0 +1,193 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+import { KodeksDatabase } from "@kodeks/storage";
+import { WorkspaceService } from "@kodeks/workspace";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import {
+  buildAgentsSdkBuildAgent,
+  runChatTurn,
+  type AgentEvent,
+  type ModelClient,
+  type ModelTurnRequest,
+  type ModelTurnStreamEvent
+} from "./index";
+
+let tempDir: string;
+let database: KodeksDatabase;
+let workspace: WorkspaceService;
+
+beforeEach(async () => {
+  tempDir = await mkdtemp(join(tmpdir(), "kodeks-runtime-"));
+  database = new KodeksDatabase(join(tempDir, "kodeks.sqlite3"));
+  workspace = new WorkspaceService(tempDir);
+});
+
+afterEach(async () => {
+  database.close();
+  await rm(tempDir, { recursive: true, force: true });
+});
+
+describe("runChatTurn", () => {
+  it("streams text events and stores resumable transcript", async () => {
+    const model = new FakeModelClient([
+      { type: "text_delta", text: "Hello" },
+      { type: "text_delta", text: " world" },
+      { type: "response_completed", responseId: "resp_1" }
+    ]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "hello",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events).toEqual([
+      { type: "text_delta", text: "Hello", sessionId: "s1" },
+      { type: "text_delta", text: " world", sessionId: "s1" },
+      { type: "response_completed", sessionId: "s1", responseId: "resp_1" }
+    ]);
+    expect(await database.sessions.getTranscript("s1")).toEqual([
+      expect.objectContaining({ role: "user", content: { text: "hello" } }),
+      expect.objectContaining({ role: "assistant", content: { text: "Hello world" } })
+    ]);
+  });
+
+  it("executes tool calls and emits tool result events", async () => {
+    const model = new FakeModelClient([
+      {
+        type: "tool_call",
+        id: "call_1",
+        name: "write_file",
+        args: { path: "notes.txt", content: "from tool" }
+      },
+      { type: "response_completed", responseId: "resp_2" }
+    ]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "write a note",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events).toEqual([
+      {
+        type: "tool_call",
+        id: "call_1",
+        name: "write_file",
+        args: { path: "notes.txt", content: "from tool" },
+        sessionId: "s1"
+      },
+      expect.objectContaining({
+        type: "tool_result",
+        id: "call_1",
+        name: "write_file",
+        status: "ok",
+        sessionId: "s1"
+      }),
+      { type: "response_completed", sessionId: "s1", responseId: "resp_2" }
+    ]);
+    await expect(workspace.readFile("notes.txt")).resolves.toBe("from tool");
+  });
+
+  it("filters mutating tools in plan mode", async () => {
+    const model = new FakeModelClient([{ type: "response_completed", responseId: "resp_3" }]);
+
+    await collectEvents(
+      runChatTurn({
+        input: "make a plan",
+        sessionId: "s1",
+        mode: "plan",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual([
+      "read_file",
+      "grep",
+      "recall_memory",
+      "spawn_explore_agent"
+    ]);
+    expect(await database.sessions.getSession("s1")).toMatchObject({ mode: "plan" });
+  });
+
+  it("injects recalled memory before model execution", async () => {
+    await database.memories.remember({
+      scope: "project",
+      content: "Kodeks uses plan mode for read-only planning."
+    });
+    const model = new FakeModelClient([{ type: "response_completed", responseId: "resp_4" }]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "how should plan mode work?",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events[0]).toMatchObject({
+      type: "memory_recalled",
+      sessionId: "s1",
+      memoryIds: [expect.stringMatching(/^mem_/)]
+    });
+    expect(model.requests[0]?.messages[0]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("Kodeks uses plan mode")
+    });
+  });
+});
+
+describe("buildAgentsSdkBuildAgent", () => {
+  it("constructs an OpenAI Agents SDK agent with local tool wrappers", () => {
+    const agent = buildAgentsSdkBuildAgent({
+      workspace,
+      database,
+      mode: "act",
+      model: "gpt-4.1-mini"
+    });
+
+    expect(agent.name).toBe("Kodeks Build Agent");
+    expect(agent.tools.map((tool) => tool.name)).toContain("read_file");
+  });
+});
+
+class FakeModelClient implements ModelClient {
+  readonly requests: ModelTurnRequest[] = [];
+
+  constructor(private readonly events: ModelTurnStreamEvent[]) {}
+
+  // Streams preconfigured events while capturing the runtime request.
+  async *streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent> {
+    this.requests.push(request);
+    for (const event of this.events) {
+      yield event;
+    }
+  }
+}
+
+// Collects one async event stream into an array for assertions.
+async function collectEvents(events: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
+  const collected: AgentEvent[] = [];
+  for await (const event of events) {
+    collected.push(event);
+  }
+  return collected;
+}

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Kodeks Chat",
-  description: "Minimal chat UI for the kodeks FastAPI coding-agent demo."
+  description: "Minimal chat UI for the kodeks TypeScript coding-agent demo."
 };
 
 // Defines the root document shell for the Next.js app.

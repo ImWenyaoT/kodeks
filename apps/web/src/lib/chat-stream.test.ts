@@ -16,6 +16,18 @@ describe("parseSseFrames", () => {
       { type: "response_completed", responseId: "resp_1", sessionId: "s1" }
     ]);
   });
+
+  it("parses approval and memory events from TS runtime frames", () => {
+    const frames = [
+      'event: memory_recalled\ndata: {"type":"memory_recalled","memory_ids":["mem_1"],"session_id":"s1"}\n\n',
+      'event: approval_required\ndata: {"type":"approval_required","approval_id":"appr_1","message":"danger","session_id":"s1"}\n\n'
+    ];
+
+    expect(parseSseFrames(frames.join(""))).toEqual([
+      { type: "memory_recalled", memoryIds: ["mem_1"], sessionId: "s1" },
+      { type: "approval_required", approvalId: "appr_1", message: "danger", sessionId: "s1" }
+    ]);
+  });
 });
 
 describe("collectChatStream", () => {

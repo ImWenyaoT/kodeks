@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved direction from planning conversation. This document freezes the migration design before implementation.
+Implemented on branch `codex/ts-agents-migration`. This document froze the migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter.
 
 ## Goal
 

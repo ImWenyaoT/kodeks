@@ -21,7 +21,30 @@ export type ChatStreamEvent =
       type: "tool_result";
       toolName?: string;
       toolStatus?: string;
-      toolOutput?: Record<string, unknown>;
+      toolOutput?: unknown;
+      sessionId?: string;
+    }
+  | {
+      type: "approval_required";
+      approvalId: string;
+      message: string;
+      sessionId?: string;
+    }
+  | {
+      type: "memory_recalled";
+      memoryIds: string[];
+      sessionId?: string;
+    }
+  | {
+      type: "subagent_started";
+      runId: string;
+      agent: string;
+      sessionId?: string;
+    }
+  | {
+      type: "subagent_completed";
+      runId: string;
+      summary: string;
       sessionId?: string;
     }
   | {
@@ -38,7 +61,12 @@ type RawChatStreamEvent = {
   tool_name?: string;
   tool_arguments?: Record<string, unknown>;
   tool_status?: string;
-  tool_output?: Record<string, unknown>;
+  tool_output?: unknown;
+  approval_id?: string;
+  memory_ids?: string[];
+  run_id?: string;
+  agent?: string;
+  summary?: string;
   message?: string;
 };
 
@@ -142,6 +170,41 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
       toolName: rawEvent.tool_name,
       toolStatus: rawEvent.tool_status,
       toolOutput: rawEvent.tool_output,
+      sessionId: rawEvent.session_id
+    };
+  }
+
+  if (rawEvent.type === "approval_required") {
+    return {
+      type: "approval_required",
+      approvalId: rawEvent.approval_id ?? "",
+      message: rawEvent.message ?? "Approval required.",
+      sessionId: rawEvent.session_id
+    };
+  }
+
+  if (rawEvent.type === "memory_recalled") {
+    return {
+      type: "memory_recalled",
+      memoryIds: rawEvent.memory_ids ?? [],
+      sessionId: rawEvent.session_id
+    };
+  }
+
+  if (rawEvent.type === "subagent_started") {
+    return {
+      type: "subagent_started",
+      runId: rawEvent.run_id ?? "",
+      agent: rawEvent.agent ?? "explore",
+      sessionId: rawEvent.session_id
+    };
+  }
+
+  if (rawEvent.type === "subagent_completed") {
+    return {
+      type: "subagent_completed",
+      runId: rawEvent.run_id ?? "",
+      summary: rawEvent.summary ?? "",
       sessionId: rawEvent.session_id
     };
   }

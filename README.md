@@ -2,7 +2,7 @@
 
 `kodeks` 是一个教学型 coding-agent 项目：目标是为了实习面试，写出一个能讲清楚架构、边界和取舍的 mini opencode/codex。
 
-项目正在从 Python/FastAPI 迁移到 TypeScript full-stack 架构。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
+项目已从 Python/FastAPI 主链路迁移到 TypeScript full-stack 架构。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
 
 ## Reference Sources
 
@@ -31,19 +31,22 @@
 
 ## Current Capabilities
 
-已完成：
+TypeScript MVP 已完成：
 
+- Next.js App Router UI and API routes
+- OpenAI-compatible Chat Completions model adapter
+- OpenAI Agents SDK agent/tool wrapper construction
+- Vercel AI SDK UIMessage stream adapter for SDK-native clients
 - workspace file boundary with blocked internal paths
 - shell harness with timeout and dangerous command detection
-- streaming DeepSeek chat-completions baseline
-- persistent conversation state with SQLite
-- `read_file` / `write_file` / `run_shell` tool loop through runtime orchestration
-- pending approval audit records for dangerous shell commands
-- approval API for approving or rejecting pending shell commands once
+- persistent sessions, transcript, memory, approvals, subagent runs, and audit log in SQLite
+- `read_file` / `write_file` / `grep` / `run_shell` / `remember_fact` / `recall_memory` / `spawn_explore_agent` tools
+- plan mode read-only tool filtering
+- SSE chat stream from the TypeScript runtime
+- Vercel AI SDK chat stream from the same runtime
+- session and approval API routes
 
-下一阶段：
-
-`Phase 7: long-term memory`
+The original Python/FastAPI implementation is archived under `legacy/python/` for reference.
 
 ## Run
 
@@ -54,25 +57,26 @@ pnpm install
 pnpm dev
 ```
 
-Python legacy backend:
-
-```bash
-uv sync
-uv run fastapi dev src/kodeks/main.py
-```
-
 Health check:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:3000/api/sessions
 ```
 
 Chat stream smoke test:
 
 ```bash
-curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
+curl -N -X POST http://127.0.0.1:3000/api/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"input":"hello","session_id":"s_demo"}'
+  -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
+```
+
+Vercel AI SDK UIMessage stream smoke test:
+
+```bash
+curl -N -X POST http://127.0.0.1:3000/api/chat/ui-stream \
+  -H "Content-Type: application/json" \
+  -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
 ```
 
 Frontend chat demo:
@@ -81,17 +85,18 @@ Frontend chat demo:
 pnpm --filter @kodeks/web dev
 ```
 
-Then open `http://127.0.0.1:3000`. The Next.js UI proxies chat requests to the
-FastAPI backend at `http://127.0.0.1:8000` by default. Override it with
-`KODEKS_API_BASE_URL` if the backend runs elsewhere.
+Then open `http://127.0.0.1:3000`. The Next.js UI streams chat requests through the
+TypeScript runtime.
 For a cleaner production-style preview after `npm run build`, use
 `npm run start`.
 
 Provider configuration:
 
-- `LLM_API_KEY` or `DEEPSEEK_API_KEY`
-- optional `LLM_BASE_URL` or `DEEPSEEK_BASE_URL`
-- optional `LLM_MODEL`, default `deepseek-v4-flash`
+- `OPENAI_API_KEY`
+- optional `OPENAI_BASE_URL`
+- optional `OPENAI_MODEL`, default `gpt-4.1-mini`
+- optional `KODEKS_WORKSPACE_ROOT`
+- optional `KODEKS_DB_PATH`
 
 ## Test
 
@@ -101,20 +106,6 @@ TypeScript:
 pnpm test
 pnpm typecheck
 pnpm lint
-```
-
-Python legacy:
-
-```bash
-uv run python -m compileall -q src tests
-uv run python -m unittest discover -s tests -v
-```
-
-If the local environment cannot write to the default uv cache, use a temp cache:
-
-```bash
-UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m compileall -q src tests
-UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -v
 ```
 
 ## Architecture
@@ -129,26 +120,12 @@ TypeScript target:
 - `packages/storage`: async SQLite repositories.
 - `packages/shared`: cross-package IDs, errors, Result helpers, and JSON utilities.
 
-Python legacy:
+Python legacy archive:
 
-- `src/kodeks/api/routes/`: inbound FastAPI routes. Routes translate HTTP/SSE only.
-- `src/kodeks/runtime/`: agent runtime contracts, event protocol, session state, and provider interface.
-- `src/kodeks/services/api/`: outbound API adapters, currently DeepSeek chat completions.
-- `src/kodeks/services/`: local workspace, shell, and audit capabilities.
-- `src/kodeks/tools/`: model-callable tool registry and local execution wrappers.
-- `src/kodeks/schemas/`: HTTP request/response schemas.
-
-Important runtime contracts:
-
-- `ChatStreamEvent`: internal event contract for `text_delta`, `response_completed`, `error`, `tool_call`, and `tool_result`.
-- `ChatProviderRequest`: provider-neutral request carrying user input, chat messages, tool definitions, and tool outputs.
-- `SessionStateStore`: storage abstraction for session transcript plus a compatibility latest completion id.
-- `ToolRegistry`: maps model tool calls to workspace/shell services while preserving safety boundaries.
+- `legacy/python/`: original Python/FastAPI implementation kept for behavior comparison.
 
 ## Interview Narrative
 
 一句话讲法：
 
-> I built a Python/FastAPI mini coding-agent inspired by opencode/codex. It streams DeepSeek chat-completions events, preserves multi-turn session state through explicit messages, lets the model call workspace and shell tools through a registry, and gates dangerous shell actions behind a one-shot auditable approval flow.
-
-Phase 7 要把当前短期 session context 升级出长期 memory：只保存可解释、可审计、可更新的用户偏好、项目事实和 lessons，避免模型把临时信息静默写进永久状态。
+> I migrated a Python/FastAPI mini coding-agent into a TypeScript full-stack coding agent. The MVP uses Next.js, OpenAI Agents SDK wrappers, an OpenAI-compatible Chat Completions adapter, SQLite repositories, workspace/shell services, memory, multi-session resume, plan-mode read-only tools, subagent run records, and auditable one-shot approvals.

@@ -8,10 +8,10 @@
     "build": "pnpm --filter @kodeks/web build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "test:python": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -v"
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }
