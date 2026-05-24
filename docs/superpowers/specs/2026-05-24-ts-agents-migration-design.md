@@ -23,7 +23,8 @@ The migrated project should be strong enough to publish as an open-source resume
 
 1. `/Users/edward/Documents/src`: primary product and behavior reference for memory, planning, tool orchestration, subagent isolation, context assembly, and permission UX.
 2. `/Users/edward/Documents/opencode`: secondary structure reference for agent roles, session shape, tool contracts, permission rules, and coding-agent package boundaries.
-3. Existing `kodeks` Python code: behavior source of truth for workspace boundary, shell policy, approval audit, session state, memory JSONL, plan mode, and current tests.
+3. `/Users/edward/Documents/apps.apple.com.-main`: frontend design reference for polished App Store-style app shell, responsive shelves, card rhythm, system color tokens, and accessibility details. Use it for visual and interaction principles only; do not copy Apple-owned code, assets, content, or Svelte-specific implementation patterns.
+4. Existing `kodeks` Python code: behavior source of truth for workspace boundary, shell policy, approval audit, session state, memory JSONL, plan mode, and current tests.
 
 The migration should translate patterns into a smaller TypeScript design. It should not clone either reference repository's full platform architecture.
 
@@ -258,6 +259,17 @@ The parent agent receives the subagent summary as a tool result. The MVP stores 
 
 The first screen remains the usable coding-agent chat interface, not a landing page.
 
+Frontend design should additionally reference `/Users/edward/Documents/apps.apple.com.-main` for product polish:
+
+- Use an app-shell composition with a persistent desktop sidebar and a compact mobile top chrome.
+- Treat sessions, tool calls, approvals, memory recall, and subagent summaries as structured shelves or timeline rows with consistent rhythm.
+- Prefer system-like color tokens, light/dark support, high-contrast compatibility, and clear focus-visible states.
+- Use responsive grid and shelf spacing rules so dense coding-agent information stays scannable without becoming a generic dashboard.
+- Keep controls precise and familiar: icon buttons for compact actions, segmented controls for modes, and quiet hover/active states.
+- Preserve accessibility details such as keyboard focus, reduced visual noise, and readable contrast.
+
+This reference should shape the UI direction, but implementation remains Next.js + React + TypeScript. The MVP should not include Apple content, copied CSS, copied Svelte components, or reverse-engineered private behavior.
+
 MVP UI:
 
 - chat timeline
@@ -268,6 +280,8 @@ MVP UI:
 - plan mode indicator
 - subagent summary row
 - memory recall indicator
+- responsive session/sidebar shell
+- frontend tokens for color, spacing, radius, focus, and density
 
 Use Vercel AI SDK for React chat state and stream handling where it fits, but do not delegate runtime tool execution to `streamText` or Vercel AI SDK agents.
 
@@ -354,6 +368,7 @@ API/UI:
 - Next.js app runs locally and streams an agent response.
 - The migrated stack supports memory, multi-session, plan mode, and one read-only subagent.
 - Dangerous shell commands require approval and are auditable.
+- The UI follows the App Store reference at the level of layout discipline, shelf rhythm, responsive behavior, and accessibility polish without copying protected code or assets.
 - Python backend is no longer required for the main app after parity.
 - README has updated run/test instructions and interview narrative.
 
