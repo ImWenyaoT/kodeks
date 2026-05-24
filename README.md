@@ -1,8 +1,8 @@
 # kodeks
 
-`kodeks` 是一个教学型 Python coding-agent 项目：目标是为了实习面试，写出一个能讲清楚架构、边界和取舍的 mini opencode/codex。
+`kodeks` 是一个教学型 coding-agent 项目：目标是为了实习面试，写出一个能讲清楚架构、边界和取舍的 mini opencode/codex。
 
-技术栈固定为 Python、FastAPI、uv、OpenAI-compatible Python SDK 和 DeepSeek chat-completions API。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
+项目正在从 Python/FastAPI 迁移到 TypeScript full-stack 架构。长期目标不是普通 chatbot，而是至少具备 memory、multi-session、plan mode、subagent 能力的 coding agent。
 
 ## Reference Sources
 
@@ -11,8 +11,23 @@
 - DeepSeek API docs: 对照 chat-completions streaming、function calling 和 stateless multi-round messages。
 - `/Users/edward/Documents/src`: agent 产品设计主参考，对照 memory、multi-session、context window、plan mode、tool orchestration、subagent。
 - `/Users/edward/Documents/opencode`: coding-agent 结构副参考，对照 session、agent、tool、provider abstraction、plan tool 和权限边界。
+- `/Users/edward/Documents/apps.apple.com.-main`: 前端设计参考，对照 App Store 风格的 app shell、shelf 节奏、响应式布局和 accessibility polish。
 
-实现时用 Python 重写这些能力，不照搬 TypeScript/Next.js 目录结构。
+迁移时把参考项目的模式翻译成更小的 TypeScript 设计，不照搬完整平台架构或受保护前端源码。
+
+## TypeScript Migration
+
+当前 TS scaffold：
+
+- `apps/web`: Next.js App Router UI
+- `packages/shared`: shared result and boundary helpers
+- `packages/agent-runtime`: future OpenAI Agents SDK runtime
+- `packages/model`: future OpenAI JS SDK / Chat Completions model adapter
+- `packages/tools`: future model-callable tool registry
+- `packages/workspace`: future workspace and shell services
+- `packages/storage`: future SQLite repositories
+
+设计文档：`docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md`
 
 ## Current Capabilities
 
@@ -31,6 +46,15 @@
 `Phase 7: long-term memory`
 
 ## Run
+
+TypeScript workspace:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Python legacy backend:
 
 ```bash
 uv sync
@@ -54,10 +78,7 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
 Frontend chat demo:
 
 ```bash
-cd frontend
-proxy_off  # if your shell has proxy enabled and npm is slow
-npm install
-npm run dev
+pnpm --filter @kodeks/web dev
 ```
 
 Then open `http://127.0.0.1:3000`. The Next.js UI proxies chat requests to the
@@ -74,6 +95,16 @@ Provider configuration:
 
 ## Test
 
+TypeScript:
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm lint
+```
+
+Python legacy:
+
 ```bash
 uv run python -m compileall -q src tests
 uv run python -m unittest discover -s tests -v
@@ -87,6 +118,18 @@ UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m unittest discover -s tests -
 ```
 
 ## Architecture
+
+TypeScript target:
+
+- `apps/web`: inbound HTTP/SSE routes and React UI only.
+- `packages/agent-runtime`: agent roles, context assembly, stream mapping, and turn orchestration.
+- `packages/model`: OpenAI-compatible model clients and adapters.
+- `packages/tools`: model-callable tool definitions and policy wrappers.
+- `packages/workspace`: workspace path policy, file access, and shell execution.
+- `packages/storage`: async SQLite repositories.
+- `packages/shared`: cross-package IDs, errors, Result helpers, and JSON utilities.
+
+Python legacy:
 
 - `src/kodeks/api/routes/`: inbound FastAPI routes. Routes translate HTTP/SSE only.
 - `src/kodeks/runtime/`: agent runtime contracts, event protocol, session state, and provider interface.
