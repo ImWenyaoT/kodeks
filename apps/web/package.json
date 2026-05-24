@@ -1,0 +1,36 @@
+{
+  "name": "@kodeks/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "build": "next build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kodeks/agent-runtime": "workspace:*",
+    "@kodeks/model": "workspace:*",
+    "@kodeks/shared": "workspace:*",
+    "@kodeks/storage": "workspace:*",
+    "@kodeks/workspace": "workspace:*",
+    "@next/swc-darwin-arm64": "^16.2.6",
+    "ai": "^6.0.182",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
+    "playwright-core": "^1.60.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

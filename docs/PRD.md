@@ -1,6 +1,20 @@
 # kodeks PRD
 
-目标：实现一个 Python + FastAPI 版 mini opencode/codex，可以作为实习简历项目讲清楚。
+目标：实现一个 mini opencode/codex，可以作为实习简历项目讲清楚。产品能力不变；当前主实现已迁移为 TypeScript full-stack。
+
+## Implementation Status
+
+主链路已经从 Python/FastAPI 迁移到 TypeScript workspace：
+
+- `apps/web`: Next.js App Router UI、SSE chat route、Vercel AI SDK UIMessage stream route、sessions API、approvals API。
+- `packages/agent-runtime`: chat turn orchestration、event contract、memory injection、plan-mode tool filtering、OpenAI Agents SDK agent/tool wrapper construction。
+- `packages/model`: OpenAI-compatible Chat Completions adapter。
+- `packages/tools`: deterministic tool registry for workspace, shell, memory, and explore subagent tools。
+- `packages/workspace`: workspace path policy, file service, and shell harness。
+- `packages/storage`: SQLite repositories for sessions, messages, memories, approvals, subagent runs, and audit log。
+- `legacy/python`: archived Python/FastAPI implementation for behavior comparison.
+
+PRD 的产品目标仍然是 memory、multi-session、plan mode、subagent、workspace tools、shell execution 和 auditable approvals；变化只是实现栈从 Python/FastAPI 切到 TypeScript/Next.js/OpenAI SDK。
 
 ## Product Goal
 
