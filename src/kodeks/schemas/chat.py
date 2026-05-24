@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Literal
 
 
 class ChatStreamRequest(BaseModel):
@@ -7,3 +8,4 @@ class ChatStreamRequest(BaseModel):
     input: str
     previous_response_id: str | None = None
     session_id: str | None = None
+    mode: Literal["act", "plan"] = "act"

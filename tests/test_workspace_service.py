@@ -18,6 +18,96 @@ class WorkspaceServiceTest(unittest.TestCase):
                 self.assertEqual(workspace_service.read_file("output/probe.txt"), "ok")
                 self.assertIn("output/probe.txt", workspace_service.list_files())
 
+    def test_list_files_supports_limit(self) -> None:
+        """Verify workspace listing can bound memory used by large repositories."""
+
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "a.txt").write_text("a", encoding="utf-8")
+            (root / "b.txt").write_text("b", encoding="utf-8")
+
+            with patch.object(workspace_service, "WORKSPACE_ROOT", root):
+                files = workspace_service.list_files(limit=1)
+
+        self.assertEqual(len(files), 1)
+
+    def test_list_files_does_not_materialize_sorted_directory_entries(self) -> None:
+        """Verify workspace listing avoids sorted directory snapshots."""
+
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "a.txt").write_text("a", encoding="utf-8")
+
+            with (
+                patch.object(workspace_service, "WORKSPACE_ROOT", root),
+                patch("builtins.sorted", side_effect=AssertionError("sorted should not be used")),
+            ):
+                files = workspace_service.list_files()
+
+        self.assertEqual(files, ["a.txt"])
+
+    def test_list_files_uses_cache_until_write_invalidates_it(self) -> None:
+        """Verify workspace listing avoids repeated scans and refreshes after writes."""
+
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "a.txt").write_text("a", encoding="utf-8")
+
+            with patch.object(workspace_service, "WORKSPACE_ROOT", root):
+                workspace_service.invalidate_file_list_cache()
+                first_files = workspace_service.list_files()
+                (root / "b.txt").write_text("b", encoding="utf-8")
+                cached_files = workspace_service.list_files()
+                refreshed_files = workspace_service.list_files(refresh=True)
+                workspace_service.write_file("c.txt", "c")
+                invalidated_files = workspace_service.list_files()
+
+        self.assertEqual(first_files, ["a.txt"])
+        self.assertEqual(cached_files, ["a.txt"])
+        self.assertIn("b.txt", refreshed_files)
+        self.assertIn("c.txt", invalidated_files)
+
+    def test_list_files_cache_expires_after_ttl(self) -> None:
+        """Verify cached listings refresh after the configured TTL."""
+
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "a.txt").write_text("a", encoding="utf-8")
+
+            with (
+                patch.object(workspace_service, "WORKSPACE_ROOT", root),
+                patch.object(workspace_service, "monotonic", return_value=0.0),
+            ):
+                workspace_service.invalidate_file_list_cache()
+                first_files = workspace_service.list_files()
+
+            (root / "b.txt").write_text("b", encoding="utf-8")
+
+            with (
+                patch.object(workspace_service, "WORKSPACE_ROOT", root),
+                patch.object(
+                    workspace_service,
+                    "monotonic",
+                    return_value=workspace_service.WORKSPACE_LIST_CACHE_TTL_SECONDS + 0.1,
+                ),
+            ):
+                expired_files = workspace_service.list_files()
+
+        self.assertEqual(first_files, ["a.txt"])
+        self.assertIn("b.txt", expired_files)
+
+    def test_large_text_file_is_rejected(self) -> None:
+        """Verify read_file refuses files that would bloat memory and model context."""
+
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            large_file = root / "large.txt"
+            large_file.write_text("x" * (workspace_service.MAX_TEXT_FILE_BYTES + 1), encoding="utf-8")
+
+            with patch.object(workspace_service, "WORKSPACE_ROOT", root):
+                with self.assertRaisesRegex(ValueError, "File is too large"):
+                    workspace_service.read_file("large.txt")
+
     def test_missing_file_raises_file_not_found(self) -> None:
         """Verify missing workspace files surface as FileNotFoundError."""
 

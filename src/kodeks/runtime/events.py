@@ -2,6 +2,8 @@
 # a1: 因为这些事件是 coding agent 的内部协议；HTTP/SSE、CLI、未来 TUI 都应该消费同一套事件，而不是各自发明格式。
 # q2: 这个设计体现了什么技术品味？
 # a2: 它把“业务语义”从“传输协议”中分离出来。route 只负责传输，runtime 负责表达 agent 正在输出文本、完成、失败或执行工具。
+# q3: 为什么 event contract 要先于具体 UI 或 provider？
+# a3: 这是 /src 和 opencode 都体现出的 agent 产品边界：内部事件要稳定，CLI/TUI/Web 和 provider adapter 才能独立演进。
 
 from typing import Any, Literal
 
@@ -17,7 +19,7 @@ ChatStreamEventType = Literal[
     "tool_result",
 ]
 
-ToolResultStatus = Literal["completed", "failed"]
+ToolResultStatus = Literal["completed", "failed", "approval_required"]
 
 
 class ChatStreamEvent(BaseModel):

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Phase 6 教案：Approval Flow</title>
+    <style>
+      :root {
+        --ivory: #faf9f5;
+        --paper: #ffffff;
+        --ink: #171714;
+        --line: #d1cfc5;
+        --muted: #696861;
+        --blue: #2563eb;
+        --green: #12805c;
+        --amber: #b7791f;
+        --red: #b42318;
+        --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--ivory);
+        color: var(--ink);
+        font-family: var(--sans);
+        line-height: 1.62;
+      }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 32px 88px;
+      }
+
+      nav {
+        background: rgba(250, 249, 245, 0.94);
+        border-bottom: 1.5px solid var(--line);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 24px 0 10px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+      }
+
+      nav strong {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        margin-right: 6px;
+        padding: 7px 0;
+        text-transform: uppercase;
+      }
+
+      nav a {
+        border: 1.5px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        font-size: 12.5px;
+        padding: 7px 14px;
+        text-decoration: none;
+      }
+
+      header {
+        border-bottom: 1.5px solid var(--line);
+        padding: 72px 0 46px;
+      }
+
+      .eyebrow {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-family: var(--serif);
+        font-size: clamp(38px, 5.4vw, 60px);
+        font-weight: 500;
+        line-height: 1.06;
+        margin: 0 0 14px;
+        max-width: 17ch;
+      }
+
+      h2 {
+        font-family: var(--serif);
+        font-size: 32px;
+        font-weight: 500;
+        margin: 0 0 18px;
+      }
+
+      p { margin: 0 0 16px; }
+
+      section {
+        border-bottom: 1.5px solid var(--line);
+        padding: 44px 0;
+      }
+
+      .lead {
+        color: #3d3d3a;
+        font-size: 18px;
+        max-width: 780px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .panel,
+      .qa {
+        background: var(--paper);
+        border: 1.5px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .panel strong {
+        display: block;
+        font-family: var(--mono);
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        color: #fff;
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12px;
+        margin-bottom: 10px;
+        padding: 3px 9px;
+      }
+
+      .green { background: var(--green); }
+      .amber { background: var(--amber); }
+      .red { background: var(--red); }
+      .blue { background: var(--blue); }
+
+      pre {
+        background: #f0efe8;
+        border: 1.5px solid var(--line);
+        border-radius: 8px;
+        overflow-x: auto;
+        padding: 18px;
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 0.92em;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border-bottom: 1.5px solid var(--line);
+        padding: 12px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 800px) {
+        .wrap { padding: 0 20px 64px; }
+        .grid { grid-template-columns: 1fr; }
+        header { padding-top: 52px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav>
+        <strong>Phase 6</strong>
+        <a href="#problem">业务问题</a>
+        <a href="#design">状态机</a>
+        <a href="#api">API</a>
+        <a href="#verify">验证</a>
+        <a href="#interview">面试讲法</a>
+        <a href="#handoff">Phase 7</a>
+      </nav>
+
+      <header>
+        <div class="eyebrow">kodeks · approval flow</div>
+        <h1>Phase 6：把危险动作交还给人类决策</h1>
+        <p class="lead">
+          Phase 5B 只会把危险 shell 暂停成 <code>approval_required</code>。
+          Phase 6 把这个 pending 状态产品化：人类可以查看、批准或拒绝；批准后命令只执行一次；
+          每一步都追加审计记录。
+        </p>
+      </header>
+
+      <section id="problem">
+        <h2>1. 业务问题</h2>
+        <p>
+          一个真实 coding agent 不能因为模型想运行 <code>rm -rf</code> 或访问内部路径就直接照做。
+          但它也不能永远卡在 pending 状态。Phase 6 的目标是把“暂停”升级成“可决策、可恢复、可追踪”的 approval flow。
+        </p>
+        <div class="grid">
+          <div class="panel">
+            <span class="tag amber">pending</span>
+            <strong>Ask</strong>
+            <p>Phase 5B 生成 <code>approval_id</code>，记录原始命令和原因。</p>
+          </div>
+          <div class="panel">
+            <span class="tag green">approved</span>
+            <strong>Approve</strong>
+            <p>批准后通过 dedicated approved-command path 执行一次，并记录结果。</p>
+          </div>
+          <div class="panel">
+            <span class="tag red">rejected</span>
+            <strong>Reject</strong>
+            <p>拒绝后不执行命令，记录拒绝原因，approval 不能再次消费。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="design">
+        <h2>2. 状态机</h2>
+        <pre><code>pending
+  -> approve -> approved -> executed | execution_timeout
+  -> reject  -> rejected
+
+resolved approvals cannot be processed again</code></pre>
+        <p>
+          这里刻意不做 <code>always allow</code>、持久规则和 UI prompt。第一版只保证：
+          approval 可以被查询，只能被消费一次，并且每次状态变化都写入 JSONL。
+        </p>
+      </section>
+
+      <section id="api">
+        <h2>3. API</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>作用</th>
+              <th>错误边界</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET /api/approvals/{approval_id}</code></td>
+              <td>读取 approval 最新状态。</td>
+              <td>不存在返回 404。</td>
+            </tr>
+            <tr>
+              <td><code>POST /api/approvals/{approval_id}/approve</code></td>
+              <td>批准并执行 pending shell command。</td>
+              <td>不存在 404；已处理 409；超时 408。</td>
+            </tr>
+            <tr>
+              <td><code>POST /api/approvals/{approval_id}/reject</code></td>
+              <td>拒绝 pending shell command。</td>
+              <td>不存在 404；已处理 409。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verify">
+        <h2>4. 验证</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>测试</th>
+              <th>证明什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>test_approve_pending_shell_command_executes_once</code></td>
+              <td>批准后命令会执行，并追加 approved/executed 记录。</td>
+            </tr>
+            <tr>
+              <td><code>test_reject_pending_shell_command_does_not_execute</code></td>
+              <td>拒绝不会执行命令。</td>
+            </tr>
+            <tr>
+              <td><code>test_resolved_approval_cannot_be_approved_twice</code></td>
+              <td>approval 只能消费一次。</td>
+            </tr>
+            <tr>
+              <td><code>test_approve_timeout_returns_408</code></td>
+              <td>批准执行超时被映射成清晰 HTTP 错误。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="interview">
+        <h2>5. 面试讲法</h2>
+        <div class="qa">
+          <p>
+            <strong>q1: Phase 6 解决了什么工程问题？</strong><br>
+            a1: 它把模型请求危险命令这件事，从“模型直接执行”改成“模型申请、人类决策、系统审计、一次性恢复执行”。
+          </p>
+          <p>
+            <strong>q2: 为什么 approval 只能消费一次？</strong><br>
+            a2: 因为批准是对某个具体风险动作的一次性授权。重复执行会让权限语义失真，也会造成不可预期的副作用。
+          </p>
+          <p>
+            <strong>q3: 为什么还不做 always allow？</strong><br>
+            a3: 持久规则会把一次判断升级成长期策略，风险更高。先做 one-shot approval，能把状态机、审计和恢复执行测扎实。
+          </p>
+        </div>
+      </section>
+
+      <section id="handoff">
+        <h2>6. Phase 7 Handoff</h2>
+        <p>
+          下一阶段进入 long-term memory。现在 agent 已经具备 stream、session、tool loop、approval，
+          可以开始区分 session context、project memory、user preference memory 和 lessons。
+          Phase 7 的 API/streaming 细节继续对照 OpenAI 官方文档和
+          <code>/Users/edward/Documents/openai-responses-starter-app</code>；memory、planning、subagent
+          的产品边界优先对照 <code>/Users/edward/Documents/src</code>，再用
+          <code>/Users/edward/Documents/opencode</code> 做结构检查。
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
