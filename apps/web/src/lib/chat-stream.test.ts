@@ -29,6 +29,14 @@ describe("parseSseFrames", () => {
     ]);
   });
 
+  it("parses runtime-created sessions and folded SSE data lines", () => {
+    const frames = [
+      'event: session_created\ndata: {"type":"session_created",\ndata: "session_id":"sess_1"}\n\n'
+    ];
+
+    expect(parseSseFrames(frames.join(""))).toEqual([{ type: "session_created", sessionId: "sess_1" }]);
+  });
+
   it("parses assistant status without treating it as answer text", async () => {
     const frames = [
       'event: assistant_status\ndata: {"type":"assistant_status","message":"正在读取文件","session_id":"s1"}\n\n',

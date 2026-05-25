@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createKodeksUIMessageResponse, resolveModelClientOptions } from "./kodeks-runtime";
+import { createKodeksUIMessageResponse, resolveModelClientOptions, streamKodeksChat } from "./kodeks-runtime";
 
 const originalOpenAIKey = process.env.OPENAI_API_KEY;
 const originalOpenAIBaseUrl = process.env.OPENAI_BASE_URL;
@@ -45,6 +45,17 @@ describe("createKodeksUIMessageResponse", () => {
 
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     expect(body).toContain("An OpenAI API key is required for the Responses API client");
+  });
+});
+
+describe("streamKodeksChat", () => {
+  it("stops before starting runtime work when the client request is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const response = new Response(streamKodeksChat({ input: "hello", session_id: "s1" }, { signal: controller.signal }));
+
+    await expect(response.text()).resolves.toBe("");
   });
 });
 

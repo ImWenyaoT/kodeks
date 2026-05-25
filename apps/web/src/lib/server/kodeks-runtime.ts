@@ -22,6 +22,10 @@ type ChatStreamRequest = {
   reasoning_effort?: unknown;
 };
 
+type StreamKodeksChatOptions = {
+  signal?: AbortSignal;
+};
+
 type ModelClientOptions = {
   apiKey: string;
   baseURL?: string;
@@ -51,16 +55,19 @@ let database: KodeksDatabase | null = null;
 let workspaceEnvLoaded = false;
 
 // Streams one chat turn through the TypeScript runtime as SSE bytes.
-export function streamKodeksChat(body: ChatStreamRequest): ReadableStream<Uint8Array> {
+export function streamKodeksChat(body: ChatStreamRequest, options: StreamKodeksChatOptions = {}): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of runKodeksChatEvents(body)) {
+        for await (const event of abortableAgentEvents(runKodeksChatEvents(body), options.signal)) {
           controller.enqueue(encoder.encode(toSseFrame(event)));
         }
       } catch (error) {
+        if (options.signal?.aborted) {
+          return;
+        }
         const fallbackSessionId = readSessionId(body) ?? "";
         controller.enqueue(
           encoder.encode(
@@ -79,10 +86,10 @@ export function streamKodeksChat(body: ChatStreamRequest): ReadableStream<Uint8A
 }
 
 // Creates a Vercel AI SDK UIMessage stream response for SDK-native clients.
-export function createKodeksUIMessageResponse(body: ChatStreamRequest): Response {
+export function createKodeksUIMessageResponse(body: ChatStreamRequest, options: StreamKodeksChatOptions = {}): Response {
   const stream = createUIMessageStream<KodeksUIMessage>({
     execute: async ({ writer }) => {
-      await writeKodeksUIMessageChunks(writer, runKodeksChatEvents(body));
+      await writeKodeksUIMessageChunks(writer, abortableAgentEvents(runKodeksChatEvents(body), options.signal));
     },
     onError: (error) => (error instanceof Error ? error.message : String(error))
   });
@@ -92,6 +99,45 @@ export function createKodeksUIMessageResponse(body: ChatStreamRequest): Response
       "Cache-Control": "no-cache, no-transform"
     }
   });
+}
+
+// Stops consuming runtime events once the HTTP client disconnects.
+async function* abortableAgentEvents(
+  events: AsyncIterable<AgentEvent>,
+  signal?: AbortSignal
+): AsyncIterable<AgentEvent> {
+  const iterator = events[Symbol.asyncIterator]();
+  let removeAbortListener: (() => void) | undefined;
+  const abortPromise =
+    signal === undefined
+      ? null
+      : new Promise<"aborted">((resolve) => {
+          if (signal.aborted) {
+            resolve("aborted");
+            return;
+          }
+          const onAbort = () => resolve("aborted");
+          signal.addEventListener("abort", onAbort, { once: true });
+          removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+        });
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        return;
+      }
+
+      const next = abortPromise === null ? await iterator.next() : await Promise.race([iterator.next(), abortPromise]);
+      if (next === "aborted" || next.done) {
+        return;
+      }
+
+      yield next.value;
+    }
+  } finally {
+    removeAbortListener?.();
+    await iterator.return?.();
+  }
 }
 
 // Runs the shared Kodeks chat pipeline used by both SSE and Vercel AI SDK routes.

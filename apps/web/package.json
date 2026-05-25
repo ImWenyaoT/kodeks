@@ -18,7 +18,6 @@
     "@kodeks/workspace": "workspace:*",
     "@next/swc-darwin-arm64": "^16.2.6",
     "ai": "^6.0.182",
-    "lucide-react": "^1.16.0",
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

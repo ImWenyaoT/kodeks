@@ -2,6 +2,10 @@ export type ChatMode = "act" | "plan";
 
 export type ChatStreamEvent =
   | {
+      type: "session_created";
+      sessionId: string;
+    }
+  | {
       type: "assistant_status";
       message: string;
       sessionId?: string;
@@ -87,16 +91,17 @@ export function parseSseFrames(text: string): ChatStreamEvent[] {
     .map((frame) => frame.trim())
     .filter(Boolean)
     .flatMap((frame) => {
-      const dataLine = frame
+      const dataLines = frame
         .split("\n")
-        .find((line) => line.startsWith("data: "));
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => line.slice("data: ".length));
 
-      if (dataLine === undefined) {
+      if (dataLines.length === 0) {
         return [];
       }
 
       try {
-        const rawEvent = JSON.parse(dataLine.slice("data: ".length)) as RawChatStreamEvent;
+        const rawEvent = JSON.parse(dataLines.join("\n")) as RawChatStreamEvent;
         const event = normalizeRawEvent(rawEvent);
         return event === null ? [] : [event];
       } catch {
@@ -123,6 +128,7 @@ export async function collectChatStream(
     const { done, value } = await reader.read();
 
     if (done) {
+      buffer += decoder.decode();
       if (buffer.trim().length > 0) {
         emitEvents(parseSseFrames(buffer), handlers);
       }
@@ -144,6 +150,13 @@ export async function collectChatStream(
 
 // Converts backend snake_case event payloads into a compact frontend contract.
 function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null {
+  if (rawEvent.type === "session_created") {
+    return {
+      type: "session_created",
+      sessionId: rawEvent.session_id ?? ""
+    };
+  }
+
   if (rawEvent.type === "assistant_status") {
     return {
       type: "assistant_status",

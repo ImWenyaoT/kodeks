@@ -2,7 +2,7 @@ import { ChatMode, collectChatStream, type ChatStreamEvent } from "./chat-stream
 
 export type SendChatMessageInput = {
   input: string;
-  sessionId: string;
+  sessionId?: string;
   mode: ChatMode;
   reasoningEffort: "low" | "medium" | "high" | "xhigh";
   signal?: AbortSignal;
@@ -27,7 +27,7 @@ export async function sendChatMessage({
     },
     body: JSON.stringify({
       input,
-      session_id: sessionId,
+      ...(sessionId === undefined ? {} : { session_id: sessionId }),
       mode,
       reasoning_effort: reasoningEffort
     }),

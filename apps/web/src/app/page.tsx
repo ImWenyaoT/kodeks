@@ -1,26 +1,6 @@
 "use client";
 
 import { type FormEvent, type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AppWindow,
-  Bot,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  CircleStop,
-  Code2,
-  Cpu,
-  Gamepad2,
-  Grid2X2,
-  MessageSquare,
-  Search,
-  Send,
-  Settings,
-  Sparkles,
-  UserRound,
-  Wrench,
-  X
-} from "lucide-react";
 
 import { type ChatMode, type ChatStreamEvent } from "@/lib/chat-stream";
 import { sendChatMessage } from "@/lib/kodeks-api";
@@ -31,28 +11,186 @@ type ChatMessage = {
   content: string;
 };
 
-type ActivityItem = {
-  id: string;
-  label: string;
-  detail: string;
-};
-
 type PendingApproval = {
   id: string;
   reason: string;
 };
 
-type SectionId = "today" | "chat" | "tools" | "runtime";
+type ActivityKind = "approval" | "memory" | "session" | "status" | "subagent" | "tool";
+
+type ActivityItem = {
+  id: string;
+  kind: ActivityKind;
+  title: string;
+  detail: string;
+  state?: "active" | "done" | "ready" | "waiting";
+};
+
+type UiLanguage = "zh" | "en";
+type ColorTheme = "system" | "light" | "dark";
+type ActiveView = "activity" | "chat";
+type UiCopy = (typeof uiCopy)[UiLanguage];
 
 const reasoningOptions = [
-  { label: "低", value: "low" },
-  { label: "中", value: "medium" },
-  { label: "高", value: "high" },
-  { label: "超高", value: "xhigh" }
+  { labels: { zh: "低", en: "Low" }, value: "low" },
+  { labels: { zh: "中", en: "Medium" }, value: "medium" },
+  { labels: { zh: "高", en: "High" }, value: "high" },
+  { labels: { zh: "超高", en: "X-high" }, value: "xhigh" }
 ] as const;
 
 type ReasoningOption = (typeof reasoningOptions)[number];
 type ReasoningEffort = ReasoningOption["value"];
+
+const uiCopy = {
+  zh: {
+    assistantRole: "Kodeks",
+    approval: "审批",
+    approvalFailed: "审批请求失败，HTTP ",
+    approvalRequired: "需要确认",
+    activityTitle: "Agent 活动",
+    activitySubtitle: "能力与运行轨迹",
+    activityNav: "活动",
+    artifacts: "Artifacts",
+    appearance: "外观",
+    approve: "批准",
+    autoSession: "auto session",
+    chatMode: "对话模式",
+    chinese: "中文",
+    collapseSidebar: "收起侧栏",
+    english: "English",
+    expandSidebar: "展开侧栏",
+    language: "界面语言",
+    localAgent: "本地代理",
+    messageLabel: "消息",
+    modelMenuTitle: "智能",
+    navLabel: "主导航",
+    newChat: "新对话",
+    placeholder: "给 Kodeks 发送消息",
+    reasoning: "智能",
+    reject: "拒绝",
+    requestFailed: "请求失败了。确认本地 Next.js runtime 还在 http://127.0.0.1:3000 运行。",
+    runFailedPrefix: "运行失败：",
+    send: "发送",
+    sendLabel: "发送消息",
+    session: "会话",
+    sessionPlaceholder: "留空自动创建",
+    settings: "打开设置",
+    settingsDialog: "对话设置",
+    stopStreaming: "停止生成",
+    syncWithSystem: "跟随系统",
+    title: "Kodeks agent",
+    today: "今天",
+    userRole: "你",
+    welcome: "你好，我是 Kodeks。把要处理的代码上下文发给我。",
+    activity: {
+      approvalRequired: "等待人工确认",
+      completed: "响应完成",
+      memoryRecalled: "召回记忆",
+      sessionCreated: "会话已创建",
+      status: "状态更新",
+      subagentCompleted: "子代理完成",
+      subagentStarted: "子代理启动",
+      toolCall: "调用工具",
+      toolResult: "工具结果"
+    },
+    capabilities: {
+      approval: "审批",
+      approvalDetail: "危险 shell 命令会暂停并等待确认",
+      memory: "记忆",
+      memoryDetail: "按输入召回 project/session memory",
+      session: "会话",
+      sessionDetail: "保留 session id 与可恢复 transcript",
+      subagent: "子代理",
+      subagentDetail: "独立探索任务并回传摘要",
+      tools: "工作区工具",
+      toolsDetail: "读写文件、grep、受控运行 shell"
+    },
+    status: {
+      act: "Act mode",
+      plan: "Plan mode",
+      streaming: "Streaming"
+    },
+    theme: {
+      dark: "Dark",
+      light: "Light",
+      system: "System"
+    }
+  },
+  en: {
+    assistantRole: "Kodeks",
+    approval: "Approval",
+    approvalFailed: "Approval request failed with HTTP ",
+    approvalRequired: "Approval required",
+    activityTitle: "Agent Activity",
+    activitySubtitle: "Capabilities and run trace",
+    activityNav: "Activity",
+    artifacts: "Artifacts",
+    appearance: "Appearance",
+    approve: "Approve",
+    autoSession: "auto session",
+    chatMode: "Chat mode",
+    chinese: "中文",
+    collapseSidebar: "Collapse sidebar",
+    english: "English",
+    expandSidebar: "Expand sidebar",
+    language: "UI language",
+    localAgent: "Local agent",
+    messageLabel: "Message",
+    modelMenuTitle: "Reasoning",
+    navLabel: "Main navigation",
+    newChat: "New chat",
+    placeholder: "Message Kodeks",
+    reasoning: "Reasoning",
+    reject: "Reject",
+    requestFailed: "Request failed. Confirm the local Next.js runtime is still running at http://127.0.0.1:3000.",
+    runFailedPrefix: "Runtime failed: ",
+    send: "Send",
+    sendLabel: "Send message",
+    session: "Session",
+    sessionPlaceholder: "Leave blank to create one",
+    settings: "Open settings",
+    settingsDialog: "Chat settings",
+    stopStreaming: "Stop streaming",
+    syncWithSystem: "Sync with system",
+    title: "Kodeks agent",
+    today: "Today",
+    userRole: "You",
+    welcome: "Hi, I am Kodeks. Send me the code context you want handled.",
+    activity: {
+      approvalRequired: "Waiting for approval",
+      completed: "Response completed",
+      memoryRecalled: "Memory recalled",
+      sessionCreated: "Session created",
+      status: "Status update",
+      subagentCompleted: "Subagent completed",
+      subagentStarted: "Subagent started",
+      toolCall: "Tool call",
+      toolResult: "Tool result"
+    },
+    capabilities: {
+      approval: "Approval",
+      approvalDetail: "Dangerous shell commands pause for review",
+      memory: "Memory",
+      memoryDetail: "Recalls project and session memory",
+      session: "Session",
+      sessionDetail: "Keeps session id and resumable transcript",
+      subagent: "Subagent",
+      subagentDetail: "Runs isolated exploration tasks",
+      tools: "Workspace tools",
+      toolsDetail: "Read, write, grep, and controlled shell"
+    },
+    status: {
+      act: "Act mode",
+      plan: "Plan mode",
+      streaming: "Streaming"
+    },
+    theme: {
+      dark: "Dark",
+      light: "Light",
+      system: "System"
+    }
+  }
+} as const;
 
 type ComposerKeyLike = {
   key: string;
@@ -63,15 +201,13 @@ type ComposerKeyLike = {
   isComposing: boolean;
 };
 
-type DeferredDiagnosticsWindow = Window &
-  typeof globalThis & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-    cancelIdleCallback?: (handle: number) => void;
-  };
-
-// Checks whether a hash value points at one of the local demo sections.
-function isSectionId(value: string): value is SectionId {
-  return value === "today" || value === "chat" || value === "tools" || value === "runtime";
+// Renders one Google Material Symbols glyph with consistent sizing for controls.
+function MaterialIcon({ name, size = 18 }: { name: string; size?: number }) {
+  return (
+    <span aria-hidden="true" className="material-symbols-rounded material-icon" style={{ fontSize: `${size}px` }}>
+      {name}
+    </span>
+  );
 }
 
 // Decides whether one composer key press should submit instead of inserting text.
@@ -86,28 +222,76 @@ export function shouldSubmitComposerKey(event: ComposerKeyLike): boolean {
   );
 }
 
-// Delays non-critical diagnostics until after the first browser paint has a chance to complete.
-function useDeferredDiagnostics(): boolean {
-  const [shouldRenderDiagnostics, setShouldRenderDiagnostics] = useState(false);
+// Converts event payloads into a one-line activity summary for the inspector.
+function summarizeActivityPayload(payload: unknown): string {
+  if (payload === null || payload === undefined) {
+    return "";
+  }
 
-  useEffect(() => {
-    if (shouldRenderDiagnostics) {
-      return undefined;
-    }
+  if (typeof payload === "string") {
+    return payload;
+  }
 
-    const browserWindow = window as DeferredDiagnosticsWindow;
-    if (browserWindow.requestIdleCallback && browserWindow.cancelIdleCallback) {
-      const idleHandle = browserWindow.requestIdleCallback(() => setShouldRenderDiagnostics(true), { timeout: 800 });
-      return () => browserWindow.cancelIdleCallback?.(idleHandle);
-    }
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+}
 
-    const frameHandle = browserWindow.requestAnimationFrame(() => {
-      browserWindow.setTimeout(() => setShouldRenderDiagnostics(true), 0);
-    });
-    return () => browserWindow.cancelAnimationFrame(frameHandle);
-  }, [shouldRenderDiagnostics]);
+// Renders one chat transcript row with compact Vercel-style message chrome.
+function MessageArticle({ copy, message }: { copy: UiCopy; message: ChatMessage }) {
+  return (
+    <article className={`message ${message.role}`}>
+      <div className="avatar" aria-hidden="true">
+        {message.role === "user" ? (
+          <MaterialIcon name="person" size={16} />
+        ) : (
+          <MaterialIcon name="smart_toy" size={16} />
+        )}
+      </div>
+      <div className="bubble">
+        <span className="role-label">
+          {message.role === "user" ? copy.userRole : copy.assistantRole}
+        </span>
+        <p>{message.id === "welcome" ? copy.welcome : message.content || "..."}</p>
+      </div>
+    </article>
+  );
+}
 
-  return shouldRenderDiagnostics;
+// Renders reusable agent activity rows for both the docked inspector and the full page view.
+function ActivityPanel({
+  className = "",
+  copy,
+  items
+}: {
+  className?: string;
+  copy: UiCopy;
+  items: ActivityItem[];
+}) {
+  return (
+    <aside className={className ? `activity-panel ${className}` : "activity-panel"} aria-label={copy.activityTitle}>
+      <div className="activity-heading">
+        <div>
+          <strong>{copy.activityTitle}</strong>
+          <span>{copy.activitySubtitle}</span>
+        </div>
+        <span className="activity-count">{items.length}</span>
+      </div>
+      <div className="activity-list">
+        {items.map((item) => (
+          <article className={`activity-row ${item.kind}`} key={item.id}>
+            <span className={item.state ? `activity-dot ${item.state}` : "activity-dot"} aria-hidden="true" />
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </aside>
+  );
 }
 
 // Renders the minimal interactive chat surface for the kodeks backend.
@@ -116,47 +300,99 @@ export default function Home() {
     {
       id: "welcome",
       role: "assistant",
-      content: "我是 Kodeks 的最小聊天界面。输入一条消息，我会通过本地 TypeScript runtime 流式回复。"
+      content: uiCopy.zh.welcome
     }
   ]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("act");
+  const [activeView, setActiveView] = useState<ActiveView>("chat");
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>("zh");
+  const [colorTheme, setColorTheme] = useState<ColorTheme>("system");
   const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<ReasoningEffort>("medium");
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sessionId, setSessionId] = useState("s_demo");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeSection, setActiveSection] = useState<SectionId>("today");
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const shouldRenderDiagnostics = useDeferredDiagnostics();
+  const messageListRef = useRef<HTMLDivElement | null>(null);
 
+  const copy = uiCopy[uiLanguage];
   const canSend = input.trim().length > 0 && !isStreaming;
   const statusText = useMemo(() => {
     if (isStreaming) {
-      return "Streaming";
+      return copy.status.streaming;
     }
-    return mode === "plan" ? "Plan mode" : "Act mode";
-  }, [isStreaming, mode]);
+    return mode === "plan" ? copy.status.plan : copy.status.act;
+  }, [copy.status.act, copy.status.plan, copy.status.streaming, isStreaming, mode]);
   const selectedReasoningLabel = useMemo(
-    () => reasoningOptions.find((option) => option.value === selectedReasoningEffort)?.label ?? "中",
-    [selectedReasoningEffort]
+    () =>
+      reasoningOptions.find((option) => option.value === selectedReasoningEffort)?.labels[uiLanguage] ??
+      reasoningOptions[1].labels[uiLanguage],
+    [selectedReasoningEffort, uiLanguage]
+  );
+  const visibleActivityItems = useMemo<ActivityItem[]>(
+    () => [
+      {
+        id: "capability-tools",
+        kind: "tool",
+        title: copy.capabilities.tools,
+        detail: copy.capabilities.toolsDetail,
+        state: "ready"
+      },
+      {
+        id: "capability-memory",
+        kind: "memory",
+        title: copy.capabilities.memory,
+        detail: copy.capabilities.memoryDetail,
+        state: "ready"
+      },
+      {
+        id: "capability-subagent",
+        kind: "subagent",
+        title: copy.capabilities.subagent,
+        detail: copy.capabilities.subagentDetail,
+        state: "ready"
+      },
+      {
+        id: "capability-approval",
+        kind: "approval",
+        title: copy.capabilities.approval,
+        detail: copy.capabilities.approvalDetail,
+        state: "ready"
+      },
+      {
+        id: "capability-session",
+        kind: "session",
+        title: copy.capabilities.session,
+        detail: copy.capabilities.sessionDetail,
+        state: "ready"
+      },
+      ...activityItems
+    ],
+    [activityItems, copy.capabilities]
   );
 
   useEffect(() => {
-    const syncSectionFromHash = () => {
-      const hashSection = window.location.hash.slice(1);
-      if (isSectionId(hashSection)) {
-        setActiveSection(hashSection);
-      }
-    };
+    if (colorTheme === "system") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.dataset.theme = colorTheme;
+    }
+    document.documentElement.lang = uiLanguage === "zh" ? "zh-CN" : "en";
+  }, [colorTheme, uiLanguage]);
 
-    syncSectionFromHash();
-    window.addEventListener("hashchange", syncSectionFromHash);
-    return () => window.removeEventListener("hashchange", syncSectionFromHash);
-  }, []);
+  useEffect(() => {
+    const messageList = messageListRef.current;
+    if (messageList === null) {
+      return;
+    }
+
+    messageList.scrollTo({ top: messageList.scrollHeight, behavior: "smooth" });
+  }, [messages, isStreaming]);
 
   // Submits one message and appends streamed text into the active assistant bubble.
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -174,7 +410,6 @@ export default function Home() {
 
     setInput("");
     setIsStreaming(true);
-    setActivity([]);
     setMessages((currentMessages) => [
       ...currentMessages,
       { id: userMessageId, role: "user", content: prompt },
@@ -184,7 +419,7 @@ export default function Home() {
     try {
       await sendChatMessage({
         input: prompt,
-        sessionId,
+        sessionId: sessionId.trim() || undefined,
         mode,
         reasoningEffort: selectedReasoningEffort,
         signal: controller.signal,
@@ -213,7 +448,7 @@ export default function Home() {
                   ...message,
                   content:
                     message.content ||
-                    "请求失败了。确认本地 Next.js runtime 还在 http://127.0.0.1:3000 运行。"
+                    copy.requestFailed
                 }
               : message
           )
@@ -246,16 +481,19 @@ export default function Home() {
     }
   }
 
-  // Moves sidebar navigation to a real page target and keeps selected state honest.
-  function handleSectionNavigation(event: MouseEvent<HTMLAnchorElement>, sectionId: SectionId) {
+  // Moves sidebar navigation to the chat target and focuses the composer.
+  function handleChatNavigation(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
-    setActiveSection(sectionId);
-    window.history.replaceState(null, "", `#${sectionId}`);
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveView("chat");
+    window.history.replaceState(null, "", "#chat");
+    document.getElementById("chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => messageTextareaRef.current?.focus(), 180);
+  }
 
-    if (sectionId === "chat") {
-      window.setTimeout(() => messageTextareaRef.current?.focus(), 180);
-    }
+  // Opens the secondary activity view where runtime capabilities and events live.
+  function handleActivityNavigation() {
+    setActiveView("activity");
+    window.history.replaceState(null, "", "#activity");
   }
 
   // Writes stream errors into the active assistant bubble instead of hiding them in telemetry.
@@ -263,7 +501,7 @@ export default function Home() {
     setMessages((currentMessages) =>
       currentMessages.map((currentMessage) =>
         currentMessage.id === assistantMessageId
-          ? { ...currentMessage, content: `运行失败：${message}` }
+          ? { ...currentMessage, content: `${copy.runFailedPrefix}${message}` }
           : currentMessage
       )
     );
@@ -277,23 +515,54 @@ export default function Home() {
 
   // Adds compact stream telemetry so tool calls and completion are visible.
   function recordStreamEvent(streamEvent: ChatStreamEvent) {
+    if (streamEvent.type === "session_created") {
+      setSessionId(streamEvent.sessionId);
+      appendActivity({
+        kind: "session",
+        title: copy.activity.sessionCreated,
+        detail: streamEvent.sessionId || copy.autoSession,
+        state: "done"
+      });
+      return;
+    }
+
     if (streamEvent.type === "assistant_status") {
-      appendActivity("Status", streamEvent.message);
+      appendActivity({
+        kind: "status",
+        title: copy.activity.status,
+        detail: streamEvent.message,
+        state: "active"
+      });
       return;
     }
 
     if (streamEvent.type === "tool_call") {
-      appendActivity("Tool call", streamEvent.toolName ?? "unknown");
+      appendActivity({
+        kind: "tool",
+        title: `${copy.activity.toolCall}${streamEvent.toolName ? ` · ${streamEvent.toolName}` : ""}`,
+        detail: summarizeActivityPayload(streamEvent.toolArguments),
+        state: "active"
+      });
       return;
     }
 
     if (streamEvent.type === "tool_result") {
-      appendActivity("Tool result", `${streamEvent.toolName ?? "unknown"}: ${streamEvent.toolStatus ?? "done"}`);
+      appendActivity({
+        kind: "tool",
+        title: `${copy.activity.toolResult}${streamEvent.toolName ? ` · ${streamEvent.toolName}` : ""}`,
+        detail: summarizeActivityPayload(streamEvent.toolOutput) || streamEvent.toolStatus || "",
+        state: streamEvent.toolStatus === "approval_required" ? "waiting" : "done"
+      });
       return;
     }
 
     if (streamEvent.type === "response_completed") {
-      appendActivity("Completed", streamEvent.responseId || "response finished");
+      appendActivity({
+        kind: "session",
+        title: copy.activity.completed,
+        detail: streamEvent.responseId,
+        state: "done"
+      });
       return;
     }
 
@@ -302,28 +571,55 @@ export default function Home() {
         id: streamEvent.approvalId,
         reason: streamEvent.message
       });
-      appendActivity("Approval", streamEvent.message);
+      appendActivity({
+        kind: "approval",
+        title: copy.activity.approvalRequired,
+        detail: streamEvent.message,
+        state: "waiting"
+      });
       return;
     }
 
     if (streamEvent.type === "memory_recalled") {
-      appendActivity("Memory", `${streamEvent.memoryIds.length} recalled`);
+      appendActivity({
+        kind: "memory",
+        title: copy.activity.memoryRecalled,
+        detail: streamEvent.memoryIds.length > 0 ? streamEvent.memoryIds.join(", ") : "0",
+        state: "done"
+      });
       return;
     }
 
     if (streamEvent.type === "subagent_started") {
-      appendActivity("Subagent", `${streamEvent.agent} started`);
+      appendActivity({
+        kind: "subagent",
+        title: `${copy.activity.subagentStarted} · ${streamEvent.agent}`,
+        detail: streamEvent.runId,
+        state: "active"
+      });
       return;
     }
 
     if (streamEvent.type === "subagent_completed") {
-      appendActivity("Subagent", streamEvent.summary);
+      appendActivity({
+        kind: "subagent",
+        title: copy.activity.subagentCompleted,
+        detail: streamEvent.summary,
+        state: "done"
+      });
       return;
     }
+  }
 
-    if (streamEvent.type === "error") {
-      appendActivity("Error", streamEvent.message);
-    }
+  // Appends one visible runtime activity row while keeping the panel compact.
+  function appendActivity(item: Omit<ActivityItem, "id">) {
+    setActivityItems((currentItems) => [
+      ...currentItems.slice(-7),
+      {
+        ...item,
+        id: crypto.randomUUID()
+      }
+    ]);
   }
 
   // Sends an approval decision to the local TS approval API.
@@ -342,325 +638,304 @@ export default function Home() {
     });
 
     if (response.ok) {
-      appendActivity(decision === "approve" ? "Approved" : "Rejected", approvalId);
       setPendingApproval(null);
       return;
     }
 
-    appendActivity("Approval error", `HTTP ${response.status}`);
-  }
-
-  // Appends one telemetry row, keeping the panel short and readable.
-  function appendActivity(label: string, detail: string) {
-    setActivity((currentActivity) => [
-      { id: crypto.randomUUID(), label, detail },
-      ...currentActivity.slice(0, 5)
-    ]);
+    setPendingApproval({
+      id: approvalId,
+      reason: `${copy.approvalFailed}${response.status}.`
+    });
   }
 
   return (
-    <main className="app-shell">
+    <main className={isSidebarOpen ? "app-shell sidebar-open" : "app-shell sidebar-collapsed"}>
       <aside className="store-sidebar" aria-label="Kodeks navigation">
         <div className="sidebar-brand">
-          <div className="appstore-mark" aria-hidden="true">
-            <Code2 size={20} />
+          <button
+            aria-expanded={isSidebarOpen}
+            aria-label={isSidebarOpen ? copy.collapseSidebar : copy.expandSidebar}
+            className="appstore-mark sidebar-toggle"
+            onClick={() => setIsSidebarOpen((current) => !current)}
+            type="button"
+          >
+            <MaterialIcon name="code_blocks" size={20} />
+          </button>
+          <div className="sidebar-brand-text">
+            <strong>Kodeks</strong>
+            <span>{copy.localAgent}</span>
           </div>
-          <strong>Kodeks</strong>
-          <span>for Mac</span>
         </div>
 
-        <label className="sidebar-search" htmlFor="sidebar-search">
-          <Search size={15} />
-          <input id="sidebar-search" name="sidebar-search" placeholder="Search" readOnly value="" />
-        </label>
-
-        <nav className="sidebar-nav" aria-label="Demo sections">
-          <a
-            className={activeSection === "today" ? "active" : ""}
-            href="#today"
-            onClick={(event) => handleSectionNavigation(event, "today")}
-          >
-            <CalendarDays size={18} />
-            Today
-          </a>
-          <a
-            className={activeSection === "chat" ? "active" : ""}
-            href="#chat"
-            onClick={(event) => handleSectionNavigation(event, "chat")}
-          >
-            <MessageSquare size={18} />
-            Chat
-          </a>
-          <a
-            className={activeSection === "tools" ? "active" : ""}
-            href="#tools"
-            onClick={(event) => handleSectionNavigation(event, "tools")}
-          >
-            <Grid2X2 size={18} />
-            Tools
-          </a>
-          <a
-            className={activeSection === "runtime" ? "active" : ""}
-            href="#runtime"
-            onClick={(event) => handleSectionNavigation(event, "runtime")}
-          >
-            <Gamepad2 size={18} />
-            Runtime
-          </a>
+        <nav className="sidebar-nav" aria-label={copy.navLabel}>
+          <button className="new-chat-button" onClick={handleChatNavigation} type="button">
+            <MaterialIcon name="add" size={18} />
+            <span>{copy.newChat}</span>
+          </button>
+          <button className={activeView === "chat" ? "active" : ""} onClick={handleChatNavigation} type="button">
+            <MaterialIcon name="chat_bubble" size={18} />
+            <span>Chat</span>
+          </button>
+          <button className={activeView === "activity" ? "active" : ""} onClick={handleActivityNavigation} type="button">
+            <MaterialIcon name="monitoring" size={18} />
+            <span>{copy.activityNav}</span>
+          </button>
         </nav>
+
+        <div className="sidebar-spacer" />
+
+        <div className="session-stack" aria-label={copy.session}>
+          <span className="sidebar-section-label">{copy.session}</span>
+          <span className="sidebar-section-label subtle">{copy.today}</span>
+          <button className="session-card active" onClick={handleChatNavigation} type="button">
+            <span className="session-card-title">{sessionId.trim() || copy.autoSession}</span>
+            <span>{mode === "plan" ? copy.status.plan : copy.status.act}</span>
+          </button>
+        </div>
       </aside>
 
-      <div className={isSettingsOpen ? "settings-dock open" : "settings-dock"}>
-        <button
-          aria-expanded={isSettingsOpen}
-          aria-haspopup="dialog"
-          aria-label="Open settings"
-          className="icon-button settings-trigger"
-          onClick={() => setIsSettingsOpen((current) => !current)}
-          type="button"
-        >
-          <Settings size={17} />
-        </button>
-        {isSettingsOpen ? (
-          <div className="settings-panel" role="dialog" aria-label="对话设置">
-            <label className="settings-field" htmlFor="settings-session-id">
-              <span>会话</span>
-              <input
-                id="settings-session-id"
-                name="settings-session-id"
-                onChange={(event) => setSessionId(event.target.value)}
-                value={sessionId}
-              />
-            </label>
-            <div className="settings-field">
-              <span>模式</span>
-              <div className="settings-segment" aria-label="Settings chat mode">
-                <button
-                  className={mode === "act" ? "selected" : ""}
-                  onClick={() => setMode("act")}
-                  type="button"
-                >
-                  Act
-                </button>
-                <button
-                  className={mode === "plan" ? "selected" : ""}
-                  onClick={() => setMode("plan")}
-                  type="button"
-                >
-                  Plan
-                </button>
-              </div>
-            </div>
-            <div className="settings-field">
-              <span>智能</span>
-              <div className="settings-segment" aria-label="Settings reasoning effort">
-                {reasoningOptions.map((reasoningOption) => (
-                  <button
-                    className={selectedReasoningEffort === reasoningOption.value ? "selected" : ""}
-                    key={reasoningOption.value}
-                    onClick={() => setSelectedReasoningEffort(reasoningOption.value)}
-                    type="button"
-                  >
-                    {reasoningOption.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       <section className="store-main" aria-label="Kodeks chat">
-        <header className="page-heading" id="today">
-          <div>
-            <p>Today</p>
-            <h1>Kodeks Chat</h1>
+        <header className="workbench-header">
+          <div className="chat-title-stack">
+            <span>Kodeks Chat</span>
+            <h1>{activeView === "activity" ? copy.activityTitle : copy.title}</h1>
           </div>
-          <div className="status" aria-live="polite">
-            <span className={isStreaming ? "status-dot active" : "status-dot"} />
-            {statusText}
+          <div className="header-meta">
+            <span>{sessionId.trim() || copy.autoSession}</span>
+            <span>{selectedReasoningLabel} {copy.reasoning.toLowerCase()}</span>
+            <div className="status" aria-live="polite">
+              <span className={isStreaming ? "status-dot active" : "status-dot"} />
+              {statusText}
+            </div>
+            <div className={isSettingsOpen ? "settings-dock open" : "settings-dock"}>
+              <button
+                aria-expanded={isSettingsOpen}
+                aria-haspopup="dialog"
+                aria-label={copy.settings}
+                className="icon-button settings-trigger"
+                onClick={() => setIsSettingsOpen((current) => !current)}
+                type="button"
+              >
+                <MaterialIcon name="settings" size={17} />
+              </button>
+              {isSettingsOpen ? (
+                <div className="settings-panel" role="dialog" aria-label={copy.settingsDialog}>
+                  <div className="settings-field">
+                    <span>{copy.language}</span>
+                    <div className="settings-segment" aria-label={copy.language}>
+                      <button
+                        className={uiLanguage === "zh" ? "selected" : ""}
+                        onClick={() => setUiLanguage("zh")}
+                        type="button"
+                      >
+                        {copy.chinese}
+                      </button>
+                      <button
+                        className={uiLanguage === "en" ? "selected" : ""}
+                        onClick={() => setUiLanguage("en")}
+                        type="button"
+                      >
+                        {copy.english}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="settings-field">
+                    <span>{copy.appearance}</span>
+                    <div className="settings-segment icon-segment" aria-label={copy.appearance}>
+                      <button
+                        aria-label={copy.syncWithSystem}
+                        className={colorTheme === "system" ? "selected" : ""}
+                        onClick={() => setColorTheme("system")}
+                        title={copy.syncWithSystem}
+                        type="button"
+                      >
+                        <MaterialIcon name="desktop_windows" size={16} />
+                      </button>
+                      <button
+                        aria-label={copy.theme.light}
+                        className={colorTheme === "light" ? "selected" : ""}
+                        onClick={() => setColorTheme("light")}
+                        title={copy.theme.light}
+                        type="button"
+                      >
+                        <MaterialIcon name="light_mode" size={16} />
+                      </button>
+                      <button
+                        aria-label={copy.theme.dark}
+                        className={colorTheme === "dark" ? "selected" : ""}
+                        onClick={() => setColorTheme("dark")}
+                        title={copy.theme.dark}
+                        type="button"
+                      >
+                        <MaterialIcon name="dark_mode" size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <label className="settings-field" htmlFor="settings-session-id">
+                    <span>{copy.session}</span>
+                    <input
+                      id="settings-session-id"
+                      name="settings-session-id"
+                      onChange={(event) => setSessionId(event.target.value)}
+                      placeholder={copy.sessionPlaceholder}
+                      value={sessionId}
+                    />
+                  </label>
+                  <div className="settings-field">
+                    <span>{copy.chatMode}</span>
+                    <div className="settings-segment" aria-label={copy.chatMode}>
+                      <button
+                        className={mode === "act" ? "selected" : ""}
+                        onClick={() => setMode("act")}
+                        type="button"
+                      >
+                        Act
+                      </button>
+                      <button
+                        className={mode === "plan" ? "selected" : ""}
+                        onClick={() => setMode("plan")}
+                        type="button"
+                      >
+                        Plan
+                      </button>
+                    </div>
+                  </div>
+                  <div className="settings-field">
+                    <span>{copy.reasoning}</span>
+                    <div className="settings-segment" aria-label={copy.reasoning}>
+                      {reasoningOptions.map((reasoningOption) => (
+                        <button
+                          className={selectedReasoningEffort === reasoningOption.value ? "selected" : ""}
+                          key={reasoningOption.value}
+                          onClick={() => setSelectedReasoningEffort(reasoningOption.value)}
+                          type="button"
+                        >
+                          {reasoningOption.labels[uiLanguage]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
-        <div className="today-grid">
-          <section className="feature-card chat-card" aria-label="Conversation" id="chat">
-            <div className="feature-card-header">
-              <div>
-                <span>Local runtime</span>
-                <h2>Kodeks agent</h2>
-              </div>
-              <div className="feature-icon" aria-hidden="true">
-                <Sparkles size={21} />
-              </div>
-            </div>
-
-            <div className="conversation">
-              <div className="message-list">
-                {messages.map((message) => (
-                  <article className={`message ${message.role}`} key={message.id}>
-                    <div className="avatar" aria-hidden="true">
-                      {message.role === "user" ? <UserRound size={17} /> : <Bot size={17} />}
-                    </div>
-                    <div className="bubble">
-                      <span className="role-label">{message.role === "user" ? "You" : "Kodeks"}</span>
-                      <p>{message.content || "..."}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-
-              <form className="composer" onSubmit={handleSubmit}>
-                <textarea
-                  aria-label="Message"
-                  id="message"
-                  name="message"
-                  onKeyDown={handleComposerKeyDown}
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder="问一句，比如：帮我解释这个项目现在能做什么"
-                  ref={messageTextareaRef}
-                  rows={3}
-                  value={input}
-                />
-                <div className="composer-actions">
-                  <div className="mode-control" aria-label="Chat mode">
-                    <button
-                      className={mode === "act" ? "selected" : ""}
-                      onClick={() => setMode("act")}
-                      type="button"
-                    >
-                      Act
-                    </button>
-                    <button
-                      className={mode === "plan" ? "selected" : ""}
-                      onClick={() => setMode("plan")}
-                      type="button"
-                    >
-                      Plan
-                    </button>
-                  </div>
-                  <div className="composer-right-tools">
-                    <div
-                      className={isModelMenuOpen ? "model-picker open" : "model-picker"}
-                      onMouseLeave={() => setIsModelMenuOpen(false)}
-                    >
-                      <button
-                        aria-expanded={isModelMenuOpen}
-                        aria-haspopup="menu"
-                        className="model-trigger"
-                        onClick={() => setIsModelMenuOpen((current) => !current)}
-                        onMouseEnter={() => setIsModelMenuOpen(true)}
-                        type="button"
-                      >
-                        {selectedReasoningLabel}
-                        <ChevronDown size={15} />
-                      </button>
-                      <div className="model-menu" role="menu" aria-label="OpenAI reasoning effort">
-                        <div className="model-menu-title" aria-hidden="true">
-                          智能
-                        </div>
-                        {reasoningOptions.map((reasoningOption) => (
-                          <button
-                            aria-checked={selectedReasoningEffort === reasoningOption.value}
-                            className={selectedReasoningEffort === reasoningOption.value ? "selected" : ""}
-                            key={reasoningOption.value}
-                            onClick={() => {
-                              setSelectedReasoningEffort(reasoningOption.value);
-                              setIsModelMenuOpen(false);
-                            }}
-                            role="menuitemradio"
-                            type="button"
-                          >
-                            {reasoningOption.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {isStreaming ? (
-                      <button className="icon-button stop" onClick={handleStop} type="button" aria-label="Stop streaming">
-                        <CircleStop size={18} />
-                      </button>
-                    ) : (
-                      <button className="send-button" disabled={!canSend} type="submit" aria-label="Send message">
-                        <Send size={17} />
-                        <span className="send-label">Send</span>
-                      </button>
-                    )}
-                  </div>
+        {activeView === "chat" ? (
+          <section className="conversation" aria-label="Conversation" id="chat">
+            <div className="workbench-body">
+              <div className="chat-column">
+                <div className="message-list" ref={messageListRef}>
+                  {messages.map((message) => (
+                    <MessageArticle copy={copy} key={message.id} message={message} />
+                  ))}
                 </div>
-              </form>
-            </div>
-          </section>
-
-          <aside
-            aria-busy={!shouldRenderDiagnostics}
-            aria-label="Session details"
-            className="today-stack"
-            id="tools"
-          >
-            {shouldRenderDiagnostics ? (
-              <>
-                <section className="detail-card">
-                  <label htmlFor="session-id">Session</label>
-                  <input
-                    id="session-id"
-                    name="session-id"
-                    onChange={(event) => setSessionId(event.target.value)}
-                    value={sessionId}
-                  />
-                  <p>Use a stable session id to test multi-turn memory and resume behavior.</p>
-                </section>
 
                 {pendingApproval !== null ? (
-                  <section className="detail-card">
-                    <label>Approval</label>
-                    <p>{pendingApproval.reason}</p>
+                  <section className="approval-banner" aria-label={copy.approval}>
+                    <div>
+                      <strong>{copy.approvalRequired}</strong>
+                      <p>{pendingApproval.reason}</p>
+                    </div>
                     <div className="approval-actions">
-                      <button className="icon-button" onClick={() => decideApproval("approve")} type="button" aria-label="Approve">
-                        <Check size={17} />
+                      <button className="icon-button approve" onClick={() => decideApproval("approve")} type="button" aria-label={copy.approve}>
+                        <MaterialIcon name="check" size={17} />
                       </button>
-                      <button className="icon-button stop" onClick={() => decideApproval("reject")} type="button" aria-label="Reject">
-                        <X size={17} />
+                      <button className="icon-button stop" onClick={() => decideApproval("reject")} type="button" aria-label={copy.reject}>
+                        <MaterialIcon name="close" size={17} />
                       </button>
                     </div>
                   </section>
                 ) : null}
 
-                <details className="activity-card runtime-log-card" id="runtime">
-                  <summary className="activity-heading">
-                    <Cpu size={16} />
-                    <span>运行日志</span>
-                    <span className="activity-count">{activity.length}</span>
-                    <span className="runtime-state">{activity.length > 0 ? "Live" : "Ready"}</span>
-                  </summary>
-                  {activity.length === 0 ? (
-                    <p className="muted">暂无事件。发送消息后会显示工具调用、审批和完成状态。</p>
-                  ) : (
-                    <ul className="activity-list">
-                      {activity.map((item) => (
-                        <li key={item.id}>
-                          <span>{item.label}</span>
-                          <p>{item.detail}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="runtime-log">
-                    <div>
-                      <AppWindow size={17} />
-                      <span>TypeScript runtime</span>
+                <form className="composer" onSubmit={handleSubmit}>
+                  <textarea
+                    aria-label={copy.messageLabel}
+                    id="message"
+                    name="message"
+                    onKeyDown={handleComposerKeyDown}
+                    onChange={(event) => setInput(event.target.value)}
+                    placeholder={copy.placeholder}
+                    ref={messageTextareaRef}
+                    rows={2}
+                    value={input}
+                  />
+                  <div className="composer-actions">
+                    <div className="mode-control" aria-label={copy.chatMode}>
+                      <button
+                        className={mode === "act" ? "selected" : ""}
+                        onClick={() => setMode("act")}
+                        type="button"
+                      >
+                        Act
+                      </button>
+                      <button
+                        className={mode === "plan" ? "selected" : ""}
+                        onClick={() => setMode("plan")}
+                        type="button"
+                      >
+                        Plan
+                      </button>
                     </div>
-                    <div>
-                      <Wrench size={17} />
-                      <span>Next proxy route</span>
+                    <div className="composer-right-tools">
+                      <div
+                        className={isModelMenuOpen ? "model-picker open" : "model-picker"}
+                        onMouseLeave={() => setIsModelMenuOpen(false)}
+                      >
+                        <button
+                          aria-expanded={isModelMenuOpen}
+                          aria-haspopup="menu"
+                          className="model-trigger"
+                          onClick={() => setIsModelMenuOpen((current) => !current)}
+                          onMouseEnter={() => setIsModelMenuOpen(true)}
+                          type="button"
+                        >
+                          {selectedReasoningLabel}
+                          <MaterialIcon name="keyboard_arrow_down" size={15} />
+                        </button>
+                        <div className="model-menu" role="menu" aria-label="OpenAI reasoning effort">
+                          <div className="model-menu-title" aria-hidden="true">
+                            {copy.modelMenuTitle}
+                          </div>
+                          {reasoningOptions.map((reasoningOption) => (
+                            <button
+                              aria-checked={selectedReasoningEffort === reasoningOption.value}
+                              className={selectedReasoningEffort === reasoningOption.value ? "selected" : ""}
+                              key={reasoningOption.value}
+                              onClick={() => {
+                                setSelectedReasoningEffort(reasoningOption.value);
+                                setIsModelMenuOpen(false);
+                              }}
+                              role="menuitemradio"
+                              type="button"
+                            >
+                              {reasoningOption.labels[uiLanguage]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {isStreaming ? (
+                        <button className="icon-button stop" onClick={handleStop} type="button" aria-label={copy.stopStreaming}>
+                          <MaterialIcon name="stop_circle" size={18} />
+                        </button>
+                      ) : (
+                        <button className="send-button" disabled={!canSend} type="submit" aria-label={copy.sendLabel}>
+                          <MaterialIcon name="send" size={17} />
+                          <span className="send-label">{copy.send}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
-                </details>
-              </>
-            ) : (
-              <div className="diagnostics-placeholder" aria-hidden="true" />
-            )}
-          </aside>
-        </div>
+                </form>
+              </div>
+              <ActivityPanel className="docked" copy={copy} items={visibleActivityItems} />
+            </div>
+          </section>
+        ) : (
+          <section className="activity-page" aria-label={copy.activityTitle} id="activity">
+            <ActivityPanel copy={copy} items={visibleActivityItems} />
+          </section>
+        )}
       </section>
     </main>
   );
