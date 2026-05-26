@@ -8,7 +8,7 @@
 
 kodeks has migrated from a Python/FastAPI prototype to a TypeScript workspace. The current implementation is an MVP, not a hosted product. It is designed to be small enough to study and extend while still preserving the boundaries a real coding agent needs.
 
-The original Python implementation is archived under [`legacy/python/`](./legacy/python/).
+The original Python implementation has been removed from the active repository. Historical behavior can be inspected through Git history and the migration design notes.
 
 ## Highlights
 

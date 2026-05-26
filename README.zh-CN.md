@@ -8,7 +8,7 @@
 
 kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实现是 MVP，不是托管型产品。它的目标是保持足够小，方便学习和扩展，同时保留真实 coding agent 需要的关键边界。
 
-原 Python 实现已经归档在 [`legacy/python/`](./legacy/python/)。
+原 Python 实现已经从当前仓库移除；历史行为对照请查看 Git 历史和迁移设计文档。
 
 ## 功能亮点
 
