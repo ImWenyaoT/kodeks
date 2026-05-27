@@ -32,6 +32,15 @@ export type TimelineMemoryItem = {
   memoryIds: string[];
 };
 
+export type TimelinePlanItem = {
+  type: "plan";
+  id: string;
+  action: "created" | "recovered";
+  title: string;
+  summary: string;
+  stepCount: number;
+};
+
 export type TimelineStatusItem = {
   type: "status";
   id: string;
@@ -58,6 +67,7 @@ export type TimelineItem =
   | TimelineToolItem
   | TimelineApprovalItem
   | TimelineMemoryItem
+  | TimelinePlanItem
   | TimelineStatusItem
   | TimelineSubagentItem
   | TimelineCompletionItem;
@@ -115,6 +125,20 @@ export function upsertRuntimeTimelineItem(
 
   if (event.type === "memory_recalled") {
     return [...items, { type: "memory", id: `memory-${makeId()}`, memoryIds: event.memoryIds }];
+  }
+
+  if (event.type === "plan_artifact") {
+    return [
+      ...items,
+      {
+        type: "plan",
+        id: `plan-${event.plan.id || makeId()}`,
+        action: event.action,
+        title: event.plan.title,
+        summary: event.plan.summary,
+        stepCount: event.plan.steps.length
+      }
+    ];
   }
 
   if (event.type === "assistant_status") {

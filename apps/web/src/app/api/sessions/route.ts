@@ -7,8 +7,15 @@ export const runtime = "nodejs";
 
 // 列出当前本地 Kodeks workspace 已知的 sessions。
 export async function GET(): Promise<Response> {
-  const sessions = await getKodeksDatabase().sessions.listSessions();
-  return Response.json({ sessions });
+  const database = getKodeksDatabase();
+  const sessions = await database.sessions.listSessions();
+  const sessionsWithPlans = await Promise.all(
+    sessions.map(async (session) => ({
+      ...session,
+      activePlan: await database.plans.getActiveBySession(session.id)
+    }))
+  );
+  return Response.json({ sessions: sessionsWithPlans });
 }
 
 // 创建一个 session record，用于 resume 和显式 mode tracking。

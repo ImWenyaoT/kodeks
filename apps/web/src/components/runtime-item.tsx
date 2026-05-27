@@ -1,20 +1,33 @@
 import React from "react";
 
 import { MaterialIcon } from "@/components/material-icon";
-import { type TimelineCompletionItem, type TimelineMemoryItem, type TimelineStatusItem, type TimelineSubagentItem } from "@/lib/conversation-timeline";
+import { type TimelineCompletionItem, type TimelineMemoryItem, type TimelinePlanItem, type TimelineStatusItem, type TimelineSubagentItem } from "@/lib/conversation-timeline";
 import type { UiCopy } from "@/lib/ui-copy";
 
 type RuntimeItemProps = {
-  item: TimelineCompletionItem | TimelineMemoryItem | TimelineStatusItem | TimelineSubagentItem;
+  item: TimelineCompletionItem | TimelineMemoryItem | TimelinePlanItem | TimelineStatusItem | TimelineSubagentItem;
   copy: UiCopy["runtime"];
 };
 
 // 渲染轻量级 runtime 事件，例如记忆召回、子代理状态和响应完成。
 export default function RuntimeItem({ item, copy }: RuntimeItemProps) {
-  const iconName = item.type === "memory" ? "memory" : item.type === "subagent" ? "account_tree" : item.type === "completed" ? "check" : "hourglass_empty";
+  const iconName =
+    item.type === "memory"
+      ? "memory"
+      : item.type === "plan"
+        ? "fact_check"
+        : item.type === "subagent"
+          ? "account_tree"
+          : item.type === "completed"
+            ? "check"
+            : "hourglass_empty";
   const title =
     item.type === "memory"
       ? copy.memoryRecalled
+      : item.type === "plan"
+        ? item.action === "created"
+          ? copy.planCreated
+          : copy.planRecovered
       : item.type === "subagent"
         ? item.status === "running"
           ? copy.subagentStarted(item.agent)
@@ -25,6 +38,8 @@ export default function RuntimeItem({ item, copy }: RuntimeItemProps) {
   const detail =
     item.type === "memory"
       ? item.memoryIds.join(", ") || copy.zeroMemories
+      : item.type === "plan"
+        ? copy.planDetail(item.title, item.stepCount)
       : item.type === "subagent"
         ? item.summary ?? item.runId
         : item.type === "completed"

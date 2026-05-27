@@ -1,6 +1,13 @@
 import { Agent, type FunctionTool, tool } from "@openai/agents";
 import type { ChatMessage, ModelClient, ModelTurnRequest, ModelTurnStreamEvent } from "@kodeks/model";
-import type { KodeksDatabase, SessionMode, StoredMemory, StoredMessage } from "@kodeks/storage";
+import type {
+  KodeksDatabase,
+  SessionMode,
+  StoredMemory,
+  StoredMessage,
+  StoredPlanArtifact,
+  StoredPlanStep
+} from "@kodeks/storage";
 import {
   ToolExecutionContext,
   buildDefaultToolRegistry,
@@ -24,6 +31,7 @@ export type AgentEvent =
     }
   | { type: "approval_required"; approvalId: string; toolCallId: string; reason: string; sessionId: string }
   | { type: "memory_recalled"; memoryIds: string[]; sessionId: string }
+  | { type: "plan_artifact"; action: "created" | "recovered"; plan: StoredPlanArtifact; sessionId: string }
   | { type: "subagent_started"; runId: string; agent: "explore"; sessionId: string }
   | { type: "subagent_completed"; runId: string; summary: string; sessionId: string }
   | { type: "response_completed"; sessionId: string; responseId: string }
@@ -71,6 +79,11 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
     content: { text: input.input }
   });
 
+  const activePlan = await input.database.plans.getActiveBySession(sessionId);
+  if (activePlan !== null) {
+    yield { type: "plan_artifact", action: "recovered", plan: activePlan, sessionId };
+  }
+
   const recalledMemories = await input.database.memories.recall(input.input);
   if (recalledMemories.length > 0) {
     yield {
@@ -90,6 +103,7 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
     database: input.database,
     sessionId,
     recalledMemories,
+    activePlan,
     registry
   });
 
@@ -157,11 +171,19 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
       if (modelEvent.type === "response_completed") {
         responseCompleted = true;
         if (roundAssistantText.length > 0) {
-          await input.database.sessions.appendMessage({
+          const assistantMessage = await input.database.sessions.appendMessage({
             sessionId,
             role: "assistant",
             content: { text: roundAssistantText }
           });
+          if (input.mode === "plan") {
+            const plan = await input.database.plans.upsertActive({
+              ...buildPlanArtifactContent(input.input, roundAssistantText),
+              sessionId,
+              sourceMessageId: assistantMessage.id
+            });
+            yield { type: "plan_artifact", action: "created", plan, sessionId };
+          }
         }
         yield {
           type: "response_completed",
@@ -236,6 +258,7 @@ async function buildModelTurnRequest(input: {
   database: KodeksDatabase;
   sessionId: string;
   recalledMemories: StoredMemory[];
+  activePlan: StoredPlanArtifact | null;
   registry: ToolRegistry;
 }): Promise<ModelTurnRequest> {
   const transcript = await input.database.sessions.getTranscript(input.sessionId);
@@ -243,7 +266,7 @@ async function buildModelTurnRequest(input: {
     messages: [
       {
         role: "system",
-        content: buildSystemContext(input.mode, input.recalledMemories)
+        content: buildSystemContext(input.mode, input.recalledMemories, input.activePlan)
       },
       ...transcript.flatMap(toModelTranscriptMessage)
     ],
@@ -343,6 +366,8 @@ function buildAgentInstructions(mode: SessionMode): string {
       "You are Kodeks Plan Agent.",
       "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
       "Inspect the workspace and produce a short, practical plan.",
+      "Structure the final answer with a title, short summary, numbered steps, and a verification note so Kodeks can persist it as a plan artifact.",
+      "Use read-only tools for workspace search, Brave web search, MCP manifests, and skills when useful.",
       "Do not mutate files or run shell commands.",
       "Do not reveal hidden reasoning or private scratchpad text.",
       "Do not claim you opened a URL unless a tool result proves it."
@@ -351,8 +376,9 @@ function buildAgentInstructions(mode: SessionMode): string {
   return [
     "You are Kodeks Build Agent.",
     "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
-    "Help with coding tasks by using simple workspace tools: read files, write files, and run shell commands.",
-    "Use memory and subagent tools only when they clearly help the task.",
+    "Help with coding tasks by using workspace tools, Brave web search, MCP manifests, skills, memory, and subagents.",
+    "Use workspace tools to read files, write files, and run shell commands when that is the right next step.",
+    "Use web search, memory, skills, and subagent tools only when they clearly help the task.",
     "Ask for approval before dangerous shell commands or risky writes.",
     "Do not reveal hidden reasoning or private scratchpad text.",
     "Do not write self-talk like \"Let me explore\" as the final answer.",
@@ -362,12 +388,99 @@ function buildAgentInstructions(mode: SessionMode): string {
 }
 
 // Builds system context for the model client request.
-function buildSystemContext(mode: SessionMode, recalledMemories: StoredMemory[]): string {
+function buildSystemContext(
+  mode: SessionMode,
+  recalledMemories: StoredMemory[],
+  activePlan: StoredPlanArtifact | null
+): string {
   const memoryBlock =
     recalledMemories.length === 0
       ? "No recalled memories."
       : recalledMemories.map((memory) => `- [${memory.scope}] ${memory.content}`).join("\n");
-  return `${buildAgentInstructions(mode)}\n\nRecalled memory:\n${memoryBlock}`;
+  const planBlock = activePlan === null ? "No active plan artifact." : formatPlanArtifactForContext(activePlan);
+  return `${buildAgentInstructions(mode)}\n\nRecalled memory:\n${memoryBlock}\n\nActive plan artifact:\n${planBlock}`;
+}
+
+// Converts a plan artifact into compact context that can be resumed in later turns.
+function formatPlanArtifactForContext(plan: StoredPlanArtifact): string {
+  const steps = plan.steps.map((step) => `- [${step.status}] ${step.title}`).join("\n");
+  return [`${plan.title} (${plan.id})`, plan.summary, steps].filter(Boolean).join("\n");
+}
+
+// Extracts a minimal structured plan from the assistant's plan-mode answer.
+function buildPlanArtifactContent(userPrompt: string, assistantText: string): {
+  title: string;
+  summary: string;
+  steps: StoredPlanStep[];
+} {
+  const lines = assistantText.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  const title = readPlanTitle(lines) ?? compactText(userPrompt, 80) ?? "Kodeks plan";
+  const summary = readPlanSummary(lines, title) ?? compactText(assistantText, 240);
+  const steps = readPlanSteps(lines);
+  return {
+    title,
+    summary,
+    steps:
+      steps.length > 0
+        ? steps
+        : [
+            {
+              id: "step_1",
+              title: summary || "Review the generated plan",
+              status: "pending",
+              details: null
+            }
+          ]
+  };
+}
+
+// Reads a markdown heading or the first short non-list line as a plan title.
+function readPlanTitle(lines: string[]): string | null {
+  const heading = lines.find((line) => /^#{1,3}\s+/u.test(line));
+  if (heading !== undefined) {
+    return heading.replace(/^#{1,3}\s+/u, "").trim();
+  }
+  const firstText = lines.find((line) => !isPlanStepLine(line));
+  return firstText === undefined ? null : compactText(firstText.replace(/[:：]$/u, ""), 80);
+}
+
+// Reads a concise summary line while skipping headings and step-like bullets.
+function readPlanSummary(lines: string[], title: string): string | null {
+  const summary = lines.find((line) => {
+    const normalized = line.replace(/^#{1,3}\s+/u, "").trim();
+    return normalized !== title && !isPlanStepLine(line) && !/^(summary|摘要|计划|steps|步骤)[:：]?$/iu.test(normalized);
+  });
+  return summary === undefined ? null : compactText(summary, 240);
+}
+
+// Extracts numbered, bulleted, or checkbox lines as structured plan steps.
+function readPlanSteps(lines: string[]): StoredPlanStep[] {
+  return lines.flatMap((line) => {
+    const match = line.match(/^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)(.+)$/u);
+    if (match === null) {
+      return [];
+    }
+    const title = compactText(match[1]?.replace(/^[-*]\s*/u, "").trim() ?? "", 160);
+    if (title.length === 0) {
+      return [];
+    }
+    const status: StoredPlanStep["status"] = line.includes("[x]") || line.includes("[X]") ? "completed" : "pending";
+    return [{ id: "", title, status, details: null }];
+  }).map((step, index) => ({ ...step, id: `step_${index + 1}` }));
+}
+
+// Checks whether a line looks like a markdown/list plan step.
+function isPlanStepLine(line: string): boolean {
+  return /^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)/u.test(line);
+}
+
+// Collapses whitespace and trims long model text for stable artifact fields.
+function compactText(text: string, maxLength: number): string {
+  const normalized = text.replace(/\s+/gu, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd();
 }
 
 // Converts stored JSON message content into text for model input.

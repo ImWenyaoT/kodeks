@@ -29,6 +29,30 @@ describe("parseSseFrames", () => {
     ]);
   });
 
+  it("parses persisted plan artifact events", () => {
+    const frame =
+      'event: plan_artifact\ndata: {"type":"plan_artifact","action":"created","session_id":"s1","plan":{"id":"plan_1","sessionId":"s1","title":"Storage plan","summary":"Persist it","steps":[{"id":"step_1","title":"Add table","status":"pending","details":null}],"status":"active","sourceMessageId":"msg_1","createdAt":"2026-05-27T00:00:00.000Z","updatedAt":"2026-05-27T00:00:00.000Z"}}\n\n';
+
+    expect(parseSseFrames(frame)).toEqual([
+      {
+        type: "plan_artifact",
+        action: "created",
+        sessionId: "s1",
+        plan: {
+          id: "plan_1",
+          sessionId: "s1",
+          title: "Storage plan",
+          summary: "Persist it",
+          steps: [{ id: "step_1", title: "Add table", status: "pending", details: null }],
+          status: "active",
+          sourceMessageId: "msg_1",
+          createdAt: "2026-05-27T00:00:00.000Z",
+          updatedAt: "2026-05-27T00:00:00.000Z"
+        }
+      }
+    ]);
+  });
+
   it("parses runtime-created sessions and folded SSE data lines", () => {
     const frames = [
       'event: session_created\ndata: {"type":"session_created",\ndata: "session_id":"sess_1"}\n\n'

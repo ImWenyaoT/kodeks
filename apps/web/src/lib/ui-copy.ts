@@ -31,6 +31,8 @@ export type UiCopy = {
     session: string;
     autoSession: string;
     webSearch: string;
+    webSearchDescription: string;
+    braveProvider: string;
     userLocation: string;
     clear: string;
     country: string;
@@ -44,6 +46,12 @@ export type UiCopy = {
     plan: string;
     functions: string;
     mcp: string;
+    mcpDescription: string;
+    mcpManifest: string;
+    skills: string;
+    skillsDescription: string;
+    skillSource: string;
+    runtimeSettings: string;
     reasoning: string;
     runtimeEvents: string;
     googleIntegration: string;
@@ -53,6 +61,9 @@ export type UiCopy = {
   runtime: {
     memoryRecalled: string;
     zeroMemories: string;
+    planCreated: string;
+    planRecovered: string;
+    planDetail: (title: string, stepCount: number) => string;
     subagentStarted: (agent: string) => string;
     subagentCompleted: (agent: string) => string;
     responseCompleted: string;
@@ -96,6 +107,8 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       session: "会话",
       autoSession: "自动会话",
       webSearch: "网页搜索",
+      webSearchDescription: "通过 Brave Search API 执行实时网页搜索；配置 BRAVE_SEARCH_API_KEY 后模型可调用 web_search。",
+      braveProvider: "Brave Search",
       userLocation: "用户位置",
       clear: "清除",
       country: "国家",
@@ -109,6 +122,12 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       plan: "计划",
       functions: "函数",
       mcp: "MCP",
+      mcpDescription: "读取 KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL 中的 MCP server manifest，作为后续 MCP tool 调用的入口。",
+      mcpManifest: "环境 manifest",
+      skills: "Skills",
+      skillsDescription: "从 KODEKS_SKILLS_PATHS 或 workspace .kodeks/skills 发现技能，并允许模型读取 SKILL.md。",
+      skillSource: "技能目录",
+      runtimeSettings: "运行设置",
       reasoning: "推理强度",
       runtimeEvents: "运行事件",
       googleIntegration: "Google 集成",
@@ -123,6 +142,9 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
     runtime: {
       memoryRecalled: "已召回记忆",
       zeroMemories: "0 条记忆",
+      planCreated: "计划已保存",
+      planRecovered: "已恢复计划",
+      planDetail: (title, stepCount) => `${title} · ${stepCount} 步`,
       subagentStarted: (agent) => `子代理 ${agent} 已启动`,
       subagentCompleted: (agent) => `子代理 ${agent} 已完成`,
       responseCompleted: "响应完成",
@@ -164,6 +186,8 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       session: "Session",
       autoSession: "auto session",
       webSearch: "Web Search",
+      webSearchDescription: "Run live web search through the Brave Search API. Configure BRAVE_SEARCH_API_KEY to enable the web_search tool.",
+      braveProvider: "Brave Search",
       userLocation: "User's location",
       clear: "Clear",
       country: "Country",
@@ -177,6 +201,12 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       plan: "Plan",
       functions: "Functions",
       mcp: "MCP",
+      mcpDescription: "Reads MCP server manifests from KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL as the entry point for future MCP tool calls.",
+      mcpManifest: "Env manifest",
+      skills: "Skills",
+      skillsDescription: "Discovers skills from KODEKS_SKILLS_PATHS or workspace .kodeks/skills and lets the model read SKILL.md.",
+      skillSource: "Skill roots",
+      runtimeSettings: "Runtime",
       reasoning: "Reasoning",
       runtimeEvents: "Runtime events",
       googleIntegration: "Google Integration",
@@ -191,6 +221,9 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
     runtime: {
       memoryRecalled: "Memory recalled",
       zeroMemories: "0 memories",
+      planCreated: "Plan saved",
+      planRecovered: "Plan recovered",
+      planDetail: (title, stepCount) => `${title} · ${stepCount} steps`,
       subagentStarted: (agent) => `Subagent ${agent} started`,
       subagentCompleted: (agent) => `Subagent ${agent} completed`,
       responseCompleted: "Response completed",

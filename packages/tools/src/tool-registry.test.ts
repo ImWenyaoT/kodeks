@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -6,7 +6,7 @@ import { KodeksDatabase } from "@kodeks/storage";
 import { WorkspaceService } from "@kodeks/workspace";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ToolExecutionContext, buildDefaultToolRegistry } from "./index";
+import { ToolExecutionContext, buildDefaultToolRegistry, defaultToolDefinitions } from "./index";
 
 let tempDir: string;
 let database: KodeksDatabase;
@@ -27,20 +27,29 @@ describe("ToolRegistry", () => {
   it("returns stable tool definitions and filters read-only tools for plan mode", () => {
     const registry = buildDefaultToolRegistry({ workspace, database });
 
+    expect(registry.definitions()).toEqual(defaultToolDefinitions);
     expect(registry.definitions().map((definition) => definition.name)).toEqual([
       "read_file",
       "write_file",
       "grep",
+      "web_search",
       "run_shell",
       "remember_fact",
       "recall_memory",
-      "spawn_explore_agent"
+      "spawn_explore_agent",
+      "list_mcp_servers",
+      "list_skills",
+      "read_skill"
     ]);
     expect(registry.definitions({ readOnlyOnly: true }).map((definition) => definition.name)).toEqual([
       "read_file",
       "grep",
+      "web_search",
       "recall_memory",
-      "spawn_explore_agent"
+      "spawn_explore_agent",
+      "list_mcp_servers",
+      "list_skills",
+      "read_skill"
     ]);
   });
 
@@ -77,6 +86,65 @@ describe("ToolRegistry", () => {
     expect(JSON.parse(result.output)).toMatchObject({
       ok: true,
       matches: [{ path: "src/a.ts", line: 1, text: "export const marker = 'kodeks';" }]
+    });
+  });
+
+  it("runs Brave web search through an injected fetch client", async () => {
+    const registry = buildDefaultToolRegistry({
+      workspace,
+      database,
+      environment: { BRAVE_SEARCH_API_KEY: "brave_test_key" },
+      fetch: async (url, init) => {
+        expect(url).toContain("api.search.brave.com");
+        expect(url).toContain("q=kodeks");
+        expect(init?.headers?.["X-Subscription-Token"]).toBe("brave_test_key");
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          async json() {
+            return {
+              web: {
+                results: [
+                  {
+                    title: "Kodeks",
+                    url: "https://example.com/kodeks",
+                    description: "A coding agent runtime."
+                  }
+                ]
+              }
+            };
+          }
+        };
+      }
+    });
+
+    const result = await registry.execute("web_search", { query: "kodeks", count: 1 });
+
+    expect(result.status).toBe("completed");
+    expect(JSON.parse(result.output)).toMatchObject({
+      ok: true,
+      provider: "brave",
+      results: [{ title: "Kodeks", url: "https://example.com/kodeks" }]
+    });
+  });
+
+  it("reports missing Brave API configuration without making a request", async () => {
+    const registry = buildDefaultToolRegistry({
+      workspace,
+      database,
+      environment: {},
+      fetch: async () => {
+        throw new Error("fetch should not be called");
+      }
+    });
+
+    const result = await registry.execute("web_search", { query: "kodeks" });
+
+    expect(result.status).toBe("failed");
+    expect(JSON.parse(result.output)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("BRAVE_SEARCH_API_KEY")
     });
   });
 
@@ -147,6 +215,63 @@ describe("ToolRegistry", () => {
       parentSessionId: "s1",
       agentName: "explore",
       status: "completed"
+    });
+  });
+
+  it("lists MCP manifests from environment", async () => {
+    const registry = buildDefaultToolRegistry({
+      workspace,
+      database,
+      environment: {
+        KODEKS_MCP_SERVERS: JSON.stringify([
+          {
+            label: "deepwiki",
+            url: "https://example.com/mcp",
+            allowedTools: ["search"],
+            skipApproval: true
+          }
+        ])
+      }
+    });
+
+    const result = await registry.execute("list_mcp_servers", {});
+
+    expect(JSON.parse(result.output)).toMatchObject({
+      ok: true,
+      count: 1,
+      servers: [
+        {
+          label: "deepwiki",
+          url: "https://example.com/mcp",
+          allowedTools: ["search"],
+          skipApproval: true
+        }
+      ]
+    });
+  });
+
+  it("lists and reads configured skills", async () => {
+    const skillsRoot = join(tempDir, "skills");
+    await mkdir(join(skillsRoot, "frontend"), { recursive: true });
+    await writeFile(join(skillsRoot, "frontend", "SKILL.md"), "# Frontend Builder\n\nUse for UI work.");
+    const registry = buildDefaultToolRegistry({
+      workspace,
+      database,
+      environment: { KODEKS_SKILLS_PATHS: skillsRoot }
+    });
+
+    const listResult = await registry.execute("list_skills", { query: "front" });
+    const readResult = await registry.execute("read_skill", { name: "frontend" });
+
+    expect(JSON.parse(listResult.output)).toMatchObject({
+      ok: true,
+      skills: [{ name: "frontend", title: "Frontend Builder" }]
+    });
+    expect(JSON.parse(readResult.output)).toMatchObject({
+      ok: true,
+      name: "frontend",
+      title: "Frontend Builder",
+      content: expect.stringContaining("Use for UI work.")
     });
   });
 });

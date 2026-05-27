@@ -32,6 +32,7 @@ type KodeksUIDataParts = {
   session: { sessionId: string };
   status: { message: string; sessionId: string };
   memory: { memoryIds: string[]; sessionId: string };
+  plan: { action: "created" | "recovered"; plan: unknown; sessionId: string };
   approval: { approvalId: string; toolCallId: string; reason: string; sessionId: string };
   subagent: { runId: string; agent?: "explore"; summary?: string; sessionId: string };
   completed: { responseId: string; sessionId: string };
@@ -266,6 +267,15 @@ async function writeKodeksUIMessageChunks(
       continue;
     }
 
+    if (event.type === "plan_artifact") {
+      writer.write({
+        type: "data-plan",
+        data: { action: event.action, plan: event.plan, sessionId: event.sessionId },
+        transient: event.action === "recovered"
+      });
+      continue;
+    }
+
     if (event.type === "subagent_started") {
       writer.write({
         type: "data-subagent",
@@ -343,6 +353,9 @@ function toWirePayload(event: AgentEvent): Record<string, unknown> {
   }
   if (event.type === "memory_recalled") {
     return { type: "memory_recalled", memory_ids: event.memoryIds, session_id: event.sessionId };
+  }
+  if (event.type === "plan_artifact") {
+    return { type: "plan_artifact", action: event.action, plan: event.plan, session_id: event.sessionId };
   }
   if (event.type === "subagent_started") {
     return { type: "subagent_started", run_id: event.runId, agent: event.agent, session_id: event.sessionId };

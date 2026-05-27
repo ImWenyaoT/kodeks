@@ -58,6 +58,27 @@ export type StoredSubagentRun = {
   completedAt: string | null;
 };
 
+export type PlanStepStatus = "pending" | "in_progress" | "completed";
+
+export type StoredPlanStep = {
+  id: string;
+  title: string;
+  status: PlanStepStatus;
+  details: string | null;
+};
+
+export type StoredPlanArtifact = {
+  id: string;
+  sessionId: string;
+  title: string;
+  summary: string;
+  steps: StoredPlanStep[];
+  status: "active" | "archived";
+  sourceMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StoredAuditLogEntry = {
   id: string;
   sessionId: string | null;
@@ -99,6 +120,7 @@ export class KodeksDatabase {
   readonly memories: MemoryRepository;
   readonly approvals: ApprovalRepository;
   readonly subagents: SubagentRepository;
+  readonly plans: PlanRepository;
   readonly auditLog: AuditLogRepository;
 
   private readonly database: SqliteDatabase;
@@ -114,6 +136,7 @@ export class KodeksDatabase {
     this.memories = new MemoryRepository(this);
     this.approvals = new ApprovalRepository(this);
     this.subagents = new SubagentRepository(this);
+    this.plans = new PlanRepository(this);
     this.auditLog = new AuditLogRepository(this);
   }
 
@@ -181,6 +204,18 @@ export class KodeksDatabase {
         status TEXT NOT NULL,
         created_at TEXT NOT NULL,
         completed_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS plan_artifacts (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        steps_json TEXT NOT NULL,
+        status TEXT NOT NULL,
+        source_message_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -546,6 +581,77 @@ export class SubagentRepository {
   }
 }
 
+export class PlanRepository {
+  // Stores one durable active planning artifact per session for resume.
+  constructor(private readonly database: KodeksDatabase) {}
+
+  // Creates a new active plan and archives older active plans in the same session.
+  async upsertActive(input: {
+    sessionId: string;
+    title: string;
+    summary: string;
+    steps: StoredPlanStep[];
+    sourceMessageId?: string | null;
+  }): Promise<StoredPlanArtifact> {
+    const now = currentTimestamp();
+    this.database
+      .connection()
+      .prepare("UPDATE plan_artifacts SET status = 'archived', updated_at = ? WHERE session_id = ? AND status = 'active'")
+      .run(now, input.sessionId);
+
+    const plan: StoredPlanArtifact = {
+      id: prefixedId("plan"),
+      sessionId: input.sessionId,
+      title: input.title.trim() || "Plan",
+      summary: input.summary.trim(),
+      steps: input.steps,
+      status: "active",
+      sourceMessageId: input.sourceMessageId ?? null,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.database
+      .connection()
+      .prepare(
+        `INSERT INTO plan_artifacts
+          (id, session_id, title, summary, steps_json, status, source_message_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        plan.id,
+        plan.sessionId,
+        plan.title,
+        plan.summary,
+        JSON.stringify(plan.steps),
+        plan.status,
+        plan.sourceMessageId,
+        plan.createdAt,
+        plan.updatedAt
+      );
+    return plan;
+  }
+
+  // Returns the latest active plan artifact for a session, if one exists.
+  async getActiveBySession(sessionId: string): Promise<StoredPlanArtifact | null> {
+    const row = this.database
+      .connection()
+      .prepare(
+        "SELECT * FROM plan_artifacts WHERE session_id = ? AND status = 'active' ORDER BY updated_at DESC, rowid DESC LIMIT 1"
+      )
+      .get(sessionId) as PlanArtifactRow | null | undefined;
+    return row == null ? null : mapPlanArtifact(row);
+  }
+
+  // Lists every plan artifact in newest-first order for session recovery screens.
+  async listBySession(sessionId: string): Promise<StoredPlanArtifact[]> {
+    const rows = this.database
+      .connection()
+      .prepare("SELECT * FROM plan_artifacts WHERE session_id = ? ORDER BY updated_at DESC, rowid DESC")
+      .all(sessionId) as PlanArtifactRow[];
+    return rows.map(mapPlanArtifact);
+  }
+}
+
 export class AuditLogRepository {
   // Stores append-only product audit events in SQLite.
   constructor(private readonly database: KodeksDatabase) {}
@@ -637,6 +743,18 @@ type SubagentRow = {
   completed_at: string | null;
 };
 
+type PlanArtifactRow = {
+  id: string;
+  session_id: string;
+  title: string;
+  summary: string;
+  steps_json: string;
+  status: StoredPlanArtifact["status"];
+  source_message_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type AuditLogRow = {
   id: string;
   session_id: string | null;
@@ -713,6 +831,21 @@ function mapSubagentRun(row: SubagentRow): StoredSubagentRun {
   };
 }
 
+// Maps SQLite plan artifact rows into structured plan domain objects.
+function mapPlanArtifact(row: PlanArtifactRow): StoredPlanArtifact {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    title: row.title,
+    summary: row.summary,
+    steps: readStoredPlanSteps(row.steps_json),
+    status: row.status,
+    sourceMessageId: row.source_message_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 // Maps SQLite audit rows into parsed audit event objects.
 function mapAuditLogEntry(row: AuditLogRow): StoredAuditLogEntry {
   return {
@@ -732,6 +865,36 @@ function prefixedId(prefix: string): string {
 // Returns an ISO timestamp for records that need stable JSON serialization.
 function currentTimestamp(): string {
   return new Date().toISOString();
+}
+
+// Parses persisted plan steps while tolerating older or malformed rows.
+function readStoredPlanSteps(value: string): StoredPlanStep[] {
+  const parsed = JSON.parse(value) as unknown;
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.flatMap((item) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || typeof record.title !== "string") {
+      return [];
+    }
+    return [
+      {
+        id: record.id,
+        title: record.title,
+        status: readPlanStepStatus(record.status),
+        details: typeof record.details === "string" ? record.details : null
+      }
+    ];
+  });
+}
+
+// Normalizes plan step status strings from persisted JSON.
+function readPlanStepStatus(value: unknown): PlanStepStatus {
+  return value === "in_progress" || value === "completed" ? value : "pending";
 }
 
 // Extracts lightweight recall terms for the MVP memory scorer.

@@ -1,5 +1,24 @@
 export type ChatMode = "act" | "plan";
 
+export type ChatPlanStep = {
+  id: string;
+  title: string;
+  status: "pending" | "in_progress" | "completed";
+  details: string | null;
+};
+
+export type ChatPlanArtifact = {
+  id: string;
+  sessionId: string;
+  title: string;
+  summary: string;
+  steps: ChatPlanStep[];
+  status: "active" | "archived";
+  sourceMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ChatStreamEvent =
   | {
       type: "session_created";
@@ -48,6 +67,12 @@ export type ChatStreamEvent =
       sessionId?: string;
     }
   | {
+      type: "plan_artifact";
+      action: "created" | "recovered";
+      plan: ChatPlanArtifact;
+      sessionId?: string;
+    }
+  | {
       type: "subagent_started";
       runId: string;
       agent: string;
@@ -77,6 +102,8 @@ type RawChatStreamEvent = {
   tool_output?: unknown;
   approval_id?: string;
   memory_ids?: string[];
+  action?: string;
+  plan?: unknown;
   run_id?: string;
   agent?: string;
   summary?: string;
@@ -224,6 +251,15 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
     };
   }
 
+  if (rawEvent.type === "plan_artifact") {
+    return {
+      type: "plan_artifact",
+      action: rawEvent.action === "recovered" ? "recovered" : "created",
+      plan: normalizePlanArtifact(rawEvent.plan),
+      sessionId: rawEvent.session_id
+    };
+  }
+
   if (rawEvent.type === "subagent_started") {
     return {
       type: "subagent_started",
@@ -251,6 +287,53 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
   }
 
   return null;
+}
+
+// Normalizes plan artifacts from the runtime into a safe frontend shape.
+function normalizePlanArtifact(plan: unknown): ChatPlanArtifact {
+  const record = plan !== null && typeof plan === "object" && !Array.isArray(plan)
+    ? (plan as Record<string, unknown>)
+    : {};
+  return {
+    id: typeof record.id === "string" ? record.id : "",
+    sessionId: typeof record.sessionId === "string" ? record.sessionId : "",
+    title: typeof record.title === "string" ? record.title : "Plan",
+    summary: typeof record.summary === "string" ? record.summary : "",
+    steps: normalizePlanSteps(record.steps),
+    status: record.status === "archived" ? "archived" : "active",
+    sourceMessageId: typeof record.sourceMessageId === "string" ? record.sourceMessageId : null,
+    createdAt: typeof record.createdAt === "string" ? record.createdAt : "",
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : ""
+  };
+}
+
+// Normalizes persisted plan steps from loose JSON.
+function normalizePlanSteps(steps: unknown): ChatPlanStep[] {
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+  return steps.flatMap((step) => {
+    if (step === null || typeof step !== "object" || Array.isArray(step)) {
+      return [];
+    }
+    const record = step as Record<string, unknown>;
+    if (typeof record.id !== "string" || typeof record.title !== "string") {
+      return [];
+    }
+    return [
+      {
+        id: record.id,
+        title: record.title,
+        status: readPlanStepStatus(record.status),
+        details: typeof record.details === "string" ? record.details : null
+      }
+    ];
+  });
+}
+
+// Maps unknown plan status input to the frontend status union.
+function readPlanStepStatus(status: unknown): ChatPlanStep["status"] {
+  return status === "in_progress" || status === "completed" ? status : "pending";
 }
 
 // Dispatches parsed events to the text-delta and generic event callbacks.

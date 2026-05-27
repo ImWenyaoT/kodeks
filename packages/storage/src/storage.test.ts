@@ -10,6 +10,7 @@ import {
   AuditLogRepository,
   KodeksDatabase,
   MemoryRepository,
+  PlanRepository,
   SessionRepository,
   SubagentRepository
 } from "./index";
@@ -174,6 +175,43 @@ describe("SubagentRepository", () => {
       summary: "storage is ready",
       status: "completed"
     });
+  });
+});
+
+describe("PlanRepository", () => {
+  it("stores one active structured plan per session and archives older plans", async () => {
+    const plans = new PlanRepository(database);
+    const firstPlan = await plans.upsertActive({
+      sessionId: "s1",
+      title: "Initial plan",
+      summary: "Inspect files before editing.",
+      steps: [{ id: "step_1", title: "Read runtime", status: "pending", details: null }],
+      sourceMessageId: "msg_1"
+    });
+    const secondPlan = await plans.upsertActive({
+      sessionId: "s1",
+      title: "Updated plan",
+      summary: "Persist plan artifacts.",
+      steps: [
+        { id: "step_1", title: "Add storage table", status: "completed", details: "SQLite repository" },
+        { id: "step_2", title: "Emit recovery event", status: "pending", details: null }
+      ]
+    });
+
+    expect(await plans.getActiveBySession("s1")).toMatchObject({
+      id: secondPlan.id,
+      sessionId: "s1",
+      title: "Updated plan",
+      steps: [
+        { id: "step_1", title: "Add storage table", status: "completed", details: "SQLite repository" },
+        { id: "step_2", title: "Emit recovery event", status: "pending", details: null }
+      ],
+      status: "active"
+    });
+    expect(await plans.listBySession("s1")).toEqual([
+      expect.objectContaining({ id: secondPlan.id, status: "active" }),
+      expect.objectContaining({ id: firstPlan.id, status: "archived" })
+    ]);
   });
 });
 

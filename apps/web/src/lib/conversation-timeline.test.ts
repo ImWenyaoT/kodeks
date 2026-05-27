@@ -61,6 +61,40 @@ describe("conversation timeline", () => {
     ]);
   });
 
+  it("adds saved plan artifacts to the visible timeline", () => {
+    const items = upsertRuntimeTimelineItem(
+      [],
+      {
+        type: "plan_artifact",
+        action: "created",
+        sessionId: "s1",
+        plan: {
+          id: "plan_1",
+          sessionId: "s1",
+          title: "Storage plan",
+          summary: "Persist it",
+          steps: [{ id: "step_1", title: "Add table", status: "pending", details: null }],
+          status: "active",
+          sourceMessageId: "msg_1",
+          createdAt: "2026-05-27T00:00:00.000Z",
+          updatedAt: "2026-05-27T00:00:00.000Z"
+        }
+      },
+      () => "id1"
+    );
+
+    expect(items).toEqual([
+      {
+        type: "plan",
+        id: "plan-plan_1",
+        action: "created",
+        title: "Storage plan",
+        summary: "Persist it",
+        stepCount: 1
+      }
+    ]);
+  });
+
   it("formats structured payloads for compact timeline cards", () => {
     expect(formatTimelinePayload({ ok: true })).toBe("{\n  \"ok\": true\n}");
     expect(formatTimelinePayload("plain")).toBe("plain");

@@ -289,10 +289,96 @@ describe("runChatTurn", () => {
     expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual([
       "read_file",
       "grep",
+      "web_search",
       "recall_memory",
-      "spawn_explore_agent"
+      "spawn_explore_agent",
+      "list_mcp_servers",
+      "list_skills",
+      "read_skill"
     ]);
     expect(await database.sessions.getSession("s1")).toMatchObject({ mode: "plan" });
+  });
+
+  it("creates and persists a structured plan artifact in plan mode", async () => {
+    const model = new FakeModelClient([
+      [
+        { type: "text_delta", text: "# Storage plan\n\nPersist a plan artifact.\n\n1. Add a plans table\n2. Restore it next turn" },
+        { type: "response_completed", responseId: "resp_plan" }
+      ]
+    ]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "make a plan for plan artifacts",
+        sessionId: "s1",
+        mode: "plan",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events).toEqual([
+      {
+        type: "text_delta",
+        text: "# Storage plan\n\nPersist a plan artifact.\n\n1. Add a plans table\n2. Restore it next turn",
+        sessionId: "s1"
+      },
+      expect.objectContaining({
+        type: "plan_artifact",
+        action: "created",
+        sessionId: "s1",
+        plan: expect.objectContaining({
+          title: "Storage plan",
+          summary: "Persist a plan artifact.",
+          steps: [
+            { id: "step_1", title: "Add a plans table", status: "pending", details: null },
+            { id: "step_2", title: "Restore it next turn", status: "pending", details: null }
+          ]
+        })
+      }),
+      { type: "response_completed", sessionId: "s1", responseId: "resp_plan" }
+    ]);
+    await expect(database.plans.getActiveBySession("s1")).resolves.toMatchObject({
+      title: "Storage plan",
+      summary: "Persist a plan artifact.",
+      steps: [
+        { id: "step_1", title: "Add a plans table" },
+        { id: "step_2", title: "Restore it next turn" }
+      ]
+    });
+  });
+
+  it("recovers the active plan artifact in later turns for the same session", async () => {
+    await database.plans.upsertActive({
+      sessionId: "s1",
+      title: "Recovered plan",
+      summary: "Keep the next turn aligned with the stored plan.",
+      steps: [{ id: "step_1", title: "Use the active plan in context", status: "pending", details: null }]
+    });
+    const model = new FakeModelClient([[{ type: "response_completed", responseId: "resp_resume_plan" }]]);
+
+    const events = await collectEvents(
+      runChatTurn({
+        input: "continue from the plan",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model
+      })
+    );
+
+    expect(events[0]).toMatchObject({
+      type: "plan_artifact",
+      action: "recovered",
+      sessionId: "s1",
+      plan: expect.objectContaining({ title: "Recovered plan" })
+    });
+    expect(model.requests[0]?.messages[0]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("Recovered plan")
+    });
   });
 
   it("injects recalled memory before model execution", async () => {

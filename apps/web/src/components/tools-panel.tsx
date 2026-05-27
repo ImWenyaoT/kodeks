@@ -2,6 +2,8 @@
 
 import React from "react";
 
+import { defaultToolDefinitions, type JsonSchemaProperty, type ToolDefinition } from "@kodeks/tools/definitions";
+
 import { MaterialIcon } from "@/components/material-icon";
 import type { UiCopy, UiLanguagePreference, UiThemePreference } from "@/lib/ui-copy";
 
@@ -19,12 +21,43 @@ type ToolsPanelProps = {
   onThemeChange: (theme: UiThemePreference) => void;
 };
 
-const functionNames = ["read_file(path: string)", "write_file(path: string, content: string)", "grep(pattern: string)", "run_shell(command: string)"] as const;
-
 type SegmentOption<TValue extends string> = {
   value: TValue;
   label: string;
 };
+
+// Converts JSON schema primitive names into the compact labels shown in the tool list.
+function formatSchemaType(property: JsonSchemaProperty | undefined): string {
+  if (property === undefined) {
+    return "unknown";
+  }
+  if (Array.isArray(property.type)) {
+    return property.type.join(" | ");
+  }
+  if (property.type !== undefined) {
+    return property.type;
+  }
+  if (property.enum !== undefined) {
+    return "string";
+  }
+  if (property.properties !== undefined) {
+    return "object";
+  }
+  if (property.items !== undefined) {
+    return "array";
+  }
+  return "unknown";
+}
+
+// Renders a provider-facing tool definition as a TypeScript-like function signature.
+export function formatToolSignature(tool: ToolDefinition): string {
+  const required = new Set(tool.parameters.required ?? []);
+  const parameters = Object.entries(tool.parameters.properties).map(([name, property]) => {
+    const optionalMarker = required.has(name) ? "" : "?";
+    return `${name}${optionalMarker}: ${formatSchemaType(property)}`;
+  });
+  return `${tool.name}(${parameters.join(", ")})`;
+}
 
 // 渲染一组分段按钮，用 key 固定每个选项，避免切换语言时旧选中态残留。
 function SegmentedControl<TValue extends string>({
@@ -141,14 +174,17 @@ export default function ToolsPanel({
           </div>
         </PanelConfig>
 
-        <PanelConfig enabled={false} title={copy.webSearch}>
-          <div className="flex justify-between text-sm text-zinc-500 dark:text-zinc-400">
-            <span>{copy.userLocation}</span>
-            <span>{copy.clear}</span>
+        <PanelConfig enabled title={copy.webSearch}>
+          <p className="mb-4 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{copy.webSearchDescription}</p>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">{copy.braveProvider}</span>
+            <div className="min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-500 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              BRAVE_SEARCH_API_KEY
+            </div>
           </div>
           <div className="mt-4 grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 text-sm">
             <span className="text-zinc-400">{copy.country}</span>
-            <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-400 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">{copy.disabledForLocal}</div>
+            <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-400 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">web_search(country)</div>
             <span className="text-zinc-400">{copy.region}</span>
             <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-400 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">{copy.workspaceOnly}</div>
             <span className="text-zinc-400">{copy.city}</span>
@@ -177,18 +213,38 @@ export default function ToolsPanel({
 
         <PanelConfig enabled title={copy.functions}>
           <div className="space-y-5">
-            {functionNames.map((name) => (
-              <div className="flex items-start gap-3 font-mono text-sm text-zinc-700 dark:text-zinc-300" key={name}>
+            {defaultToolDefinitions.map((tool) => (
+              <div className="flex items-start gap-3 font-mono text-sm text-zinc-700 dark:text-zinc-300" key={tool.name}>
                 <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-500 dark:bg-blue-500/15 dark:text-blue-300">
                   <MaterialIcon name="code" size={16} />
                 </span>
-                <span>{name}</span>
+                <span>{formatToolSignature(tool)}</span>
               </div>
             ))}
           </div>
         </PanelConfig>
 
         <PanelConfig enabled title={copy.mcp}>
+          <p className="mb-4 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{copy.mcpDescription}</p>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">{copy.mcpManifest}</span>
+            <div className="min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-500 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              list_mcp_servers()
+            </div>
+          </div>
+        </PanelConfig>
+
+        <PanelConfig enabled title={copy.skills}>
+          <p className="mb-4 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{copy.skillsDescription}</p>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">{copy.skillSource}</span>
+            <div className="min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-500 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              list_skills() / read_skill()
+            </div>
+          </div>
+        </PanelConfig>
+
+        <PanelConfig enabled title={copy.runtimeSettings}>
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-zinc-500 dark:text-zinc-400">{copy.reasoning}</span>
