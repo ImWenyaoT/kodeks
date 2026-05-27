@@ -2,49 +2,67 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import Home, { shouldSubmitComposerKey } from "./page";
+import Home from "./page";
 
 describe("Home", () => {
-  it("does not expose debug panels in the formal navigation", () => {
+  it("renders the Kodeks two-column shell", () => {
     const markup = renderToStaticMarkup(createElement(Home));
+    const panelIndex = markup.indexOf('class="hidden min-h-0 w-[30%] min-w-[320px] max-w-[460px] md:block"');
+    const chatIndex = markup.indexOf('class="min-h-0 min-w-0 flex-1 bg-white dark:bg-zinc-950 md:w-[70%]"');
 
-    expect(markup).toContain('class="app-shell sidebar-open"');
-    expect(markup).toContain("收起侧栏");
-    expect(markup).toContain('aria-label="主导航"');
-    expect(markup).toContain("新对话");
-    expect(markup).toContain("Chat");
-    expect(markup).toContain("活动");
-    expect(markup).toContain('class="session-card active"');
-    expect(markup).not.toContain(">Tools<");
-    expect(markup).not.toContain(">Runtime<");
-    expect(markup).not.toContain('aria-label="Session details"');
-    expect(markup).not.toContain('class="diagnostics-placeholder"');
-    expect(markup).not.toContain("运行日志");
+    expect(markup).toContain('class="relative flex h-dvh min-h-0 justify-center overflow-hidden"');
+    expect(markup).toContain('class="min-h-0 min-w-0 flex-1 bg-white dark:bg-zinc-950 md:w-[70%]"');
+    expect(markup).toContain('class="hidden min-h-0 w-[30%] min-w-[320px] max-w-[460px] md:block"');
+    expect(panelIndex).toBeGreaterThan(-1);
+    expect(chatIndex).toBeGreaterThan(-1);
+    expect(panelIndex).toBeLessThan(chatIndex);
+    expect(markup).toContain("给 Kodeks 发送消息...");
   });
 
-  it("renders settings in the header app dock instead of the composer", () => {
-    const markup = renderToStaticMarkup(createElement(Home));
-    const composerStart = markup.indexOf('class="composer"');
-    const composerEnd = markup.indexOf("</form>", composerStart);
-    const composerMarkup = markup.slice(composerStart, composerEnd);
-
-    expect(markup).toContain('class="settings-dock"');
-    expect(markup).toContain("打开设置");
-    expect(composerMarkup).not.toContain("打开设置");
-  });
-
-  it("keeps agent capabilities in the docked activity inspector", () => {
+  it("keeps the tools panel sections", () => {
     const markup = renderToStaticMarkup(createElement(Home));
 
-    expect(markup).toContain("活动");
-    expect(markup).toContain('class="activity-panel docked"');
-    expect(markup).toContain("危险 shell 命令会暂停并等待确认");
+    expect(markup).toContain("界面");
+    expect(markup).toContain("文件搜索");
+    expect(markup).toContain("网页搜索");
+    expect(markup).toContain("代码解释器");
+    expect(markup).toContain("函数");
+    expect(markup).toContain("MCP");
+    expect(markup).toContain("Google 集成");
   });
 
-  it("submits with Enter while preserving multiline input shortcuts", () => {
-    expect(shouldSubmitComposerKey({ key: "Enter", shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, isComposing: false })).toBe(true);
-    expect(shouldSubmitComposerKey({ key: "Enter", shiftKey: true, altKey: false, metaKey: false, ctrlKey: false, isComposing: false })).toBe(false);
-    expect(shouldSubmitComposerKey({ key: "Enter", shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, isComposing: true })).toBe(false);
-    expect(shouldSubmitComposerKey({ key: "a", shiftKey: false, altKey: false, metaKey: false, ctrlKey: false, isComposing: false })).toBe(false);
+  it("renders language and theme controls", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+    const selectedControlCount = markup.match(/aria-pressed="true"/g)?.length ?? 0;
+
+    expect(markup).toContain("跟随系统");
+    expect(markup).toContain("中文");
+    expect(markup).toContain("EN");
+    expect(markup).toContain("浅色");
+    expect(markup).toContain("深色");
+    expect(markup).toContain('data-language="zh"');
+    expect(markup).toContain('data-theme="light"');
+    expect(selectedControlCount).toBe(2);
+  });
+
+  it("keeps SSR preference copy on the hydration-safe baseline", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+    const selectedSystemControlCount = markup.match(/aria-pressed="true"[^>]*>跟随系统<\/button>/g)?.length ?? 0;
+
+    expect(markup).toContain('data-language="zh"');
+    expect(markup).toContain('data-theme="light"');
+    expect(selectedSystemControlCount).toBe(2);
+    expect(markup).toContain("界面");
+    expect(markup).not.toContain("copy.preferences");
+    expect(markup).not.toContain("Interface");
+    expect(markup).not.toContain('class="dark flex h-full');
+  });
+
+  it("uses Material-style icons instead of font ligature text", () => {
+    const markup = renderToStaticMarkup(createElement(Home));
+
+    expect(markup).toContain("<svg");
+    expect(markup).not.toContain(">code_blocks<");
+    expect(markup).not.toContain(">smart_toy<");
   });
 });

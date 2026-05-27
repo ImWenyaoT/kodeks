@@ -8,13 +8,14 @@ import { ShellCommandTimeoutError, runApprovedCommand } from "@kodeks/workspace"
 
 import { getKodeksDatabase, getKodeksWorkspace } from "@/lib/server/kodeks-runtime";
 
+// Next.js 的 nodejs runtime 标签和 Bun 包管理/启动方式不冲突；本地仍通过 bun --bun next 运行。
 export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-// Reads one approval record by id.
+// 按 id 读取一个 approval record。
 export async function GET(_request: NextRequest, context: RouteContext): Promise<Response> {
   const { id } = await context.params;
   try {
@@ -25,7 +26,7 @@ export async function GET(_request: NextRequest, context: RouteContext): Promise
   }
 }
 
-// Approves or rejects one pending approval. Approved shell commands execute once.
+// 批准或拒绝一个 pending approval；批准后的 shell command 只会执行一次。
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
   const { id } = await context.params;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 
 export type SessionMode = "act" | "plan";
 
@@ -66,6 +66,18 @@ export type StoredAuditLogEntry = {
   createdAt: string;
 };
 
+type SqliteDatabase = {
+  exec(sql: string): void;
+  prepare(sql: string): {
+    run(...params: unknown[]): unknown;
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+  };
+  close(): void;
+};
+
+type SqliteDatabaseConstructor = new (path?: string) => SqliteDatabase;
+
 export class ApprovalNotFoundError extends Error {
   // Names approval lookup failures so API routes can map them to 404.
   constructor(approvalId: string) {
@@ -89,14 +101,14 @@ export class KodeksDatabase {
   readonly subagents: SubagentRepository;
   readonly auditLog: AuditLogRepository;
 
-  private readonly database: DatabaseSync;
+  private readonly database: SqliteDatabase;
 
-  // Opens a local SQLite database and initializes the MVP migration schema.
+  // 打开本地 SQLite 数据库，并初始化 MVP 需要的表结构。
   constructor(path: string = ":memory:") {
     if (path !== ":memory:") {
       mkdirSync(dirname(path), { recursive: true });
     }
-    this.database = new DatabaseSync(path);
+    this.database = new (loadSqliteDatabase())(path);
     this.initializeSchema();
     this.sessions = new SessionRepository(this);
     this.memories = new MemoryRepository(this);
@@ -105,12 +117,12 @@ export class KodeksDatabase {
     this.auditLog = new AuditLogRepository(this);
   }
 
-  // Exposes the low-level SQLite handle only to repository classes in this package.
-  connection(): DatabaseSync {
+  // 只把底层 SQLite 连接暴露给本 package 内部的 repository。
+  connection(): SqliteDatabase {
     return this.database;
   }
 
-  // Closes the SQLite connection after tests or server shutdown.
+  // 在测试结束或服务关闭时释放 SQLite 连接。
   close(): void {
     this.database.close();
   }
@@ -182,6 +194,16 @@ export class KodeksDatabase {
   }
 }
 
+// 优先加载 Bun 的 SQLite；在 Vitest/Node 这类暂时不支持 bun:sqlite 的环境里回退 node:sqlite。
+function loadSqliteDatabase(): SqliteDatabaseConstructor {
+  const require = createRequire(import.meta.url);
+  if ("Bun" in globalThis) {
+    return require("bun:sqlite").Database as SqliteDatabaseConstructor;
+  }
+
+  return require("node:sqlite").DatabaseSync as SqliteDatabaseConstructor;
+}
+
 export class SessionRepository {
   // Stores multi-session metadata and transcript messages.
   constructor(private readonly database: KodeksDatabase) {}
@@ -237,8 +259,8 @@ export class SessionRepository {
     const row = this.database
       .connection()
       .prepare("SELECT * FROM sessions WHERE id = ?")
-      .get(id) as SessionRow | undefined;
-    return row === undefined ? null : mapSession(row);
+      .get(id) as SessionRow | null | undefined;
+    return row == null ? null : mapSession(row);
   }
 
   // Lists non-archived sessions newest-first.
@@ -401,8 +423,8 @@ export class ApprovalRepository {
     const row = this.database
       .connection()
       .prepare("SELECT * FROM approvals WHERE id = ?")
-      .get(id) as ApprovalRow | undefined;
-    if (row === undefined) {
+      .get(id) as ApprovalRow | null | undefined;
+    if (row == null) {
       throw new ApprovalNotFoundError(id);
     }
     return mapApproval(row);
@@ -519,8 +541,8 @@ export class SubagentRepository {
     const row = this.database
       .connection()
       .prepare("SELECT * FROM subagent_runs WHERE id = ?")
-      .get(id) as SubagentRow | undefined;
-    return row === undefined ? null : mapSubagentRun(row);
+      .get(id) as SubagentRow | null | undefined;
+    return row == null ? null : mapSubagentRun(row);
   }
 }
 

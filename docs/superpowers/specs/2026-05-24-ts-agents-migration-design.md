@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented on branch `codex/ts-agents-migration`. This document froze the original migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter. A later change superseded the model API note below: the main TypeScript runtime now uses OpenAI Responses API, not Chat Completions.
+Implemented on branch `codex/ts-agents-migration`. This document froze the original migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter. Later changes supersede the package-manager and model API notes below: the active workspace now uses Bun workspaces, defaults to DeepSeek Chat Completions, and keeps OpenAI Responses API as a fallback adapter.
 
 ## Goal
 
@@ -31,10 +31,10 @@ The migration should translate patterns into a smaller TypeScript design. It sho
 ## Chosen Stack
 
 - TypeScript
-- pnpm workspace
+- Bun workspace
 - Next.js App Router
 - OpenAI Agents SDK for agent loop, tool execution, streaming, tracing, and subagent patterns
-- OpenAI JS SDK for the Responses API client and configurable OpenAI base URLs
+- OpenAI JS SDK for OpenAI-compatible Chat Completions and Responses API clients with configurable base URLs
 - Vercel AI SDK for React chat state and UI stream helpers only
 - SQLite for local durable state
 - zod for runtime schemas
@@ -125,7 +125,7 @@ packages/shared
 
 The default coding agent. It can read files, search, write files within the workspace, request shell execution, remember facts, and ask for an explore subagent.
 
-The Build Agent receives session transcript, recalled memory, workspace summary, current mode, and tool policy context. The main model adapter uses OpenAI Responses API streaming and maps response text/tool events into the stable `AgentEvent` contract.
+The Build Agent receives session transcript, recalled memory, workspace summary, current mode, and tool policy context. The model layer maps DeepSeek Chat Completions or OpenAI Responses streaming events into the stable `AgentEvent` contract.
 
 ### Plan Agent
 
@@ -289,7 +289,7 @@ Use Vercel AI SDK for React chat state and stream handling where it fits, but do
 
 ### Phase 1: Spec and Scaffold
 
-- Add pnpm workspace.
+- Add Bun workspace.
 - Create `apps/web` and `packages/*`.
 - Add TypeScript, vitest, ESLint, and shared tsconfig.
 - Keep Python code in place during scaffold.
@@ -304,7 +304,7 @@ Use Vercel AI SDK for React chat state and stream handling where it fits, but do
 
 - Implement OpenAI Agents SDK tool wrappers.
 - Implement Build Agent, Plan Agent, and Explore Agent.
-- Implement Responses API model configuration with OpenAI JS SDK.
+- Implement model configuration with OpenAI JS SDK, covering DeepSeek Chat Completions and OpenAI Responses fallback.
 - Implement `runChatTurn()` and `AgentEvent` mapping.
 
 ### Phase 4: API and UI
@@ -363,8 +363,8 @@ API/UI:
 
 ## Acceptance Criteria
 
-- `pnpm test` passes all TS unit and integration tests.
-- `pnpm lint` passes.
+- `bun run test` passes all TS unit and integration tests.
+- `bun run lint` passes.
 - Next.js app runs locally and streams an agent response.
 - The migrated stack supports memory, multi-session, plan mode, and one read-only subagent.
 - Dangerous shell commands require approval and are auditable.
@@ -375,5 +375,5 @@ API/UI:
 ## Deferred Decisions
 
 - Python files stay in place during migration. After TS parity, move them to a clearly marked legacy archive or remove them in a dedicated cleanup change.
-- The first TS MVP now uses OpenAI JS SDK Responses API support for the main model path. DeepSeek-compatible Chat Completions would require a separate provider adapter rather than sharing the Responses client.
+- The active TS MVP now defaults to a DeepSeek Chat Completions provider adapter and keeps OpenAI Responses as a separate fallback adapter.
 - Plan artifacts are stored in SQLite and mirrored to `.kodeks/plans/` in the MVP.

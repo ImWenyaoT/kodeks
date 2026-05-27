@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { collectChatStream, parseSseFrames } from "./chat-stream";
 
 describe("parseSseFrames", () => {
-  it("parses text deltas and completion ids from FastAPI SSE frames", () => {
+  it("parses text deltas and completion ids from runtime SSE frames", () => {
     const frames = [
       'event: text_delta\ndata: {"type":"text_delta","delta":"Hel","session_id":"s1"}\n\n',
       'event: text_delta\ndata: {"type":"text_delta","delta":"lo","session_id":"s1"}\n\n',

@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@kodeks/shared": "workspace:*",
-    "zod": "^4.1.0"
+    "zod": "4.1.0"
   },
   "scripts": {
     "lint": "tsc --noEmit",
@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
   }
 }

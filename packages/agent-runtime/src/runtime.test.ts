@@ -122,6 +122,101 @@ describe("runChatTurn", () => {
         }
       ]
     });
+    expect(await database.sessions.getTranscript("s1")).toEqual([
+      expect.objectContaining({ role: "user", content: { text: "write a note" } }),
+      expect.objectContaining({
+        role: "assistant",
+        content: expect.objectContaining({
+          text: "",
+          toolCalls: [
+            {
+              id: "call_1",
+              name: "write_file",
+              args: { path: "notes.txt", content: "from tool" }
+            }
+          ]
+        })
+      }),
+      expect.objectContaining({
+        role: "tool",
+        content: expect.objectContaining({
+          toolCallId: "call_1",
+          name: "write_file"
+        })
+      })
+    ]);
+  });
+
+  it("replays persisted DeepSeek reasoning content after a tool-call turn", async () => {
+    const firstModel = new FakeModelClient([
+      [
+        { type: "text_delta", text: "I'll inspect first." },
+        {
+          type: "tool_call",
+          id: "call_1",
+          name: "read_file",
+          args: { path: "README.md" },
+          reasoningContent: "Need the README before answering."
+        }
+      ],
+      [
+        { type: "text_delta", text: "Done." },
+        { type: "response_completed", responseId: "resp_tool_done" }
+      ]
+    ]);
+
+    await collectEvents(
+      runChatTurn({
+        input: "read the README",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model: firstModel
+      })
+    );
+
+    const secondModel = new FakeModelClient([[{ type: "response_completed", responseId: "resp_resume" }]]);
+    await collectEvents(
+      runChatTurn({
+        input: "continue",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model: secondModel
+      })
+    );
+
+    expect(secondModel.requests[0]?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "I'll inspect first.",
+          reasoningContent: "Need the README before answering.",
+          toolCalls: [
+            {
+              id: "call_1",
+              name: "read_file",
+              args: { path: "README.md" }
+            }
+          ]
+        }),
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call_1",
+          name: "read_file"
+        }),
+        expect.objectContaining({
+          role: "assistant",
+          content: "Done."
+        }),
+        expect.objectContaining({
+          role: "user",
+          content: "continue"
+        })
+      ])
+    );
   });
 
   it("pauses after approval-required tool results instead of sending orphan tool messages", async () => {

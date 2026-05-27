@@ -1,6 +1,6 @@
 import { Agent, type FunctionTool, tool } from "@openai/agents";
-import type { ModelClient, ModelTurnRequest, ModelTurnStreamEvent } from "@kodeks/model";
-import type { KodeksDatabase, SessionMode, StoredMemory } from "@kodeks/storage";
+import type { ChatMessage, ModelClient, ModelTurnRequest, ModelTurnStreamEvent } from "@kodeks/model";
+import type { KodeksDatabase, SessionMode, StoredMemory, StoredMessage } from "@kodeks/storage";
 import {
   ToolExecutionContext,
   buildDefaultToolRegistry,
@@ -92,24 +92,26 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
     recalledMemories,
     registry
   });
-  let assistantText = "";
 
   let pendingRequest: ModelTurnRequest | null = request;
 
   while (pendingRequest !== null) {
     const toolMessages: Array<{ toolCallId: string; name: string; output: string }> = [];
     const toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
+    let assistantReasoningContent: string | undefined;
+    let roundAssistantText = "";
     let responseCompleted = false;
     let waitingForApproval = false;
 
     for await (const modelEvent of input.model.streamTurn(pendingRequest)) {
       if (modelEvent.type === "text_delta") {
-        assistantText += modelEvent.text;
+        roundAssistantText += modelEvent.text;
         yield { type: "text_delta", text: modelEvent.text, sessionId };
         continue;
       }
 
       if (modelEvent.type === "tool_call") {
+        assistantReasoningContent = modelEvent.reasoningContent ?? assistantReasoningContent;
         toolCalls.push({ id: modelEvent.id, name: modelEvent.name, args: modelEvent.args });
         yield {
           type: "assistant_status",
@@ -154,11 +156,11 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
 
       if (modelEvent.type === "response_completed") {
         responseCompleted = true;
-        if (assistantText.length > 0) {
+        if (roundAssistantText.length > 0) {
           await input.database.sessions.appendMessage({
             sessionId,
             role: "assistant",
-            content: { text: assistantText }
+            content: { text: roundAssistantText }
           });
         }
         yield {
@@ -181,13 +183,23 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Agent
       continue;
     }
 
+    await appendToolContinuationMessages({
+      database: input.database,
+      sessionId,
+      assistantContent: roundAssistantText,
+      reasoningContent: assistantReasoningContent,
+      toolCalls,
+      toolMessages
+    });
+
     pendingRequest = {
       ...pendingRequest,
       messages: [
         ...pendingRequest.messages,
         {
           role: "assistant" as const,
-          content: "",
+          content: roundAssistantText,
+          reasoningContent: assistantReasoningContent,
           toolCalls
         },
         ...toolMessages.map((message) => ({
@@ -233,13 +245,76 @@ async function buildModelTurnRequest(input: {
         role: "system",
         content: buildSystemContext(input.mode, input.recalledMemories)
       },
-      ...transcript.map((message) => ({
-        role: message.role === "assistant" ? ("assistant" as const) : ("user" as const),
-        content: stringifyMessageContent(message.content)
-      }))
+      ...transcript.flatMap(toModelTranscriptMessage)
     ],
     tools: input.registry.definitions({ readOnlyOnly: input.mode === "plan" })
   };
+}
+
+// Persists model tool-call continuation data so DeepSeek thinking mode can resume later turns.
+async function appendToolContinuationMessages(input: {
+  database: KodeksDatabase;
+  sessionId: string;
+  assistantContent: string;
+  reasoningContent?: string;
+  toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }>;
+  toolMessages: Array<{ toolCallId: string; name: string; output: string }>;
+}): Promise<void> {
+  await input.database.sessions.appendMessage({
+    sessionId: input.sessionId,
+    role: "assistant",
+    content: {
+      text: input.assistantContent,
+      reasoningContent: input.reasoningContent,
+      toolCalls: input.toolCalls
+    }
+  });
+
+  for (const message of input.toolMessages) {
+    await input.database.sessions.appendMessage({
+      sessionId: input.sessionId,
+      role: "tool",
+      content: {
+        text: message.output,
+        toolCallId: message.toolCallId,
+        name: message.name
+      }
+    });
+  }
+}
+
+// Converts stored transcript rows back into the model client's structured message contract.
+function toModelTranscriptMessage(message: StoredMessage): ChatMessage[] {
+  if (message.role === "tool") {
+    const content = readObjectContent(message.content);
+    return [
+      {
+        role: "tool",
+        content: stringifyMessageContent(message.content),
+        toolCallId: stringField(content, "toolCallId"),
+        name: stringField(content, "name")
+      }
+    ];
+  }
+
+  if (message.role === "assistant") {
+    const content = readObjectContent(message.content);
+    return [
+      {
+        role: "assistant",
+        content: stringifyMessageContent(message.content),
+        reasoningContent: stringField(content, "reasoningContent"),
+        toolCalls: readToolCalls(content.toolCalls)
+      }
+    ];
+  }
+
+  return [
+    {
+      role: "user",
+      content: stringifyMessageContent(message.content)
+    }
+  ];
 }
 
 // Converts one local registry definition into an OpenAI Agents SDK function tool.
@@ -306,6 +381,44 @@ function stringifyMessageContent(content: unknown): string {
     return (content as { text: string }).text;
   }
   return typeof content === "string" ? content : JSON.stringify(content);
+}
+
+// Reads object-shaped message content without forcing callers to trust SQLite JSON.
+function readObjectContent(content: unknown): Record<string, unknown> {
+  return content !== null && typeof content === "object" && !Array.isArray(content)
+    ? (content as Record<string, unknown>)
+    : {};
+}
+
+// Reads one optional string field from stored message content.
+function stringField(content: Record<string, unknown>, field: string): string | undefined {
+  const value = content[field];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+// Reads persisted tool calls while discarding malformed historical entries.
+function readToolCalls(value: unknown): ChatMessage["toolCalls"] {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const calls = value.flatMap((item) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || typeof record.name !== "string") {
+      return [];
+    }
+    return [
+      {
+        id: record.id,
+        name: record.name,
+        args: readObjectContent(record.args)
+      }
+    ];
+  });
+  return calls.length > 0 ? calls : undefined;
 }
 
 // Maps local tool statuses into the product event contract.

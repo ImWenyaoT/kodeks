@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { loadEnvConfig } from "@next/env";
 import { runChatTurn, type AgentEvent } from "@kodeks/agent-runtime";
-import { OpenAIResponsesClient, type ReasoningEffort } from "@kodeks/model";
+import { createModelClientFromEnv, resolveModelClientOptions } from "@kodeks/model";
 import { KodeksDatabase } from "@kodeks/storage";
 import { WorkspaceService } from "@kodeks/workspace";
 import {
@@ -26,19 +26,7 @@ type StreamKodeksChatOptions = {
   signal?: AbortSignal;
 };
 
-type ModelClientOptions = {
-  apiKey: string;
-  baseURL?: string;
-  model: string;
-  reasoningEffort: ReasoningEffort;
-  provider: "openai";
-};
-
-type RuntimeEnv = Record<string, string | undefined>;
-
-const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
-const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
-const SUPPORTED_REASONING_EFFORTS = new Set<ReasoningEffort>(["none", "low", "medium", "high", "xhigh"]);
+export { resolveModelClientOptions };
 
 type KodeksUIDataParts = {
   session: { sessionId: string };
@@ -153,24 +141,17 @@ async function* runKodeksChatEvents(body: ChatStreamRequest): AsyncIterable<Agen
     return;
   }
 
-  const modelOptions = resolveModelClientOptions(process.env, body.reasoning_effort);
-  if (modelOptions === null) {
+  const workspaceRoot = resolveWorkspaceRoot();
+  const model = createModelClientFromEnv(process.env, body.reasoning_effort);
+  if (model === null) {
     yield {
       type: "error",
       message:
-        "An OpenAI API key is required for the Responses API client. Set OPENAI_API_KEY before sending chat messages.",
+        "A model provider is required. Set KODEKS_MODEL_PROVIDER=moonbridge for Moon Bridge Responses, DEEPSEEK_API_KEY for DeepSeek Chat Completions, or OPENAI_API_KEY for OpenAI Responses.",
       sessionId: sessionId ?? ""
     };
     return;
   }
-
-  const workspaceRoot = resolveWorkspaceRoot();
-  const model = new OpenAIResponsesClient({
-    apiKey: modelOptions.apiKey,
-    baseURL: modelOptions.baseURL,
-    model: modelOptions.model,
-    reasoningEffort: modelOptions.reasoningEffort
-  });
 
   yield* runChatTurn({
     input,
@@ -192,42 +173,6 @@ function loadWorkspaceEnv(): void {
     loadEnvConfig(resolveWorkspaceRoot(), process.env.NODE_ENV !== "production", undefined, true);
   }
   workspaceEnvLoaded = true;
-}
-
-// Resolves the OpenAI Responses provider config accepted by the local runtime.
-export function resolveModelClientOptions(
-  env: RuntimeEnv = process.env,
-  requestedReasoningEffort?: unknown
-): ModelClientOptions | null {
-  if (env.OPENAI_API_KEY) {
-    return {
-      apiKey: env.OPENAI_API_KEY,
-      baseURL: env.OPENAI_BASE_URL,
-      model: env.OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL,
-      reasoningEffort: resolveReasoningEffort(requestedReasoningEffort, env.OPENAI_REASONING_EFFORT),
-      provider: "openai"
-    };
-  }
-
-  return null;
-}
-
-// Resolves request-level reasoning strength while falling back to env and the product default.
-function resolveReasoningEffort(requested: unknown, configured: string | undefined): ReasoningEffort {
-  if (typeof requested === "string" && isReasoningEffort(requested)) {
-    return requested;
-  }
-
-  if (configured !== undefined && isReasoningEffort(configured)) {
-    return configured;
-  }
-
-  return DEFAULT_REASONING_EFFORT;
-}
-
-// Checks whether a loose value is one of the Responses API reasoning effort values Kodeks exposes.
-function isReasoningEffort(value: string): value is ReasoningEffort {
-  return SUPPORTED_REASONING_EFFORTS.has(value as ReasoningEffort);
 }
 
 // Reads a normalized session id from loose HTTP request payloads.

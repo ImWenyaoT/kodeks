@@ -28,6 +28,12 @@ afterEach(async () => {
 });
 
 describe("SessionRepository", () => {
+  it("returns null for a missing session before creating one", async () => {
+    const sessions = new SessionRepository(database);
+
+    await expect(sessions.getSession("missing")).resolves.toBeNull();
+  });
+
   it("creates, lists, resumes, and appends transcript messages", async () => {
     const sessions = new SessionRepository(database);
     const session = await sessions.createSession({

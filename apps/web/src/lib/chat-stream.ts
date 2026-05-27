@@ -22,12 +22,14 @@ export type ChatStreamEvent =
     }
   | {
       type: "tool_call";
+      toolCallId?: string;
       toolName?: string;
       toolArguments?: Record<string, unknown>;
       sessionId?: string;
     }
   | {
       type: "tool_result";
+      toolCallId?: string;
       toolName?: string;
       toolStatus?: string;
       toolOutput?: unknown;
@@ -36,6 +38,7 @@ export type ChatStreamEvent =
   | {
       type: "approval_required";
       approvalId: string;
+      toolCallId?: string;
       message: string;
       sessionId?: string;
     }
@@ -67,6 +70,7 @@ type RawChatStreamEvent = {
   delta?: string;
   response_id?: string;
   session_id?: string;
+  tool_call_id?: string;
   tool_name?: string;
   tool_arguments?: Record<string, unknown>;
   tool_status?: string;
@@ -84,7 +88,7 @@ type CollectChatStreamHandlers = {
   onEvent?: (event: ChatStreamEvent) => void;
 };
 
-// Parses the FastAPI SSE wire format into UI-friendly event objects.
+// Parses the runtime SSE wire format into UI-friendly event objects.
 export function parseSseFrames(text: string): ChatStreamEvent[] {
   return text
     .split("\n\n")
@@ -184,6 +188,7 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
   if (rawEvent.type === "tool_call") {
     return {
       type: "tool_call",
+      ...(rawEvent.tool_call_id === undefined ? {} : { toolCallId: rawEvent.tool_call_id }),
       toolName: rawEvent.tool_name,
       toolArguments: rawEvent.tool_arguments,
       sessionId: rawEvent.session_id
@@ -193,6 +198,7 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
   if (rawEvent.type === "tool_result") {
     return {
       type: "tool_result",
+      ...(rawEvent.tool_call_id === undefined ? {} : { toolCallId: rawEvent.tool_call_id }),
       toolName: rawEvent.tool_name,
       toolStatus: rawEvent.tool_status,
       toolOutput: rawEvent.tool_output,
@@ -204,6 +210,7 @@ function normalizeRawEvent(rawEvent: RawChatStreamEvent): ChatStreamEvent | null
     return {
       type: "approval_required",
       approvalId: rawEvent.approval_id ?? "",
+      ...(rawEvent.tool_call_id === undefined ? {} : { toolCallId: rawEvent.tool_call_id }),
       message: rawEvent.message ?? "Approval required.",
       sessionId: rawEvent.session_id
     };
