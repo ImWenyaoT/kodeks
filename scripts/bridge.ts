@@ -94,12 +94,15 @@ async function smokeTest(
       `Bridge smoke failed: ${response.status} ${response.statusText}\n${text}`
     );
   }
+  if (!text.includes('event: response.completed')) {
+    throw new Error(`Bridge smoke did not complete a Responses turn.\n${text}`);
+  }
   console.log(text.split('\n').slice(0, 8).join('\n'));
 }
 
 // Reads bridge base URL while preserving legacy MOONBRIDGE compatibility.
 function readBridgeBaseURL(env: Record<string, string | undefined>): string {
-  return (
+  return trimTrailingSlash(
     env.KODEKS_BRIDGE_BASE_URL ?? env.MOONBRIDGE_BASE_URL ?? DEFAULT_BASE_URL
   );
 }
@@ -113,6 +116,11 @@ function readDeepSeekApiKey(
     env.MOONBRIDGE_DEEPSEEK_API_KEY ??
     env.DEEPSEEK_API_KEY
   );
+}
+
+// Removes a trailing slash so helper commands target /v1/responses exactly once.
+function trimTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
 // Loads simple KEY=VALUE dotenv files without printing secrets.

@@ -197,8 +197,7 @@ async function* runKodeksChatEvents(
     const providerLabel = readProviderOverride(body) ?? 'auto';
     yield {
       type: 'error',
-      message:
-        `A model provider is required for ${providerLabel}. Set OPENAI_API_KEY for OpenAI Agents SDK + Responses, choose moonbridge for the local Responses bridge, or set DEEPSEEK_API_KEY for DeepSeek fallback.`,
+      message: `A model provider is required for ${providerLabel}. Set OPENAI_API_KEY for OpenAI Agents SDK + Responses, choose moonbridge for the local Responses bridge, or set DEEPSEEK_API_KEY for DeepSeek fallback.`,
       sessionId: sessionId ?? ''
     };
     return;
@@ -262,6 +261,7 @@ function readProviderOverride(
   body: ChatStreamRequest
 ): ModelProviderOverride | null {
   if (
+    body.provider === 'bridge' ||
     body.provider === 'openai' ||
     body.provider === 'moonbridge' ||
     body.provider === 'deepseek'
