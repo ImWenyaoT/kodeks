@@ -259,6 +259,130 @@ describe('MemoryRepository', () => {
     ]);
     expect(context.recalledItems[0]?.score.semantic).toBeGreaterThan(0);
   });
+
+  it('smoke tests no-download local embeddings without calling a network provider', async () => {
+    await database.memories.rememberAtom({
+      scope: 'project',
+      content: 'TencentDB memory evaluation should not require model downloads.'
+    });
+    const service = new MemoryService({
+      database,
+      workspaceRoot: tempDir,
+      environment: {
+        KODEKS_EMBEDDINGS_ENABLED: 'true',
+        KODEKS_EMBEDDINGS_PROVIDER: 'local'
+      },
+      fetch: async () => {
+        throw new Error('local embeddings should not call fetch');
+      }
+    });
+
+    const context = await service.buildContext({
+      sessionId: 's1',
+      query: 'TencentDB memory model downloads'
+    });
+
+    expect(context.recalledItems).toEqual([
+      expect.objectContaining({
+        layer: 'atom',
+        content:
+          'TencentDB memory evaluation should not require model downloads.'
+      })
+    ]);
+    expect(context.recalledItems[0]?.score.semantic).toBeGreaterThan(0);
+  });
+
+  it('caches injected embedding provider vectors for repeat memory recall', async () => {
+    await database.memories.rememberAtom({
+      scope: 'project',
+      content:
+        'Injectable embedding providers keep tests independent from Ollama.'
+    });
+    const embeddedInputs: string[] = [];
+    const service = new MemoryService({
+      database,
+      workspaceRoot: tempDir,
+      environment: {
+        KODEKS_EMBEDDINGS_ENABLED: 'true',
+        KODEKS_EMBEDDINGS_PROVIDER: 'test',
+        KODEKS_LOCAL_EMBED_MODEL: 'unit-vector-v1'
+      },
+      embeddingProvider: async ({ text }) => {
+        embeddedInputs.push(text);
+        return [1, 0];
+      }
+    });
+
+    await service.buildContext({
+      sessionId: 's1',
+      query: 'Ollama independent tests'
+    });
+    await service.buildContext({
+      sessionId: 's1',
+      query: 'Ollama independent tests'
+    });
+
+    expect(embeddedInputs).toEqual([
+      'Ollama independent tests',
+      'Injectable embedding providers keep tests independent from Ollama.'
+    ]);
+  });
+
+  it('supports Hugging Face feature-extraction compatible embedding fallback', async () => {
+    await database.memories.rememberAtom({
+      scope: 'project',
+      content:
+        'Remote embedding fallback can use Hugging Face feature extraction.'
+    });
+    const requests: Array<{
+      url: string;
+      body: unknown;
+      authorization: string | undefined;
+    }> = [];
+    const service = new MemoryService({
+      database,
+      workspaceRoot: tempDir,
+      environment: {
+        KODEKS_EMBEDDINGS_ENABLED: 'true',
+        KODEKS_EMBEDDINGS_PROVIDER: 'huggingface',
+        KODEKS_HUGGINGFACE_BASE_URL: 'https://hf.example.test',
+        KODEKS_HUGGINGFACE_EMBED_MODEL: 'org/embed-model',
+        KODEKS_HUGGINGFACE_API_TOKEN: 'hf_test'
+      },
+      fetch: async (url, init) => {
+        requests.push({
+          url,
+          body: JSON.parse(init?.body ?? '{}'),
+          authorization: init?.headers?.authorization
+        });
+        return {
+          ok: true,
+          async json() {
+            return [
+              [0, 1, 0],
+              [0, 1, 0]
+            ];
+          }
+        };
+      }
+    });
+
+    const context = await service.buildContext({
+      sessionId: 's1',
+      query: 'Hugging Face feature extraction'
+    });
+
+    expect(requests[0]).toEqual({
+      url: 'https://hf.example.test/pipeline/feature-extraction/org/embed-model',
+      body: {
+        inputs: 'Hugging Face feature extraction',
+        normalize: true,
+        truncate: true
+      },
+      authorization: 'Bearer hf_test'
+    });
+    expect(context.recalledItems[0]?.score.semantic).toBeGreaterThan(0);
+  });
 });
 
 describe('ApprovalRepository', () => {
