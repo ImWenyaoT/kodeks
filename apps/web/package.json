@@ -13,6 +13,7 @@
   "dependencies": {
     "@kodeks/agent-runtime": "workspace:*",
     "@kodeks/model": "workspace:*",
+    "@kodeks/responses-bridge": "workspace:*",
     "@kodeks/shared": "workspace:*",
     "@kodeks/storage": "workspace:*",
     "@kodeks/tools": "workspace:*",

@@ -8,6 +8,7 @@ export type SendChatMessageInput = {
   mode: ChatMode;
   provider: ModelProviderOverride;
   reasoningEffort: 'low' | 'medium' | 'high' | 'xhigh';
+  selectedFiles?: string[];
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
   onEvent: (event: ChatStreamEvent) => void;
@@ -20,6 +21,7 @@ export async function sendChatMessage({
   mode,
   provider,
   reasoningEffort,
+  selectedFiles = [],
   signal,
   onDelta,
   onEvent
@@ -34,7 +36,8 @@ export async function sendChatMessage({
       ...(sessionId === undefined ? {} : { session_id: sessionId }),
       mode,
       provider,
-      reasoning_effort: reasoningEffort
+      reasoning_effort: reasoningEffort,
+      ...(selectedFiles.length === 0 ? {} : { selected_files: selectedFiles })
     }),
     signal
   });

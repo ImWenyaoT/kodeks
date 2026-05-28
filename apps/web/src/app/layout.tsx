@@ -7,6 +7,7 @@ const geistSans = localFont({
   variable: '--font-geist-sans',
   weight: '100 900'
 });
+
 const geistMono = localFont({
   src: './fonts/GeistMonoVF.woff',
   variable: '--font-geist-mono',
@@ -25,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <div className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-gray-200 text-stone-900">
           <main className="min-h-0 flex-1">{children}</main>

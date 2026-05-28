@@ -29,17 +29,17 @@ export default function KodeksApproval({
   return (
     <div className="flex flex-col">
       <div className="flex">
-        <div className="mr-4 rounded-[16px] bg-gray-100 p-4 font-light text-black dark:bg-zinc-900 dark:text-zinc-50 md:mr-24">
-          <div className="mb-2 text-sm">
+        <div className="kodeks-ui-body mr-4 rounded-[16px] bg-gray-100 p-4 text-black dark:bg-zinc-900 dark:text-zinc-50 md:mr-24">
+          <div className="kodeks-ui-label mb-2">
             {copy.request(item.toolCallId ?? item.approvalId)}
           </div>
-          <div className="mb-3 max-w-xl whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="kodeks-ui-caption mb-3 max-w-xl whitespace-pre-wrap text-zinc-600 dark:text-zinc-400">
             {item.reason}
           </div>
           {item.state === 'waiting' ? (
             <div className="flex gap-2">
               <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-black px-3 text-xs font-medium text-white disabled:bg-zinc-300 dark:bg-white dark:text-zinc-950 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-500"
+                className="kodeks-control-text inline-flex h-8 items-center gap-1.5 rounded-md bg-black px-3 text-white disabled:bg-zinc-300 dark:bg-white dark:text-zinc-950 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-500"
                 disabled={disabled}
                 onClick={() => handleDecision('approve')}
                 type="button"
@@ -48,7 +48,7 @@ export default function KodeksApproval({
                 {copy.approve}
               </button>
               <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-gray-200 px-3 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:text-zinc-400 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                className="kodeks-control-text inline-flex h-8 items-center gap-1.5 rounded-md bg-gray-200 px-3 text-gray-700 hover:bg-gray-300 disabled:text-zinc-400 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                 disabled={disabled}
                 onClick={() => handleDecision('reject')}
                 type="button"
@@ -58,7 +58,7 @@ export default function KodeksApproval({
               </button>
             </div>
           ) : (
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption text-zinc-500 dark:text-zinc-400">
               {item.state}
             </div>
           )}

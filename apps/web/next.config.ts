@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     '@kodeks/agent-runtime',
     '@kodeks/model',
+    '@kodeks/responses-bridge',
     '@kodeks/storage',
     '@kodeks/tools',
     '@kodeks/workspace'

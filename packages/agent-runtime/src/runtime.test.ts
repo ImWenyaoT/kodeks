@@ -316,6 +316,45 @@ describe('runChatTurn', () => {
     });
   });
 
+  it('injects explicitly selected workspace files into the model context', async () => {
+    const model = new FakeModelClient([
+      [{ type: 'response_completed', responseId: 'resp_selected' }]
+    ]);
+
+    await collectEvents(
+      runChatTurn({
+        input: 'use the selected file',
+        sessionId: 's1',
+        mode: 'act',
+        workspace,
+        database,
+        selectedFiles: [
+          {
+            path: 'src/example.ts',
+            content: 'export const selectedMarker = true;'
+          }
+        ],
+        model
+      })
+    );
+
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      'Selected workspace files for this turn'
+    );
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      'src/example.ts'
+    );
+    expect(model.requests[0]?.messages[0]?.content).toContain(
+      'selectedMarker'
+    );
+    await expect(database.sessions.getTranscript('s1')).resolves.toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: { text: 'use the selected file' }
+      })
+    ]);
+  });
+
   it('creates and persists a structured plan artifact in plan mode', async () => {
     const model = new FakeModelClient([
       [

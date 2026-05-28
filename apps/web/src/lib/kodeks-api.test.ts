@@ -50,4 +50,33 @@ describe('sendChatMessage', () => {
       })
     );
   });
+
+  it('sends selected workspace files when the user attaches local context', async () => {
+    const fetchMock = vi.fn(async () => createEmptyStreamResponse());
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await sendChatMessage({
+      input: 'inspect these',
+      mode: 'act',
+      provider: 'moonbridge',
+      reasoningEffort: 'medium',
+      selectedFiles: ['apps/web/src/components/tools-panel.tsx'],
+      onDelta: vi.fn(),
+      onEvent: vi.fn()
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          input: 'inspect these',
+          mode: 'act',
+          provider: 'moonbridge',
+          reasoning_effort: 'medium',
+          selected_files: ['apps/web/src/components/tools-panel.tsx']
+        })
+      })
+    );
+  });
 });

@@ -96,6 +96,7 @@ export type RunChatTurnInput = {
   mode: SessionMode;
   workspace: WorkspaceService;
   database: KodeksDatabase;
+  selectedFiles?: SelectedWorkspaceFileContext[];
   model?: ModelClient;
   agents?: AgentsSdkRuntimeConfig;
 };
@@ -111,6 +112,7 @@ export type BuildAgentsSdkBuildAgentInput = {
   registry?: ToolRegistry;
   memoryContext?: MemoryContext;
   activePlan?: StoredPlanArtifact | null;
+  selectedFiles?: SelectedWorkspaceFileContext[];
   approvalState?: Map<string, AgentsSdkApprovalMetadata>;
 };
 
@@ -153,6 +155,13 @@ type AgentsSdkApprovalMetadata = {
   reason: string;
 };
 
+export type SelectedWorkspaceFileContext = {
+  path: string;
+  content?: string;
+  truncated?: boolean;
+  error?: string;
+};
+
 // Dispatches one product-level chat turn to the primary SDK runtime or the fallback model loop.
 export async function* runChatTurn(
   input: RunChatTurnInput
@@ -190,6 +199,7 @@ async function* runModelClientChatTurn(
     sessionId,
     memoryContext,
     activePlan,
+    selectedFiles: input.selectedFiles,
     registry
   });
 
@@ -349,6 +359,7 @@ async function* runAgentsSdkChatTurn(
     registry,
     memoryContext,
     activePlan,
+    selectedFiles: input.selectedFiles,
     approvalState
   });
   const runner = input.agents.runner ?? createAgentsSdkRunner(input.agents);
@@ -541,7 +552,8 @@ export function buildAgentsSdkBuildAgent(
     instructions: buildSystemContext(
       input.mode,
       input.memoryContext ?? emptyMemoryContext(),
-      input.activePlan ?? null
+      input.activePlan ?? null,
+      input.selectedFiles ?? []
     ),
     model: input.model,
     tools: registry
@@ -565,6 +577,7 @@ async function buildModelTurnRequest(input: {
   sessionId: string;
   memoryContext: MemoryContext;
   activePlan: StoredPlanArtifact | null;
+  selectedFiles?: SelectedWorkspaceFileContext[];
   registry: ToolRegistry;
 }): Promise<ModelTurnRequest> {
   const transcript = await input.database.sessions.getTranscript(
@@ -577,7 +590,8 @@ async function buildModelTurnRequest(input: {
         content: buildSystemContext(
           input.mode,
           input.memoryContext,
-          input.activePlan
+          input.activePlan,
+          input.selectedFiles ?? []
         )
       },
       ...transcript.flatMap(toModelTranscriptMessage)
@@ -941,7 +955,10 @@ function toAgentsSdkTool(
         toolCallId,
         toolName: definition.name
       });
-      if (compactedResult.status === 'approval_required' && toolCallId !== null) {
+      if (
+        compactedResult.status === 'approval_required' &&
+        toolCallId !== null
+      ) {
         const parsedOutput = parseToolOutput(compactedResult.output);
         options.approvalState.set(toolCallId, {
           approvalId: stringFromParsed(parsedOutput.approvalId),
@@ -977,7 +994,9 @@ async function compactToolExecutionResult(input: {
 }
 
 // Counts recalled memory layers for UI display without exposing full score details.
-function countMemoryLayers(memoryContext: MemoryContext): Record<string, number> {
+function countMemoryLayers(
+  memoryContext: MemoryContext
+): Record<string, number> {
   const counts: Record<string, number> = {};
   if (memoryContext.profiles.length > 0) {
     counts.profile = memoryContext.profiles.length;
@@ -1020,14 +1039,37 @@ function buildAgentInstructions(mode: SessionMode): string {
 function buildSystemContext(
   mode: SessionMode,
   memoryContext: MemoryContext,
-  activePlan: StoredPlanArtifact | null
+  activePlan: StoredPlanArtifact | null,
+  selectedFiles: SelectedWorkspaceFileContext[] = []
 ): string {
   const memoryBlock = formatMemoryContextForPrompt(memoryContext);
   const planBlock =
     activePlan === null
       ? 'No active plan artifact.'
       : formatPlanArtifactForContext(activePlan);
-  return `${buildAgentInstructions(mode)}\n\nRecalled memory:\n${memoryBlock}\n\nActive plan artifact:\n${planBlock}`;
+  const selectedFilesBlock = formatSelectedFilesContext(selectedFiles);
+  return `${buildAgentInstructions(mode)}\n\nSelected workspace files for this turn:\n${selectedFilesBlock}\n\nRecalled memory:\n${memoryBlock}\n\nActive plan artifact:\n${planBlock}`;
+}
+
+// Formats user-selected workspace files as bounded turn context for the model.
+function formatSelectedFilesContext(
+  selectedFiles: SelectedWorkspaceFileContext[]
+): string {
+  if (selectedFiles.length === 0) {
+    return 'No files selected.';
+  }
+  const lines = [
+    'The user explicitly selected these workspace files. Use them as high-priority context when relevant. If a file is truncated or an answer needs more detail, call read_file with its path.'
+  ];
+  for (const file of selectedFiles) {
+    lines.push(`\n--- ${file.path}${file.truncated ? ' (truncated)' : ''} ---`);
+    if (file.error !== undefined) {
+      lines.push(`Unable to read selected file: ${file.error}`);
+      continue;
+    }
+    lines.push(file.content ?? '');
+  }
+  return lines.join('\n');
 }
 
 // Formats layered memory into a compact prompt block with artifact refs instead of large bodies.

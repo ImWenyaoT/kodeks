@@ -60,6 +60,16 @@ describe('ToolsPanel', () => {
     expect(markup).toContain('spawn_explore_agent(task: string)');
   });
 
+  it('renders the Chrome-like debug panel header', () => {
+    const markup = renderToolsPanel();
+
+    expect(markup).toContain('调试');
+    expect(markup).toContain('外观');
+    expect(markup).toContain('浅色');
+    expect(markup).toContain('深色');
+    expect(markup).toContain('设备');
+  });
+
   it('renders the session provider picker', () => {
     const markup = renderToolsPanel();
 
@@ -67,5 +77,12 @@ describe('ToolsPanel', () => {
     expect(markup).toContain('OpenAI');
     expect(markup).toContain('MoonBridge');
     expect(markup).toContain('DeepSeek');
+  });
+
+  it('associates the reasoning selector with its visible label', () => {
+    const markup = renderToolsPanel();
+
+    expect(markup).toContain('for="reasoning-effort-select"');
+    expect(markup).toContain('id="reasoning-effort-select"');
   });
 });

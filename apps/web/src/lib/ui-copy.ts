@@ -17,6 +17,7 @@ export type UiCopy = {
   };
   chat: {
     composerPlaceholder: string;
+    send: string;
     stop: string;
   };
   tools: {
@@ -24,11 +25,29 @@ export type UiCopy = {
     language: string;
     theme: string;
     system: string;
+    device: string;
     light: string;
     dark: string;
     fileSearch: string;
     fileSearchDescription: string;
+    selectFiles: string;
+    selectedFiles: string;
+    noFilesSelected: string;
+    fileSearchPlaceholder: string;
+    fileSearchLoading: string;
+    fileSearchError: string;
+    noFileMatches: string;
+    selectedFileCount: (count: number) => string;
     session: string;
+    newSession: string;
+    sessionHistory: string;
+    loadingSessions: string;
+    sessionLoadError: string;
+    noSessions: string;
+    collapseSidebar: string;
+    expandSidebar: string;
+    debugPanel: string;
+    appearancePreview: string;
     autoSession: string;
     webSearch: string;
     webSearchDescription: string;
@@ -69,6 +88,7 @@ export type UiCopy = {
     subagentCompleted: (agent: string) => string;
     responseCompleted: string;
     status: string;
+    error: string;
   };
   toolCall: {
     approvalNeeded: (name: string) => string;
@@ -94,6 +114,7 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
     },
     chat: {
       composerPlaceholder: '给 Kodeks 发送消息...',
+      send: '发送消息',
       stop: '停止'
     },
     tools: {
@@ -101,12 +122,30 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       language: '语言',
       theme: '主题',
       system: '跟随系统',
+      device: '设备',
       light: '浅色',
       dark: '深色',
       fileSearch: '文件搜索',
       fileSearchDescription:
         '使用本地 workspace 文件搜索，并通过 Kodeks 工具执行 grep。',
+      selectFiles: '选择文件',
+      selectedFiles: '已选文件',
+      noFilesSelected: '尚未选择文件',
+      fileSearchPlaceholder: '搜索 workspace 文件...',
+      fileSearchLoading: '正在读取 workspace 文件...',
+      fileSearchError: '文件列表读取失败',
+      noFileMatches: '没有匹配的文件',
+      selectedFileCount: (count) => `已选择 ${count} 个文件`,
       session: '会话',
+      newSession: '新会话',
+      sessionHistory: '最近会话',
+      loadingSessions: '正在读取会话...',
+      sessionLoadError: '会话列表读取失败',
+      noSessions: '暂无历史会话',
+      collapseSidebar: '折叠侧边栏',
+      expandSidebar: '展开侧边栏',
+      debugPanel: '调试',
+      appearancePreview: '外观',
       autoSession: '自动会话',
       webSearch: '网页搜索',
       webSearchDescription:
@@ -154,7 +193,8 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       subagentStarted: (agent) => `子代理 ${agent} 已启动`,
       subagentCompleted: (agent) => `子代理 ${agent} 已完成`,
       responseCompleted: '响应完成',
-      status: '状态'
+      status: '状态',
+      error: '后端错误'
     },
     toolCall: {
       approvalNeeded: (name) => `${name} 需要审批`,
@@ -179,6 +219,7 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
     },
     chat: {
       composerPlaceholder: 'Message Kodeks...',
+      send: 'Send message',
       stop: 'Stop'
     },
     tools: {
@@ -186,12 +227,31 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       language: 'Language',
       theme: 'Theme',
       system: 'System',
+      device: 'Device',
       light: 'Light',
       dark: 'Dark',
       fileSearch: 'File Search',
       fileSearchDescription:
         'Use local workspace file search and grep through Kodeks tools.',
+      selectFiles: 'Select files',
+      selectedFiles: 'Selected files',
+      noFilesSelected: 'No files selected',
+      fileSearchPlaceholder: 'Search workspace files...',
+      fileSearchLoading: 'Reading workspace files...',
+      fileSearchError: 'Failed to read file list',
+      noFileMatches: 'No matching files',
+      selectedFileCount: (count) =>
+        `${count} file${count === 1 ? '' : 's'} selected`,
       session: 'Session',
+      newSession: 'New session',
+      sessionHistory: 'Recent sessions',
+      loadingSessions: 'Loading sessions...',
+      sessionLoadError: 'Failed to load sessions',
+      noSessions: 'No session history yet',
+      collapseSidebar: 'Collapse sidebar',
+      expandSidebar: 'Expand sidebar',
+      debugPanel: 'Debug',
+      appearancePreview: 'Appearance',
       autoSession: 'auto session',
       webSearch: 'Web Search',
       webSearchDescription:
@@ -239,7 +299,8 @@ export const uiCopy: Record<UiLanguage, UiCopy> = {
       subagentStarted: (agent) => `Subagent ${agent} started`,
       subagentCompleted: (agent) => `Subagent ${agent} completed`,
       responseCompleted: 'Response completed',
-      status: 'Status'
+      status: 'Status',
+      error: 'Backend error'
     },
     toolCall: {
       approvalNeeded: (name) => `Approval needed for ${name}`,

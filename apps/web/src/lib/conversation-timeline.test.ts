@@ -120,6 +120,26 @@ describe('conversation timeline', () => {
     ]);
   });
 
+  it('adds backend errors to the visible runtime timeline', () => {
+    const items = upsertRuntimeTimelineItem(
+      [],
+      {
+        type: 'error',
+        message: 'MoonBridge could not start',
+        sessionId: 's1'
+      },
+      () => 'id1'
+    );
+
+    expect(items).toEqual([
+      {
+        type: 'error',
+        id: 'error-id1',
+        message: 'MoonBridge could not start'
+      }
+    ]);
+  });
+
   it('formats structured payloads for compact timeline cards', () => {
     expect(formatTimelinePayload({ ok: true })).toBe('{\n  "ok": true\n}');
     expect(formatTimelinePayload('plain')).toBe('plain');

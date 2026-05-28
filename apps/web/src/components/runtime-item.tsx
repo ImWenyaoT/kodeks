@@ -3,6 +3,7 @@ import React from 'react';
 import { MaterialIcon } from '@/components/material-icon';
 import {
   type TimelineCompletionItem,
+  type TimelineErrorItem,
   type TimelineMemoryItem,
   type TimelinePlanItem,
   type TimelineStatusItem,
@@ -16,7 +17,8 @@ type RuntimeItemProps = {
     | TimelineMemoryItem
     | TimelinePlanItem
     | TimelineStatusItem
-    | TimelineSubagentItem;
+    | TimelineSubagentItem
+    | TimelineErrorItem;
   copy: UiCopy['runtime'];
 };
 
@@ -27,11 +29,13 @@ export default function RuntimeItem({ item, copy }: RuntimeItemProps) {
       ? 'memory'
       : item.type === 'plan'
         ? 'fact_check'
-        : item.type === 'subagent'
-          ? 'account_tree'
-          : item.type === 'completed'
-            ? 'check'
-            : 'hourglass_empty';
+        : item.type === 'error'
+          ? 'error'
+          : item.type === 'subagent'
+            ? 'account_tree'
+            : item.type === 'completed'
+              ? 'check'
+              : 'hourglass_empty';
   const title =
     item.type === 'memory'
       ? copy.memoryRecalled
@@ -39,31 +43,39 @@ export default function RuntimeItem({ item, copy }: RuntimeItemProps) {
         ? item.action === 'created'
           ? copy.planCreated
           : copy.planRecovered
-        : item.type === 'subagent'
-          ? item.status === 'running'
-            ? copy.subagentStarted(item.agent)
-            : copy.subagentCompleted(item.agent)
-          : item.type === 'completed'
-            ? copy.responseCompleted
-            : copy.status;
+        : item.type === 'error'
+          ? copy.error
+          : item.type === 'subagent'
+            ? item.status === 'running'
+              ? copy.subagentStarted(item.agent)
+              : copy.subagentCompleted(item.agent)
+            : item.type === 'completed'
+              ? copy.responseCompleted
+              : copy.status;
   const detail =
     item.type === 'memory'
       ? formatMemoryDetail(item, copy)
       : item.type === 'plan'
         ? copy.planDetail(item.title, item.stepCount)
-        : item.type === 'subagent'
-          ? (item.summary ?? item.runId)
-          : item.type === 'completed'
-            ? item.responseId
-            : item.message;
+        : item.type === 'error'
+          ? item.message
+          : item.type === 'subagent'
+            ? (item.summary ?? item.runId)
+            : item.type === 'completed'
+              ? item.responseId
+              : item.message;
+  const toneClass =
+    item.type === 'error'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-blue-500';
 
   return (
     <div className="flex justify-start pt-2">
-      <div className="ml-[-8px] flex max-w-[70%] items-center gap-2 text-blue-500">
+      <div className={`ml-[-8px] flex max-w-[70%] items-center gap-2 ${toneClass}`}>
         <MaterialIcon name={iconName} size={16} />
-        <div className="min-w-0 text-sm font-medium">
+        <div className="kodeks-ui-label min-w-0">
           <span>{title}</span>
-          <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+          <span className="kodeks-ui-caption ml-2 text-zinc-500 dark:text-zinc-400">
             {detail}
           </span>
         </div>

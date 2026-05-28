@@ -7,6 +7,7 @@ import type { ModelProviderOverride } from '@kodeks/model';
 import Chat from '@/components/chat';
 import { MaterialIcon } from '@/components/material-icon';
 import ToolsPanel from '@/components/tools-panel';
+import WorkspacePanel from '@/components/workspace-panel';
 import {
   appendAssistantDelta,
   updateApprovalState,
@@ -33,6 +34,16 @@ import {
 
 type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
+type StoredTranscriptMessage = {
+  id: string;
+  role: string;
+  content: unknown;
+};
+
+type SessionDetailResponse = {
+  messages?: unknown;
+};
+
 const languageStorageKey = 'kodeks.ui.language';
 const themeStorageKey = 'kodeks.ui.theme';
 type UiPreferenceState = {
@@ -57,6 +68,60 @@ const initialMessage: TimelineItem = {
   role: 'assistant',
   content: uiCopy.zh.app.welcome
 };
+
+// 从本地 transcript content 对象中提取可展示文本，兼容历史 JSON 结构。
+function stringifyTranscriptContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content !== null && typeof content === 'object') {
+    const text = (content as { text?: unknown }).text;
+    if (typeof text === 'string') {
+      return text;
+    }
+  }
+  return JSON.stringify(content);
+}
+
+// 将 session transcript 转成当前聊天时间线可直接渲染的消息项。
+function transcriptToTimeline(
+  messages: StoredTranscriptMessage[]
+): TimelineItem[] {
+  const timelineMessages = messages
+    .filter(
+      (message) =>
+        message.role === 'user' ||
+        message.role === 'assistant' ||
+        message.role === 'system'
+    )
+    .map((message) => {
+      const content = stringifyTranscriptContent(message.content);
+      return {
+        type: 'message' as const,
+        id: message.id,
+        role: message.role as 'user' | 'assistant' | 'system',
+        content
+      };
+    })
+    .filter((message) => message.content.trim().length > 0);
+
+  return timelineMessages.length > 0 ? timelineMessages : [initialMessage];
+}
+
+// 校验 session detail API 的 loose JSON 响应，只保留能恢复的 transcript message。
+function readTranscriptMessages(body: SessionDetailResponse): StoredTranscriptMessage[] {
+  if (!Array.isArray(body.messages)) {
+    return [];
+  }
+  return body.messages.filter(
+    (message): message is StoredTranscriptMessage =>
+      message !== null &&
+      typeof message === 'object' &&
+      typeof (message as { id?: unknown }).id === 'string' &&
+      typeof (message as { role?: unknown }).role === 'string' &&
+      'content' in message
+  );
+}
 
 // 根据浏览器语言推断界面语言；目前只区分中文和英文。
 function getSystemLanguage(): UiLanguage {
@@ -107,11 +172,14 @@ export default function Assistant() {
   const [reasoningEffort, setReasoningEffort] =
     useState<ReasoningEffort>('medium');
   const [sessionId, setSessionId] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [uiPreferenceState, setUiPreferenceState] = useState<UiPreferenceState>(
     () => hydrationSafeUiState
   );
   const [isAssistantLoading, setAssistantLoading] = useState(false);
   const [isToolsPanelOpen, setIsToolsPanelOpen] = useState(false);
+  const [isWorkspacePanelCollapsed, setIsWorkspacePanelCollapsed] =
+    useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const {
     languagePreference,
@@ -238,6 +306,7 @@ export default function Assistant() {
         mode,
         provider,
         reasoningEffort,
+        selectedFiles,
         signal: controller.signal,
         onDelta(delta) {
           setItems((currentItems) =>
@@ -250,10 +319,13 @@ export default function Assistant() {
           }
           if (event.type === 'error') {
             setItems((currentItems) =>
-              appendAssistantDelta(
-                currentItems,
-                assistantMessageId,
-                copy.app.runtimeFailed(event.message)
+              upsertRuntimeTimelineItem(
+                appendAssistantDelta(
+                  currentItems,
+                  assistantMessageId,
+                  copy.app.runtimeFailed(event.message)
+                ),
+                event
               )
             );
             return;
@@ -311,18 +383,93 @@ export default function Assistant() {
     setAssistantLoading(false);
   }
 
+  // 新建一个空白本地会话，下一次发送时再由 runtime 分配 durable session。
+  function handleNewSession() {
+    abortControllerRef.current?.abort();
+    setAssistantLoading(false);
+    setSessionId('');
+    setItems([initialMessage]);
+  }
+
+  // 切换桌面左侧 workspace 面板的 ChatGPT-style 折叠状态。
+  function toggleWorkspacePanelCollapsed() {
+    setIsWorkspacePanelCollapsed((current) => !current);
+  }
+
+  // 从左侧历史中选择一个 session，并恢复它已持久化的 transcript。
+  async function handleSessionSelect(nextSessionId: string) {
+    if (!nextSessionId || nextSessionId === sessionId) {
+      return;
+    }
+    abortControllerRef.current?.abort();
+    setAssistantLoading(false);
+    setSessionId(nextSessionId);
+    try {
+      const response = await fetch(`/api/sessions/${nextSessionId}`);
+      if (!response.ok) {
+        throw new Error(`Session request failed with ${response.status}`);
+      }
+      const body = (await response.json()) as SessionDetailResponse;
+      setItems(transcriptToTimeline(readTranscriptMessages(body)));
+    } catch (error) {
+      setItems([
+        initialMessage,
+        {
+          type: 'error',
+          id: `session-load-${nextSessionId}`,
+          message:
+            error instanceof Error ? error.message : copy.app.requestFailed
+        }
+      ]);
+    }
+  }
+
   // 打开或关闭移动端工具抽屉，复用桌面端同一份设置状态。
   function setMobilePanelOpen(open: boolean) {
     setIsToolsPanelOpen(open);
   }
 
+  const shellThemeClass =
+    theme === 'dark'
+      ? 'dark bg-zinc-950 text-zinc-50 md:bg-[#3a3a3a]'
+      : 'bg-white text-zinc-950 md:bg-zinc-200';
+
   return (
     <div
-      className={`${theme === 'dark' ? 'dark' : ''} flex h-full min-h-0 w-full bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50`}
+      className={`${shellThemeClass} flex h-full min-h-0 w-full md:gap-2.5 md:p-2`}
       data-language={language}
       data-theme={theme}
     >
-      <div className="hidden min-h-0 w-[30%] min-w-[320px] max-w-[460px] md:block">
+      <div
+        className={`hidden min-h-0 shrink-0 overflow-hidden rounded-[18px] transition-[width] duration-200 md:block ${
+          isWorkspacePanelCollapsed ? 'w-[64px]' : 'w-[260px]'
+        }`}
+      >
+        <WorkspacePanel
+          collapsed={isWorkspacePanelCollapsed}
+          copy={copy.tools}
+          currentSessionId={sessionId}
+          onCollapseToggle={toggleWorkspacePanelCollapsed}
+          onNewSession={handleNewSession}
+          onSelectedFilesChange={setSelectedFiles}
+          onSessionSelect={handleSessionSelect}
+          selectedFiles={selectedFiles}
+        />
+      </div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-white md:rounded-[18px] md:border md:border-stone-200 dark:bg-black md:dark:border-zinc-800">
+        <div className="h-full min-h-0 w-full p-4">
+          <Chat
+            copy={copy}
+            isAssistantLoading={isAssistantLoading}
+            items={visibleItems}
+            onApprovalResponse={handleApprovalResponse}
+            onSendMessage={handleSendMessage}
+            onStop={handleStop}
+            selectedFiles={selectedFiles}
+          />
+        </div>
+      </div>
+      <div className="hidden min-h-0 w-[340px] shrink-0 overflow-hidden rounded-[18px] lg:block">
         <ToolsPanel
           activityCount={activityCount}
           copy={copy.tools}
@@ -338,18 +485,6 @@ export default function Assistant() {
           sessionId={sessionId}
           theme={themePreference}
         />
-      </div>
-      <div className="min-h-0 min-w-0 flex-1 bg-white dark:bg-zinc-950 md:w-[70%]">
-        <div className="h-full min-h-0 w-full p-4">
-          <Chat
-            copy={copy}
-            isAssistantLoading={isAssistantLoading}
-            items={visibleItems}
-            onApprovalResponse={handleApprovalResponse}
-            onSendMessage={handleSendMessage}
-            onStop={handleStop}
-          />
-        </div>
       </div>
       <div className="absolute right-4 top-4 md:hidden">
         <button

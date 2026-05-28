@@ -1,13 +1,20 @@
 import { mkdirSync } from 'node:fs';
+import type { Server } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 
 import { loadEnvConfig } from '@next/env';
-import { runChatTurn, type AgentEvent } from '@kodeks/agent-runtime';
+import {
+  runChatTurn,
+  type AgentEvent,
+  type SelectedWorkspaceFileContext
+} from '@kodeks/agent-runtime';
 import {
   createModelClientFromEnv,
   resolveModelClientOptions,
+  type ModelClientOptions,
   type ModelProviderOverride
 } from '@kodeks/model';
+import { createBridgeServer } from '@kodeks/responses-bridge';
 import { KodeksDatabase } from '@kodeks/storage';
 import { WorkspaceService } from '@kodeks/workspace';
 import {
@@ -25,6 +32,7 @@ type ChatStreamRequest = {
   mode?: unknown;
   reasoning_effort?: unknown;
   provider?: unknown;
+  selected_files?: unknown;
 };
 
 type StreamKodeksChatOptions = {
@@ -36,6 +44,7 @@ export { resolveModelClientOptions };
 type KodeksUIDataParts = {
   session: { sessionId: string };
   status: { message: string; sessionId: string };
+  error: { message: string; code?: string; sessionId: string };
   memory: {
     memoryIds: string[];
     layers?: Record<string, number>;
@@ -61,6 +70,12 @@ type KodeksUIMessage = UIMessage<{ sessionId?: string }, KodeksUIDataParts>;
 
 let database: KodeksDatabase | null = null;
 let workspaceEnvLoaded = false;
+let managedBridgeServer: { origin: string; server: Server } | null = null;
+let managedBridgeStartPromise: Promise<void> | null = null;
+
+const MAX_SELECTED_FILES = 8;
+const MAX_SELECTED_FILE_CHARS = 12_000;
+const MAX_SELECTED_FILES_TOTAL_CHARS = 36_000;
 
 // Streams one chat turn through the TypeScript runtime as SSE bytes.
 export function streamKodeksChat(
@@ -73,7 +88,7 @@ export function streamKodeksChat(
     async start(controller) {
       try {
         for await (const event of abortableAgentEvents(
-          runKodeksChatEvents(body, options.signal),
+          visibleRuntimeEvents(body, options.signal),
           options.signal
         )) {
           controller.enqueue(encoder.encode(toSseFrame(event)));
@@ -109,7 +124,7 @@ export function createKodeksUIMessageResponse(
       await writeKodeksUIMessageChunks(
         writer,
         abortableAgentEvents(
-          runKodeksChatEvents(body, options.signal),
+          visibleRuntimeEvents(body, options.signal),
           options.signal
         )
       );
@@ -167,6 +182,21 @@ async function* abortableAgentEvents(
   }
 }
 
+// 把后端异常归一化成可流式展示的 runtime error 事件。
+async function* visibleRuntimeEvents(
+  body: ChatStreamRequest,
+  signal?: AbortSignal
+): AsyncIterable<AgentEvent> {
+  try {
+    yield* runKodeksChatEvents(body, signal);
+  } catch (error) {
+    if (signal?.aborted) {
+      return;
+    }
+    yield toRuntimeErrorEvent(error, readSessionId(body) ?? '');
+  }
+}
+
 // Runs the shared Kodeks chat pipeline used by both SSE and Vercel AI SDK routes.
 async function* runKodeksChatEvents(
   body: ChatStreamRequest,
@@ -188,6 +218,8 @@ async function* runKodeksChatEvents(
   }
 
   const workspaceRoot = resolveWorkspaceRoot();
+  const workspace = new WorkspaceService(workspaceRoot);
+  const selectedFiles = await readSelectedWorkspaceFiles(body, workspace);
   const modelOptions = resolveModelClientOptions(
     process.env,
     body.reasoning_effort,
@@ -198,10 +230,12 @@ async function* runKodeksChatEvents(
     yield {
       type: 'error',
       message: `A model provider is required for ${providerLabel}. Set OPENAI_API_KEY for OpenAI Agents SDK + Responses, choose moonbridge for the local Responses bridge, or set DEEPSEEK_API_KEY for DeepSeek fallback.`,
+      code: 'model_provider_missing',
       sessionId: sessionId ?? ''
     };
     return;
   }
+  await ensureManagedBridgeServer(process.env, modelOptions);
 
   const model =
     modelOptions.provider === 'deepseek'
@@ -215,8 +249,9 @@ async function* runKodeksChatEvents(
     input,
     sessionId,
     mode,
-    workspace: new WorkspaceService(workspaceRoot),
+    workspace,
     database: getKodeksDatabase(),
+    selectedFiles,
     ...(modelOptions.provider === 'deepseek'
       ? { model: model ?? undefined }
       : {
@@ -230,6 +265,196 @@ async function* runKodeksChatEvents(
           }
         })
   });
+}
+
+// 读取并截断用户显式选择的 workspace 文件，避免把未授权路径或过大内容注入模型。
+async function readSelectedWorkspaceFiles(
+  body: ChatStreamRequest,
+  workspace: WorkspaceService
+): Promise<SelectedWorkspaceFileContext[]> {
+  if (!Array.isArray(body.selected_files)) {
+    return [];
+  }
+  const selectedPaths = [
+    ...new Set(
+      body.selected_files.flatMap((value) =>
+        typeof value === 'string' && value.trim().length > 0
+          ? [value.trim()]
+          : []
+      )
+    )
+  ].slice(0, MAX_SELECTED_FILES);
+  const files: SelectedWorkspaceFileContext[] = [];
+  let remainingCharacters = MAX_SELECTED_FILES_TOTAL_CHARS;
+
+  for (const path of selectedPaths) {
+    if (remainingCharacters <= 0) {
+      files.push({
+        path,
+        error: 'Selected file context budget exhausted.'
+      });
+      continue;
+    }
+    try {
+      const content = await workspace.readFile(path);
+      const budget = Math.min(MAX_SELECTED_FILE_CHARS, remainingCharacters);
+      const truncated = content.length > budget;
+      files.push({
+        path,
+        content: truncated ? content.slice(0, budget) : content,
+        truncated
+      });
+      remainingCharacters -= Math.min(content.length, budget);
+    } catch (error) {
+      files.push({
+        path,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  return files;
+}
+
+// 创建带稳定 code 的后端错误事件，供 SSE 和 UIMessage stream 共用。
+function toRuntimeErrorEvent(error: unknown, sessionId: string): AgentEvent {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    type: 'error',
+    message,
+    code: readRuntimeErrorCode(error, message),
+    sessionId
+  };
+}
+
+// 根据错误形态给 UI 提供可分组的诊断 code。
+function readRuntimeErrorCode(error: unknown, message: string): string {
+  if (isAddressInUseError(error) || message.includes('MoonBridge')) {
+    return 'moonbridge_start_failed';
+  }
+  return 'runtime_error';
+}
+
+// Ensures the local MoonBridge Responses bridge exists before the Agents SDK connects to it.
+async function ensureManagedBridgeServer(
+  env: NodeJS.ProcessEnv,
+  modelOptions: ModelClientOptions
+): Promise<void> {
+  if (
+    modelOptions.provider !== 'bridge' &&
+    modelOptions.provider !== 'moonbridge'
+  ) {
+    return;
+  }
+
+  const baseURL = readManagedBridgeBaseURL(modelOptions.baseURL);
+  if (baseURL === null) {
+    return;
+  }
+  const origin = baseURL.origin;
+  if (await isManagedBridgeHealthy(origin)) {
+    return;
+  }
+  if (managedBridgeServer?.origin === origin) {
+    return;
+  }
+  if (managedBridgeStartPromise !== null) {
+    await managedBridgeStartPromise;
+    return;
+  }
+
+  managedBridgeStartPromise = startManagedBridgeServer(env, origin, baseURL)
+    .finally(() => {
+      managedBridgeStartPromise = null;
+    });
+  await managedBridgeStartPromise;
+}
+
+// Starts the embedded Responses bridge for local MoonBridge provider requests.
+async function startManagedBridgeServer(
+  env: NodeJS.ProcessEnv,
+  origin: string,
+  baseURL: URL
+): Promise<void> {
+  const server = createBridgeServer({
+    deepSeekApiKey:
+      env.KODEKS_BRIDGE_DEEPSEEK_API_KEY ??
+      env.MOONBRIDGE_DEEPSEEK_API_KEY ??
+      env.DEEPSEEK_API_KEY,
+    deepSeekBaseURL: env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ?? env.DEEPSEEK_BASE_URL,
+    deepSeekModel:
+      env.KODEKS_BRIDGE_DEEPSEEK_MODEL ??
+      env.MOONBRIDGE_DEEPSEEK_MODEL ??
+      env.DEEPSEEK_MODEL,
+    modelAliases: [
+      env.KODEKS_BRIDGE_MODEL ?? env.MOONBRIDGE_MODEL ?? 'bridge',
+      'moonbridge'
+    ],
+    userAgent: 'kodeks-web-moonbridge/0.1'
+  });
+  const hostname = baseURL.hostname || '127.0.0.1';
+  const port = Number(baseURL.port || '38440');
+
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once('error', (error) => {
+      rejectListen(error);
+    });
+    server.listen(port, hostname, () => {
+      managedBridgeServer = { origin, server };
+      resolveListen();
+    });
+  }).catch((error: unknown) => {
+    server.close();
+    if (isAddressInUseError(error)) {
+      throw new Error(
+        `MoonBridge could not start because ${origin} is already in use but did not respond to /health.`
+      );
+    }
+    throw error;
+  });
+}
+
+// Reads the bridge URL only for local HTTP endpoints that the web runtime can manage.
+function readManagedBridgeBaseURL(value: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:') {
+    return null;
+  }
+  if (
+    url.hostname !== '127.0.0.1' &&
+    url.hostname !== 'localhost' &&
+    url.hostname !== '::1'
+  ) {
+    return null;
+  }
+  return url;
+}
+
+// Checks whether a local bridge is already running before starting an embedded one.
+async function isManagedBridgeHealthy(origin: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/health`, {
+      signal: AbortSignal.timeout(500)
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Detects Node listen errors for ports that are occupied by non-bridge processes.
+function isAddressInUseError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'EADDRINUSE'
+  );
 }
 
 // Loads env files from the monorepo workspace root once for nested Next.js apps.
@@ -291,7 +516,7 @@ export function getKodeksWorkspace(): WorkspaceService {
 }
 
 // Resolves the workspace root for local development and deployed route handlers.
-function resolveWorkspaceRoot(): string {
+export function resolveWorkspaceRoot(): string {
   if (process.env.KODEKS_WORKSPACE_ROOT) {
     return resolve(process.env.KODEKS_WORKSPACE_ROOT);
   }
@@ -437,6 +662,14 @@ async function writeKodeksUIMessageChunks(
       writer.write({ type: 'text-end', id: textId });
       textStarted = false;
     }
+    writer.write({
+      type: 'data-error',
+      data: {
+        message: event.message,
+        code: event.code,
+        sessionId: event.sessionId
+      }
+    });
     writer.write({ type: 'error', errorText: event.message });
   }
 }

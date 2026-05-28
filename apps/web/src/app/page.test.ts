@@ -5,27 +5,38 @@ import { describe, expect, it } from 'vitest';
 import Home from './page';
 
 describe('Home', () => {
-  it('renders the Kodeks two-column shell', () => {
+  it('renders the Kodeks three-panel shell', () => {
     const markup = renderToStaticMarkup(createElement(Home));
-    const panelIndex = markup.indexOf(
-      'class="hidden min-h-0 w-[30%] min-w-[320px] max-w-[460px] md:block"'
+    const workspacePanelIndex = markup.indexOf(
+      'class="hidden min-h-0 shrink-0 overflow-hidden rounded-[18px] transition-[width] duration-200 md:block w-[260px]"'
     );
     const chatIndex = markup.indexOf(
-      'class="min-h-0 min-w-0 flex-1 bg-white dark:bg-zinc-950 md:w-[70%]"'
+      'class="min-h-0 min-w-0 flex-1 overflow-hidden bg-white md:rounded-[18px] md:border md:border-stone-200 dark:bg-black md:dark:border-zinc-800"'
+    );
+    const debugPanelIndex = markup.indexOf(
+      'class="hidden min-h-0 w-[340px] shrink-0 overflow-hidden rounded-[18px] lg:block"'
     );
 
     expect(markup).toContain(
       'class="relative flex h-dvh min-h-0 justify-center overflow-hidden"'
     );
     expect(markup).toContain(
-      'class="min-h-0 min-w-0 flex-1 bg-white dark:bg-zinc-950 md:w-[70%]"'
+      'class="bg-white text-zinc-950 md:bg-zinc-200 flex h-full min-h-0 w-full md:gap-2.5 md:p-2"'
     );
     expect(markup).toContain(
-      'class="hidden min-h-0 w-[30%] min-w-[320px] max-w-[460px] md:block"'
+      'class="min-h-0 min-w-0 flex-1 overflow-hidden bg-white md:rounded-[18px] md:border md:border-stone-200 dark:bg-black md:dark:border-zinc-800"'
     );
-    expect(panelIndex).toBeGreaterThan(-1);
+    expect(markup).toContain(
+      'class="hidden min-h-0 shrink-0 overflow-hidden rounded-[18px] transition-[width] duration-200 md:block w-[260px]"'
+    );
+    expect(markup).toContain(
+      'class="hidden min-h-0 w-[340px] shrink-0 overflow-hidden rounded-[18px] lg:block"'
+    );
+    expect(workspacePanelIndex).toBeGreaterThan(-1);
     expect(chatIndex).toBeGreaterThan(-1);
-    expect(panelIndex).toBeLessThan(chatIndex);
+    expect(debugPanelIndex).toBeGreaterThan(-1);
+    expect(workspacePanelIndex).toBeLessThan(chatIndex);
+    expect(chatIndex).toBeLessThan(debugPanelIndex);
     expect(markup).toContain('给 Kodeks 发送消息...');
   });
 
@@ -38,7 +49,8 @@ describe('Home', () => {
     expect(markup).toContain('代码解释器');
     expect(markup).toContain('函数');
     expect(markup).toContain('MCP');
-    expect(markup).toContain('Google 集成');
+    expect(markup).toContain('调试');
+    expect(markup).toContain('最近会话');
   });
 
   it('renders language, theme, and provider controls', () => {
@@ -46,7 +58,7 @@ describe('Home', () => {
     const selectedControlCount =
       markup.match(/aria-pressed="true"/g)?.length ?? 0;
 
-    expect(markup).toContain('跟随系统');
+    expect(markup).toContain('设备');
     expect(markup).toContain('中文');
     expect(markup).toContain('EN');
     expect(markup).toContain('浅色');
@@ -61,7 +73,7 @@ describe('Home', () => {
   it('keeps SSR preference copy on the hydration-safe baseline', () => {
     const markup = renderToStaticMarkup(createElement(Home));
     const selectedSystemControlCount =
-      markup.match(/aria-pressed="true"[^>]*>跟随系统<\/button>/g)?.length ?? 0;
+      markup.match(/aria-pressed="true"[^>]*>设备<\/button>/g)?.length ?? 0;
 
     expect(markup).toContain('data-language="zh"');
     expect(markup).toContain('data-theme="light"');

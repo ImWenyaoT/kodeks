@@ -21,14 +21,14 @@ export default function ToolCall({ toolCall, copy }: ToolCallProps) {
   return (
     <div className="flex justify-start pt-2">
       <div className="relative mb-[-8px] flex w-[70%] min-w-0 flex-col">
-        <div className="flex flex-col rounded-[16px] text-sm">
-          <div className="flex gap-2 rounded-b-none p-3 pl-0 font-semibold text-gray-700 dark:text-zinc-200">
+        <div className="flex flex-col rounded-[16px]">
+          <div className="kodeks-ui-label flex gap-2 rounded-b-none p-3 pl-0 text-gray-700 dark:text-zinc-200">
             <div className="ml-[-8px] flex items-center gap-2 text-blue-500">
               <MaterialIcon
                 name={isWaiting ? 'shield' : 'terminal'}
                 size={16}
               />
-              <div className="text-sm font-medium">
+              <div>
                 {isWaiting
                   ? copy.approvalNeeded(toolCall.name)
                   : isDone
@@ -39,7 +39,7 @@ export default function ToolCall({ toolCall, copy }: ToolCallProps) {
           </div>
 
           <div className="ml-4 mt-2 rounded-xl bg-[#fafafa] py-2 dark:bg-zinc-900">
-            <pre className="mx-6 max-h-96 overflow-y-scroll border-b border-stone-200 p-2 pl-0 text-xs text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
+            <pre className="kodeks-code-text mx-6 max-h-96 overflow-y-scroll border-b border-stone-200 p-2 pl-0 text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
               {payload || copy.waitingForResult}
             </pre>
           </div>

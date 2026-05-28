@@ -63,6 +63,12 @@ export type TimelineCompletionItem = {
   responseId: string;
 };
 
+export type TimelineErrorItem = {
+  type: 'error';
+  id: string;
+  message: string;
+};
+
 export type TimelineItem =
   | TimelineMessageItem
   | TimelineToolItem
@@ -71,7 +77,8 @@ export type TimelineItem =
   | TimelinePlanItem
   | TimelineStatusItem
   | TimelineSubagentItem
-  | TimelineCompletionItem;
+  | TimelineCompletionItem
+  | TimelineErrorItem;
 
 type MakeId = () => string;
 
@@ -185,6 +192,17 @@ export function upsertRuntimeTimelineItem(
         type: 'completed',
         id: `completed-${event.responseId || makeId()}`,
         responseId: event.responseId
+      }
+    ];
+  }
+
+  if (event.type === 'error') {
+    return [
+      ...items,
+      {
+        type: 'error',
+        id: `error-${makeId()}`,
+        message: event.message
       }
     ];
   }
