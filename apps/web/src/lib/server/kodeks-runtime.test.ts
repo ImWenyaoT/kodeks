@@ -107,7 +107,7 @@ describe('resolveModelClientOptions', () => {
     expect(
       resolveModelClientOptions({
         KODEKS_BRIDGE_ENABLED: 'true',
-        KODEKS_BRIDGE_BASE_URL: 'http://127.0.0.1:38440/v1',
+        KODEKS_BRIDGE_BASE_URL: 'http://127.0.0.1:38440/v1/',
         KODEKS_BRIDGE_MODEL: 'bridge',
         DEEPSEEK_API_KEY: 'deepseek-key',
         OPENAI_API_KEY: 'openai-key'
@@ -166,6 +166,25 @@ describe('resolveModelClientOptions', () => {
       model: 'moonbridge-session',
       reasoningEffort: 'high',
       provider: 'moonbridge'
+    });
+  });
+
+  it('lets a request-level provider override force Bridge', () => {
+    expect(
+      resolveModelClientOptions(
+        {
+          OPENAI_API_KEY: 'openai-key',
+          KODEKS_BRIDGE_MODEL: 'bridge-session'
+        },
+        undefined,
+        'bridge'
+      )
+    ).toEqual({
+      apiKey: 'bridge',
+      baseURL: 'http://127.0.0.1:38440/v1',
+      model: 'bridge-session',
+      reasoningEffort: 'high',
+      provider: 'bridge'
     });
   });
 

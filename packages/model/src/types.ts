@@ -42,7 +42,7 @@ export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export type ModelProvider = 'openai' | 'bridge' | 'moonbridge' | 'deepseek';
 
-export type ModelProviderOverride = Exclude<ModelProvider, 'bridge'>;
+export type ModelProviderOverride = ModelProvider;
 
 export interface ModelClient {
   streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent>;

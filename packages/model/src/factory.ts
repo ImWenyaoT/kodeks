@@ -82,6 +82,13 @@ export function resolveModelClientOptions(
     return resolveOpenAIOptions(env, requestedReasoningEffort);
   }
 
+  if (providerOverride === 'bridge') {
+    return resolveBridgeOptions(
+      { ...env, KODEKS_MODEL_PROVIDER: 'bridge' },
+      requestedReasoningEffort
+    );
+  }
+
   if (providerOverride === 'moonbridge') {
     return resolveBridgeOptions(
       { ...env, KODEKS_MODEL_PROVIDER: 'moonbridge' },
@@ -123,10 +130,11 @@ function resolveBridgeOptions(
       env.KODEKS_BRIDGE_API_KEY ??
       env.MOONBRIDGE_API_KEY ??
       DEFAULT_BRIDGE_API_KEY,
-    baseURL:
+    baseURL: trimTrailingSlash(
       env.KODEKS_BRIDGE_BASE_URL ??
-      env.MOONBRIDGE_BASE_URL ??
-      DEFAULT_BRIDGE_BASE_URL,
+        env.MOONBRIDGE_BASE_URL ??
+        DEFAULT_BRIDGE_BASE_URL
+    ),
     model:
       env.KODEKS_BRIDGE_MODEL ?? env.MOONBRIDGE_MODEL ?? DEFAULT_BRIDGE_MODEL,
     reasoningEffort: resolveReasoningEffort(
@@ -215,11 +223,12 @@ function isReasoningEffort(value: string): value is ReasoningEffort {
   return SUPPORTED_REASONING_EFFORTS.has(value as ReasoningEffort);
 }
 
-// 把松散请求参数收窄为工作台允许覆盖的 provider，避免暴露内部 bridge 别名。
+// 把松散请求参数收窄为工作台允许覆盖的 provider。
 function resolveProviderOverride(
   requestedProvider: unknown
 ): ModelProviderOverride | null {
   if (
+    requestedProvider === 'bridge' ||
     requestedProvider === 'openai' ||
     requestedProvider === 'moonbridge' ||
     requestedProvider === 'deepseek'
@@ -228,4 +237,9 @@ function resolveProviderOverride(
   }
 
   return null;
+}
+
+// 移除 URL 末尾斜杠，避免 SDK 或脚本拼接出双斜杠路径。
+function trimTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
 }
