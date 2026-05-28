@@ -918,7 +918,10 @@ export class MemoryRepository {
       .prepare(
         'SELECT * FROM memory_embeddings WHERE content_hash = ? AND embedding_model = ?'
       )
-      .get(contentHash, embeddingModel) as MemoryEmbeddingRow | null | undefined;
+      .get(contentHash, embeddingModel) as
+      | MemoryEmbeddingRow
+      | null
+      | undefined;
     if (row == null) {
       return null;
     }
@@ -991,7 +994,9 @@ export class MemoryRepository {
     return itemIds.flatMap((id) => {
       const row = this.database
         .connection()
-        .prepare('SELECT * FROM memory_atoms WHERE id = ? AND deleted_at IS NULL')
+        .prepare(
+          'SELECT * FROM memory_atoms WHERE id = ? AND deleted_at IS NULL'
+        )
         .get(id) as MemoryAtomRow | null | undefined;
       return row == null ? [] : [mapMemoryAtom(row)];
     });
@@ -1109,11 +1114,23 @@ type MemoryServiceFetch = (
   json(): Promise<unknown>;
 }>;
 
+export type MemoryEmbeddingProviderInput = {
+  text: string;
+  model: string;
+  provider: string;
+  environment: Record<string, string | undefined>;
+};
+
+export type MemoryEmbeddingProvider = (
+  input: MemoryEmbeddingProviderInput
+) => Promise<number[] | null>;
+
 export type MemoryServiceOptions = {
   database: KodeksDatabase;
   workspaceRoot: string;
   environment?: Record<string, string | undefined>;
   fetch?: MemoryServiceFetch;
+  embeddingProvider?: MemoryEmbeddingProvider;
   artifactThresholdBytes?: number;
 };
 
@@ -1121,12 +1138,14 @@ export type MemoryServiceOptions = {
 export class MemoryService {
   private readonly environment: Record<string, string | undefined>;
   private readonly fetchClient: MemoryServiceFetch | undefined;
+  private readonly embeddingProvider: MemoryEmbeddingProvider | undefined;
   private readonly artifactThresholdBytes: number;
 
   // Wires memory services to the workspace root without taking a dependency on workspace package types.
   constructor(private readonly options: MemoryServiceOptions) {
     this.environment = options.environment ?? process.env;
     this.fetchClient = options.fetch ?? globalThis.fetch;
+    this.embeddingProvider = options.embeddingProvider;
     this.artifactThresholdBytes = options.artifactThresholdBytes ?? 4096;
   }
 
@@ -1241,7 +1260,7 @@ export class MemoryService {
     });
   }
 
-  // Adds local semantic scores from Ollama embeddings when configured and reachable.
+  // Adds local semantic scores from the configured embedding provider when reachable.
   private async rerankWithEmbeddings(
     query: string,
     items: LayeredMemoryItem[]
@@ -1266,27 +1285,99 @@ export class MemoryService {
     return this.options.database.memories.applySemanticScores(items, scores);
   }
 
-  // Returns true when local embedding rerank is explicitly enabled.
+  // Returns true when embedding rerank is explicitly enabled.
   private embeddingsEnabled(): boolean {
     return (
       this.environment.KODEKS_EMBEDDINGS_ENABLED === 'true' &&
-      (this.environment.KODEKS_EMBEDDINGS_PROVIDER ?? 'ollama') === 'ollama'
+      this.resolveEmbeddingConfig() !== null
     );
   }
 
-  // Embeds one text through Ollama, using the SQLite cache by content hash and model.
+  // Embeds one text through the selected provider, using the SQLite cache first.
   private async embedText(text: string): Promise<number[] | null> {
-    if (this.fetchClient === undefined) {
+    const config = this.resolveEmbeddingConfig();
+    if (config === null) {
       return null;
     }
-    const model = this.environment.KODEKS_OLLAMA_EMBED_MODEL ?? 'embeddinggemma';
-    const contentHash = hashText(`${model}\n${text}`);
+    const contentHash = hashText(`${config.cacheModel}\n${text}`);
     const cached = await this.options.database.memories.getEmbedding(
       contentHash,
-      model
+      config.cacheModel
     );
     if (cached !== null) {
       return cached;
+    }
+    const vector = await this.fetchEmbedding(text, config);
+    if (vector === null) {
+      return null;
+    }
+    await this.options.database.memories.rememberEmbedding({
+      contentHash,
+      embeddingModel: config.cacheModel,
+      vector
+    });
+    return vector;
+  }
+
+  // Resolves provider-specific model names while keeping local embeddings as the safe default.
+  private resolveEmbeddingConfig(): {
+    provider: string;
+    model: string;
+    cacheModel: string;
+  } | null {
+    const provider = (
+      this.environment.KODEKS_EMBEDDINGS_PROVIDER ?? 'local'
+    ).toLowerCase();
+    if (['disabled', 'none', 'off', 'false'].includes(provider)) {
+      return null;
+    }
+    const model =
+      provider === 'ollama'
+        ? (this.environment.KODEKS_OLLAMA_EMBED_MODEL ?? 'embeddinggemma')
+        : provider === 'huggingface' || provider === 'hf'
+          ? (this.environment.KODEKS_HUGGINGFACE_EMBED_MODEL ??
+            this.environment.KODEKS_HF_EMBED_MODEL ??
+            'ibm-granite/granite-embedding-97m-multilingual-r2')
+          : (this.environment.KODEKS_LOCAL_EMBED_MODEL ?? 'local-hash-v1');
+    return {
+      provider,
+      model,
+      cacheModel: `${provider}:${model}`
+    };
+  }
+
+  // Dispatches embedding generation to the injected, local, Ollama, or Hugging Face provider.
+  private async fetchEmbedding(
+    text: string,
+    config: { provider: string; model: string }
+  ): Promise<number[] | null> {
+    if (this.embeddingProvider !== undefined) {
+      return this.embeddingProvider({
+        text,
+        model: config.model,
+        provider: config.provider,
+        environment: this.environment
+      });
+    }
+    if (config.provider === 'local') {
+      return createLocalHashEmbedding(text);
+    }
+    if (config.provider === 'ollama') {
+      return this.fetchOllamaEmbedding(text, config.model);
+    }
+    if (config.provider === 'huggingface' || config.provider === 'hf') {
+      return this.fetchHuggingFaceEmbedding(text, config.model);
+    }
+    return null;
+  }
+
+  // Embeds one text through Ollama's local /api/embed endpoint.
+  private async fetchOllamaEmbedding(
+    text: string,
+    model: string
+  ): Promise<number[] | null> {
+    if (this.fetchClient === undefined) {
+      return null;
     }
     const baseUrl =
       this.environment.KODEKS_OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434';
@@ -1303,12 +1394,43 @@ export class MemoryService {
       if (vector === null) {
         return null;
       }
-      await this.options.database.memories.rememberEmbedding({
-        contentHash,
-        embeddingModel: model,
-        vector
-      });
       return vector;
+    } catch {
+      return null;
+    }
+  }
+
+  // Embeds one text through a Hugging Face feature-extraction compatible endpoint.
+  private async fetchHuggingFaceEmbedding(
+    text: string,
+    model: string
+  ): Promise<number[] | null> {
+    if (this.fetchClient === undefined) {
+      return null;
+    }
+    const endpoint =
+      this.environment.KODEKS_HUGGINGFACE_EMBED_URL ??
+      `${trimTrailingSlash(
+        this.environment.KODEKS_HUGGINGFACE_BASE_URL ??
+          'https://api-inference.huggingface.co'
+      )}/pipeline/feature-extraction/${model}`;
+    const token =
+      this.environment.KODEKS_HUGGINGFACE_API_TOKEN ??
+      this.environment.KODEKS_HF_API_TOKEN ??
+      this.environment.HF_TOKEN;
+    try {
+      const response = await this.fetchClient(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ inputs: text, normalize: true, truncate: true })
+      });
+      if (!response.ok) {
+        return null;
+      }
+      return readHuggingFaceEmbedding(await response.json());
     } catch {
       return null;
     }
@@ -2041,7 +2163,8 @@ function hashText(text: string): string {
 // Summarizes large tool output before storing the full body behind an artifact ref.
 function summarizeArtifactOutput(toolName: string, output: string): string {
   const compact = output.replace(/\s+/gu, ' ').trim();
-  const summary = compact.length > 500 ? compact.slice(0, 500).trimEnd() : compact;
+  const summary =
+    compact.length > 500 ? compact.slice(0, 500).trimEnd() : compact;
   return summary.length === 0
     ? `${toolName} produced an empty large output.`
     : summary;
@@ -2049,7 +2172,11 @@ function summarizeArtifactOutput(toolName: string, output: string): string {
 
 // Reads both Ollama /api/embed response shapes used by recent versions.
 function readOllamaEmbedding(payload: unknown): number[] | null {
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
     return null;
   }
   const record = payload as Record<string, unknown>;
@@ -2058,6 +2185,26 @@ function readOllamaEmbedding(payload: unknown): number[] | null {
     return readNumberVector(embeddings[0]);
   }
   return readNumberVector(record.embedding);
+}
+
+// Reads Hugging Face feature-extraction responses as either pooled or token vectors.
+function readHuggingFaceEmbedding(payload: unknown): number[] | null {
+  const directVector = readNumberVector(payload);
+  if (directVector !== null) {
+    return directVector;
+  }
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return null;
+  }
+  const first = payload[0];
+  const firstVector = readNumberVector(first);
+  if (firstVector !== null) {
+    return firstVector;
+  }
+  if (!Array.isArray(first)) {
+    return null;
+  }
+  return averageVectors(first.map((item) => readNumberVector(item)));
 }
 
 // Validates one embedding vector before storing it as Float32 bytes.
@@ -2069,6 +2216,63 @@ function readNumberVector(value: unknown): number[] | null {
     (item): item is number => typeof item === 'number' && Number.isFinite(item)
   );
   return vector.length === value.length && vector.length > 0 ? vector : null;
+}
+
+// Pools token-level embeddings into one document vector.
+function averageVectors(vectors: Array<number[] | null>): number[] | null {
+  const validVectors = vectors.filter(
+    (vector): vector is number[] => vector !== null
+  );
+  if (validVectors.length === 0) {
+    return null;
+  }
+  const dimensions = Math.min(...validVectors.map((vector) => vector.length));
+  if (dimensions === 0) {
+    return null;
+  }
+  const average = Array.from({ length: dimensions }, () => 0);
+  for (const vector of validVectors) {
+    for (let index = 0; index < dimensions; index += 1) {
+      average[index] += vector[index] ?? 0;
+    }
+  }
+  return average.map((value) => value / validVectors.length);
+}
+
+// Creates a deterministic local embedding from token hashes so smoke tests never need a model download.
+function createLocalHashEmbedding(text: string, dimensions = 128): number[] {
+  const vector = Array.from({ length: dimensions }, () => 0);
+  const tokens = tokenizeForLocalEmbedding(text);
+  for (const token of tokens) {
+    const digest = createHash('sha256').update(token).digest();
+    const index = digest.readUInt32BE(0) % dimensions;
+    vector[index] += 1;
+  }
+  return normalizeVector(vector);
+}
+
+// Splits text into stable lexical units for the no-download local embedding provider.
+function tokenizeForLocalEmbedding(text: string): string[] {
+  const tokens = text.toLowerCase().match(/[\p{L}\p{N}_]+/gu);
+  if (tokens !== null && tokens.length > 0) {
+    return tokens;
+  }
+  const compact = text.trim();
+  return compact.length === 0 ? [''] : [...compact];
+}
+
+// Normalizes a vector for cosine scoring while preserving all-zero fallback vectors.
+function normalizeVector(vector: number[]): number[] {
+  const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (norm === 0) {
+    return vector;
+  }
+  return vector.map((value) => value / norm);
+}
+
+// Removes a trailing slash before appending provider-specific endpoint paths.
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/u, '');
 }
 
 // Computes cosine similarity for vectors returned by the same embedding model.
