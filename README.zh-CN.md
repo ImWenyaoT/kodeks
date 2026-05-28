@@ -78,6 +78,25 @@ curl -N -X POST "$APP_URL/api/chat/ui-stream" \
 
 - 默认路径设置 `OPENAI_API_KEY`，走 OpenAI Agents SDK + Responses；使用本地 bridge 时可设置 `KODEKS_MODEL_PROVIDER=bridge`；直连 DeepSeek Chat Completions fallback 需要 `DEEPSEEK_API_KEY`。
 
+Memory embedding rerank 是可选能力。启用后默认使用无需下载模型的本地 hash
+embedding，并把向量缓存在 SQLite；如果需要更强语义能力，可以显式切到 Ollama 或
+Hugging Face-compatible feature extraction：
+
+```bash
+KODEKS_EMBEDDINGS_ENABLED=true
+KODEKS_EMBEDDINGS_PROVIDER=local
+
+# 可选：本地 Ollama
+KODEKS_EMBEDDINGS_PROVIDER=ollama
+KODEKS_OLLAMA_BASE_URL=http://127.0.0.1:11434
+KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
+
+# 可选：Hugging Face-compatible endpoint
+KODEKS_EMBEDDINGS_PROVIDER=huggingface
+KODEKS_HUGGINGFACE_EMBED_MODEL=ibm-granite/granite-embedding-97m-multilingual-r2
+KODEKS_HUGGINGFACE_API_TOKEN=hf_...
+```
+
 可选：
 
 - `KODEKS_MODEL_PROVIDER` 可选 `bridge`、`moonbridge`、`deepseek` 或 `openai`

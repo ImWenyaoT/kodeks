@@ -78,6 +78,26 @@ Required:
 
 - `OPENAI_API_KEY` for the default OpenAI Agents SDK + Responses path, `KODEKS_MODEL_PROVIDER=bridge` with the local bridge, or `DEEPSEEK_API_KEY` for direct DeepSeek Chat Completions fallback.
 
+Memory embedding rerank is optional. When enabled, it defaults to a no-download
+local hash embedding provider and caches vectors in SQLite. For stronger
+semantic ranking, switch explicitly to Ollama or a Hugging Face-compatible
+feature extraction endpoint:
+
+```bash
+KODEKS_EMBEDDINGS_ENABLED=true
+KODEKS_EMBEDDINGS_PROVIDER=local
+
+# Optional: local Ollama
+KODEKS_EMBEDDINGS_PROVIDER=ollama
+KODEKS_OLLAMA_BASE_URL=http://127.0.0.1:11434
+KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
+
+# Optional: Hugging Face-compatible endpoint
+KODEKS_EMBEDDINGS_PROVIDER=huggingface
+KODEKS_HUGGINGFACE_EMBED_MODEL=ibm-granite/granite-embedding-97m-multilingual-r2
+KODEKS_HUGGINGFACE_API_TOKEN=hf_...
+```
+
 Optional:
 
 - `KODEKS_MODEL_PROVIDER` can be `bridge`, `moonbridge`, `deepseek`, or `openai`
