@@ -2,22 +2,32 @@
   "name": "kodeks",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "bun@1.3.14",
+  "type": "module",
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "dev": "bun --filter @kodeks/web dev",
-    "start": "bun --filter @kodeks/web start",
-    "build": "bun --filter @kodeks/web build",
-    "lint": "bun --workspaces run lint",
-    "test": "bun --workspaces run test",
-    "typecheck": "bun --workspaces run typecheck"
+    "dev": "pnpm --filter @kodeks/web dev",
+    "start": "pnpm --filter @kodeks/web start",
+    "build": "pnpm --filter @kodeks/web build",
+    "format": "prettier --write \"*.json\" \"*.mjs\" \".vscode/*.json\" \"apps/**/*.{ts,tsx,json,mjs}\" \"packages/**/*.{ts,tsx,json}\" \"scripts/**/*.ts\"",
+    "format:check": "prettier --check \"*.json\" \"*.mjs\" \".vscode/*.json\" \"apps/**/*.{ts,tsx,json,mjs}\" \"packages/**/*.{ts,tsx,json}\" \"scripts/**/*.ts\"",
+    "lint": "pnpm run lint:style && pnpm -r run lint",
+    "lint:style": "eslint .",
+    "lint:style:fix": "eslint . --fix",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "bridge:start": "node --experimental-strip-types scripts/bridge.ts start",
+    "bridge:health": "node --experimental-strip-types scripts/bridge.ts health",
+    "bridge:smoke": "node --experimental-strip-types scripts/bridge.ts smoke",
+    "moonbridge:start": "pnpm run bridge:start",
+    "moonbridge:health": "pnpm run bridge:health",
+    "moonbridge:smoke": "pnpm run bridge:smoke"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
+    "eslint": "9.39.4",
+    "prettier": "^3.8.3",
     "typescript": "6.0.3",
+    "typescript-eslint": "8.59.4",
     "vitest": "4.1.7"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+  }
 }

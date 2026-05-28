@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@kodeks/shared": "workspace:*",
-    "zod": "4.1.0"
+    "zod": "4.1.13"
   },
   "scripts": {
     "lint": "tsc --noEmit",

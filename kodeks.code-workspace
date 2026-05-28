@@ -1,26 +1,12 @@
 {
-	"folders": [
-		{
-			"name": "kodeks",
-			"path": "."
-		},
-		{
-			"name": "openai-responses-starter-app",
-			"path": "../openai-responses-starter-app"
-		},
-		{
-			"name": "opencode",
-			"path": "../opencode"
-		},
-		{
-			"path": "../src"
-		},
-		{
-			"path": "../pi"
-		}
-	],
-	"settings": {
-		"python.defaultInterpreterPath": "${workspaceFolder:kodeks}/.venv/bin/python",
-		"python.terminal.activateEnvironment": true
-	}
+  "folders": [
+    {
+      "name": "kodeks",
+      "path": "."
+    },
+    {
+      "name": "oss",
+      "path": "../oss"
+    }
+  ]
 }

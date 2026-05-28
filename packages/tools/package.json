@@ -12,7 +12,7 @@
     "@kodeks/shared": "workspace:*",
     "@kodeks/storage": "workspace:*",
     "@kodeks/workspace": "workspace:*",
-    "zod": "4.1.0"
+    "zod": "4.1.13"
   },
   "scripts": {
     "lint": "tsc --noEmit",

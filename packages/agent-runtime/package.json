@@ -14,7 +14,7 @@
     "@kodeks/tools": "workspace:*",
     "@kodeks/workspace": "workspace:*",
     "@openai/agents": "0.8.3",
-    "zod": "4.1.0"
+    "zod": "4.1.13"
   },
   "scripts": {
     "lint": "tsc --noEmit",

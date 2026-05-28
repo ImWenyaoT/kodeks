@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bun --bun next dev --hostname 127.0.0.1",
-    "start": "bun --bun next start --hostname 127.0.0.1",
-    "build": "bun --bun next build",
+    "dev": "next dev --hostname 127.0.0.1",
+    "start": "next start --hostname 127.0.0.1",
+    "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -18,7 +18,6 @@
     "@kodeks/tools": "workspace:*",
     "@kodeks/workspace": "workspace:*",
     "@next/env": "16.2.6",
-    "@next/swc-darwin-arm64": "16.2.6",
     "ai": "6.0.182",
     "next": "16.2.6",
     "react": "19.2.6",
