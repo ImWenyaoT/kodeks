@@ -14,10 +14,9 @@ kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实
 
 - Next.js App Router Web 应用和 API routes。
 - 基于 Server-Sent Events 的流式对话。
-- Moon Bridge Responses provider，可按 DeepSeek 官方 Codex 案例把 DeepSeek 接回 Responses API 形态。
-- DeepSeek Chat Completions adapter，支持 Thinking Mode 和 function tool streaming。
-- OpenAI Responses API adapter 保留为 fallback provider。
-- OpenAI Agents SDK 的 agent/tool wrapper 构造。
+- OpenAI Agents SDK 作为主 agent runtime，并优先走 Responses API。
+- 内置 TypeScript Responses bridge，可把 DeepSeek 接回 OpenAI-compatible Responses API 形态。
+- DeepSeek Chat Completions adapter 保留为非 Responses fallback，支持 Thinking Mode 和 function tool streaming。
 - 受 workspace policy 约束的文件工具，并阻止内部路径访问。
 - 带 timeout 和危险命令检测的 shell harness。
 - 基于 SQLite 的 sessions、transcripts、memories、approvals、subagent runs 和 audit logs。
@@ -27,8 +26,8 @@ kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实
 ## 快速开始
 
 ```bash
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 打开 `http://127.0.0.1:3000`。
@@ -37,14 +36,14 @@ Next.js 在 3000 空闲时默认使用 3000 端口。日常本地开发建议显
 这样其它项目占用 3000 时也不会影响 kodeks 的访问地址：
 
 ```bash
-PORT=3001 bun run dev
+PORT=3001 pnpm run dev
 APP_URL=http://127.0.0.1:3001
 ```
 
 Windows PowerShell 下：
 
 ```powershell
-$env:PORT=3001; bun run dev
+$env:PORT=3001; pnpm run dev
 $env:APP_URL="http://127.0.0.1:3001"
 ```
 
@@ -77,15 +76,16 @@ curl -N -X POST "$APP_URL/api/chat/ui-stream" \
 
 必需：
 
-- Moon Bridge 运行时可设置 `KODEKS_MODEL_PROVIDER=moonbridge`；直连 DeepSeek Chat Completions 需要 `DEEPSEEK_API_KEY`；OpenAI Responses fallback 需要 `OPENAI_API_KEY`。
+- 默认路径设置 `OPENAI_API_KEY`，走 OpenAI Agents SDK + Responses；使用本地 bridge 时可设置 `KODEKS_MODEL_PROVIDER=bridge`；直连 DeepSeek Chat Completions fallback 需要 `DEEPSEEK_API_KEY`。
 
 可选：
 
-- `KODEKS_MODEL_PROVIDER` 可选 `moonbridge`、`deepseek` 或 `openai`
-- `MOONBRIDGE_ENABLED=true` 也会启用 Moon Bridge Responses 路径
-- `MOONBRIDGE_BASE_URL`，默认是 `http://127.0.0.1:38440/v1`
-- `MOONBRIDGE_MODEL`，默认是 `moonbridge`
-- `MOONBRIDGE_REASONING_EFFORT`，默认是 `high`；支持 `none`、`low`、`medium`、`high`、`xhigh`
+- `KODEKS_MODEL_PROVIDER` 可选 `bridge`、`moonbridge`、`deepseek` 或 `openai`
+- `KODEKS_BRIDGE_ENABLED=true` 会启用内置 bridge Responses 路径
+- `KODEKS_BRIDGE_BASE_URL`，默认是 `http://127.0.0.1:38440/v1`
+- `KODEKS_BRIDGE_MODEL`，默认是 `bridge`
+- `KODEKS_BRIDGE_REASONING_EFFORT`，默认是 `high`；支持 `none`、`low`、`medium`、`high`、`xhigh`
+- `MOONBRIDGE_*` 环境变量名仍作为兼容 alias 被接受
 - `DEEPSEEK_BASE_URL`，默认是 `https://api.deepseek.com`
 - `DEEPSEEK_MODEL`，默认是 `deepseek-v4-pro`
 - `DEEPSEEK_REASONING_EFFORT`，默认是 `high`；支持 `none`、`low`、`medium`、`high`、`xhigh`
@@ -97,31 +97,43 @@ curl -N -X POST "$APP_URL/api/chat/ui-stream" \
 
 运行时状态默认写入 `.kodeks/`，并且不会进入 Git。
 
-### Moon Bridge + DeepSeek Responses
+### Built-in Bridge + DeepSeek Responses
 
-DeepSeek 官方 Codex 教程推荐用 Moon Bridge 作为本地 Responses-compatible bridge。先启动 Moon Bridge，让它暴露 `http://127.0.0.1:38440/v1/responses`，再这样启动 Kodeks：
+先启动内置 TypeScript bridge，让它暴露 `http://127.0.0.1:38440/v1/responses`，再这样启动 Kodeks：
 
 ```bash
-KODEKS_MODEL_PROVIDER=moonbridge bun run dev
+KODEKS_BRIDGE_DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY pnpm run bridge:start
+KODEKS_MODEL_PROVIDER=bridge pnpm run dev
 ```
 
-这个模式下，Kodeks 会发送 Responses API 形态的请求到 Moon Bridge，再由 Moon Bridge 路由到 DeepSeek V4。官方教程见：<https://github.com/deepseek-ai/awesome-deepseek-agent/blob/main/docs/codex.md>。
+这个模式下，Kodeks 会发送 Responses API 形态的请求到本地 bridge，再由 bridge 通过 Chat Completions 路由到 DeepSeek V4。
+
+Bridge helper 命令：
+
+```bash
+pnpm run bridge:start
+pnpm run bridge:health
+pnpm run bridge:smoke
+```
+
+旧的 `moonbridge:start`、`moonbridge:health`、`moonbridge:smoke` 脚本仍保留为内置 bridge 的兼容 alias。
 
 ## 开发
 
 ```bash
-bun run test
-bun run typecheck
-bun run lint
-bun run build
-bun run start
+pnpm run test
+pnpm run typecheck
+pnpm run lint
+pnpm run build
+pnpm run start
 ```
 
-仓库使用 Bun workspaces：
+仓库使用 pnpm workspaces：
 
 - `apps/web`: UI、API routes 和 stream adapters。
-- `packages/agent-runtime`: turn orchestration、context assembly、plan mode 和 agent/tool wrappers。
-- `packages/model`: 在同一个 runtime contract 下提供 Moon Bridge Responses、DeepSeek Chat Completions 和 OpenAI Responses model clients。
+- `packages/agent-runtime`: OpenAI Agents SDK turn orchestration、context assembly、plan mode 和本地 tool wrappers。
+- `packages/model`: DeepSeek Chat Completions 与直连 Responses-compatible model calls 的 fallback provider adapters。
+- `packages/responses-bridge`: 内置 Responses-to-DeepSeek bridge 和协议 adapter。
 - `packages/tools`: model-callable tool registry 和 policy wrappers。
 - `packages/workspace`: workspace path policy、file access 和 shell execution。
 - `packages/storage`: SQLite repositories。

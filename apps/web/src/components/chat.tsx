@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import KodeksApproval from "@/components/kodeks-approval";
-import LoadingMessage from "@/components/loading-message";
-import { MaterialIcon } from "@/components/material-icon";
-import Message from "@/components/message";
-import RuntimeItem from "@/components/runtime-item";
-import ToolCall from "@/components/tool-call";
-import type { TimelineItem } from "@/lib/conversation-timeline";
-import type { UiCopy } from "@/lib/ui-copy";
+import KodeksApproval from '@/components/kodeks-approval';
+import LoadingMessage from '@/components/loading-message';
+import { MaterialIcon } from '@/components/material-icon';
+import Message from '@/components/message';
+import RuntimeItem from '@/components/runtime-item';
+import ToolCall from '@/components/tool-call';
+import type { TimelineItem } from '@/lib/conversation-timeline';
+import type { UiCopy } from '@/lib/ui-copy';
 
 type ChatProps = {
   items: TimelineItem[];
@@ -17,7 +17,7 @@ type ChatProps = {
   copy: UiCopy;
   onSendMessage: (message: string) => void;
   onStop: () => void;
-  onApprovalResponse: (decision: "approve" | "reject", id: string) => void;
+  onApprovalResponse: (decision: 'approve' | 'reject', id: string) => void;
 };
 
 // 渲染 Kodeks 聊天区，并接收统一的语言文案配置。
@@ -30,23 +30,23 @@ const Chat: React.FC<ChatProps> = ({
   onApprovalResponse
 }) => {
   const itemsEndRef = useRef<HTMLDivElement>(null);
-  const [inputMessageText, setInputMessageText] = useState("");
+  const [inputMessageText, setInputMessageText] = useState('');
   const [isComposing, setIsComposing] = useState(false);
 
   // 保持最新消息可见，避免流式输出时用户看不到新内容。
   function scrollToBottom() {
-    itemsEndRef.current?.scrollIntoView({ behavior: "instant" });
+    itemsEndRef.current?.scrollIntoView({ behavior: 'instant' });
   }
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey && !isComposing) {
+      if (event.key === 'Enter' && !event.shiftKey && !isComposing) {
         event.preventDefault();
         if (!inputMessageText.trim() || isAssistantLoading) {
           return;
         }
         onSendMessage(inputMessageText);
-        setInputMessageText("");
+        setInputMessageText('');
       }
     },
     [inputMessageText, isAssistantLoading, isComposing, onSendMessage]
@@ -62,7 +62,7 @@ const Chat: React.FC<ChatProps> = ({
       return;
     }
     onSendMessage(inputMessageText);
-    setInputMessageText("");
+    setInputMessageText('');
   }
 
   return (
@@ -72,14 +72,18 @@ const Chat: React.FC<ChatProps> = ({
           <div className="mt-auto space-y-5 pt-4">
             {items.map((item) => (
               <React.Fragment key={item.id}>
-                {item.type === "tool" ? (
+                {item.type === 'tool' ? (
                   <ToolCall copy={copy.toolCall} toolCall={item} />
-                ) : item.type === "message" ? (
+                ) : item.type === 'message' ? (
                   <div className="flex flex-col gap-1">
                     <Message message={item} />
                   </div>
-                ) : item.type === "approval" ? (
-                  <KodeksApproval copy={copy.approval} item={item} onRespond={onApprovalResponse} />
+                ) : item.type === 'approval' ? (
+                  <KodeksApproval
+                    copy={copy.approval}
+                    item={item}
+                    onRespond={onApprovalResponse}
+                  />
                 ) : (
                   <RuntimeItem copy={copy.runtime} item={item} />
                 )}
@@ -99,7 +103,9 @@ const Chat: React.FC<ChatProps> = ({
                       className="mb-2 resize-none border-0 bg-transparent px-0 pb-6 pt-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50 dark:placeholder:text-zinc-500"
                       dir="auto"
                       id="prompt-textarea"
-                      onChange={(event) => setInputMessageText(event.target.value)}
+                      onChange={(event) =>
+                        setInputMessageText(event.target.value)
+                      }
                       onCompositionEnd={() => setIsComposing(false)}
                       onCompositionStart={() => setIsComposing(true)}
                       onKeyDown={handleKeyDown}

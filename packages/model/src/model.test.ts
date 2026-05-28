@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
 import {
   DeepSeekChatCompletionsClient,
@@ -10,35 +10,35 @@ import {
   toOpenAIResponsesInput,
   toOpenAIResponsesTools,
   type ChatToolDefinition
-} from "./index";
+} from './index';
 
-describe("toOpenAIResponsesTools", () => {
-  it("maps internal tool definitions to Responses API function tools", () => {
+describe('toOpenAIResponsesTools', () => {
+  it('maps internal tool definitions to Responses API function tools', () => {
     const tools: ChatToolDefinition[] = [
       {
-        name: "read_file",
-        description: "Read a file",
+        name: 'read_file',
+        description: 'Read a file',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
-            path: { type: "string" }
+            path: { type: 'string' }
           },
-          required: ["path"]
+          required: ['path']
         }
       }
     ];
 
     expect(toOpenAIResponsesTools(tools)).toEqual([
       {
-        type: "function",
-        name: "read_file",
-        description: "Read a file",
+        type: 'function',
+        name: 'read_file',
+        description: 'Read a file',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
-            path: { type: "string" }
+            path: { type: 'string' }
           },
-          required: ["path"]
+          required: ['path']
         },
         strict: false
       }
@@ -46,91 +46,102 @@ describe("toOpenAIResponsesTools", () => {
   });
 });
 
-describe("toOpenAIResponsesInput", () => {
-  it("maps previous assistant text as Responses API output text", () => {
+describe('toOpenAIResponsesInput', () => {
+  it('maps previous assistant text as Responses API output text', () => {
     expect(
       toOpenAIResponsesInput([
-        { role: "user", content: "hi" },
-        { role: "assistant", content: "你好，有什么可以帮你？" },
-        { role: "user", content: "继续" }
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: '你好，有什么可以帮你？' },
+        { role: 'user', content: '继续' }
       ])
     ).toEqual({
       input: [
         {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: "hi" }]
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hi' }]
         },
         {
-          type: "message",
-          role: "assistant",
-          content: [{ type: "output_text", text: "你好，有什么可以帮你？", annotations: [] }]
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: '你好，有什么可以帮你？',
+              annotations: []
+            }
+          ]
         },
         {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: "继续" }]
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: '继续' }]
         }
       ]
     });
   });
 
-  it("maps assistant tool calls and tool outputs to Responses API items", () => {
+  it('maps assistant tool calls and tool outputs to Responses API items', () => {
     expect(
       toOpenAIResponsesInput([
-        { role: "system", content: "You are Kodeks." },
-        { role: "user", content: "read README" },
+        { role: 'system', content: 'You are Kodeks.' },
+        { role: 'user', content: 'read README' },
         {
-          role: "assistant",
-          content: "",
+          role: 'assistant',
+          content: '',
           toolCalls: [
             {
-              id: "call_1",
-              name: "read_file",
-              args: { path: "README.md" }
+              id: 'call_1',
+              name: 'read_file',
+              args: { path: 'README.md' }
             }
           ]
         },
-        { role: "tool", content: "project docs", toolCallId: "call_1", name: "read_file" }
+        {
+          role: 'tool',
+          content: 'project docs',
+          toolCallId: 'call_1',
+          name: 'read_file'
+        }
       ])
     ).toEqual({
-      instructions: "You are Kodeks.",
+      instructions: 'You are Kodeks.',
       input: [
         {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: "read README" }]
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'read README' }]
         },
         {
-          type: "function_call",
-          call_id: "call_1",
-          name: "read_file",
-          arguments: JSON.stringify({ path: "README.md" })
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'read_file',
+          arguments: JSON.stringify({ path: 'README.md' })
         },
         {
-          type: "function_call_output",
-          call_id: "call_1",
-          output: "project docs"
+          type: 'function_call_output',
+          call_id: 'call_1',
+          output: 'project docs'
         }
       ]
     });
   });
 });
 
-describe("OpenAIResponsesClient", () => {
-  it("streams Responses API text and final completion into model events", async () => {
+describe('OpenAIResponsesClient', () => {
+  it('streams Responses API text and final completion into model events', async () => {
     const calls: unknown[] = [];
     const client = new OpenAIResponsesClient({
-      apiKey: "test-key",
-      baseURL: "https://example.test/v1",
-      model: "gpt-test",
+      apiKey: 'test-key',
+      baseURL: 'https://example.test/v1',
+      model: 'gpt-test',
       client: {
         responses: {
           create: async (payload: unknown) => {
             calls.push(payload);
             return streamEvents([
-              { type: "response.output_text.delta", delta: "Hello" },
-              { type: "response.completed", response: { id: "resp_1" } }
+              { type: 'response.output_text.delta', delta: 'Hello' },
+              { type: 'response.completed', response: { id: 'resp_1' } }
             ]);
           }
         }
@@ -140,14 +151,17 @@ describe("OpenAIResponsesClient", () => {
     const events = await collectEvents(
       client.streamTurn({
         messages: [
-          { role: "system", content: "You are Kodeks." },
-          { role: "user", content: "read README" }
+          { role: 'system', content: 'You are Kodeks.' },
+          { role: 'user', content: 'read README' }
         ],
         tools: [
           {
-            name: "read_file",
-            description: "Read a file",
-            parameters: { type: "object", properties: { path: { type: "string" } } }
+            name: 'read_file',
+            description: 'Read a file',
+            parameters: {
+              type: 'object',
+              properties: { path: { type: 'string' } }
+            }
           }
         ]
       })
@@ -155,21 +169,24 @@ describe("OpenAIResponsesClient", () => {
 
     expect(calls).toEqual([
       {
-        model: "gpt-test",
-        instructions: "You are Kodeks.",
+        model: 'gpt-test',
+        instructions: 'You are Kodeks.',
         input: [
           {
-            type: "message",
-            role: "user",
-            content: [{ type: "input_text", text: "read README" }]
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'read README' }]
           }
         ],
         tools: [
           {
-            type: "function",
-            name: "read_file",
-            description: "Read a file",
-            parameters: { type: "object", properties: { path: { type: "string" } } },
+            type: 'function',
+            name: 'read_file',
+            description: 'Read a file',
+            parameters: {
+              type: 'object',
+              properties: { path: { type: 'string' } }
+            },
             strict: false
           }
         ],
@@ -177,22 +194,24 @@ describe("OpenAIResponsesClient", () => {
       }
     ]);
     expect(events).toEqual([
-      { type: "text_delta", text: "Hello" },
-      { type: "response_completed", responseId: "resp_1" }
+      { type: 'text_delta', text: 'Hello' },
+      { type: 'response_completed', responseId: 'resp_1' }
     ]);
   });
 
-  it("passes configured reasoning effort to the Responses API", async () => {
+  it('passes configured reasoning effort to the Responses API', async () => {
     const calls: unknown[] = [];
     const client = new OpenAIResponsesClient({
-      apiKey: "test-key",
-      model: "gpt-test",
-      reasoningEffort: "medium",
+      apiKey: 'test-key',
+      model: 'gpt-test',
+      reasoningEffort: 'medium',
       client: {
         responses: {
           create: async (payload: unknown) => {
             calls.push(payload);
-            return streamEvents([{ type: "response.completed", response: { id: "resp_reasoning" } }]);
+            return streamEvents([
+              { type: 'response.completed', response: { id: 'resp_reasoning' } }
+            ]);
           }
         }
       }
@@ -200,35 +219,35 @@ describe("OpenAIResponsesClient", () => {
 
     await collectEvents(
       client.streamTurn({
-        messages: [{ role: "user", content: "hello" }],
+        messages: [{ role: 'user', content: 'hello' }],
         tools: []
       })
     );
 
     expect(calls[0]).toMatchObject({
-      model: "gpt-test",
-      reasoning: { effort: "medium" }
+      model: 'gpt-test',
+      reasoning: { effort: 'medium' }
     });
   });
 
-  it("does not mark a function-call response as final before tool outputs are sent", async () => {
+  it('does not mark a function-call response as final before tool outputs are sent', async () => {
     const client = new OpenAIResponsesClient({
-      apiKey: "test-key",
-      model: "gpt-test",
+      apiKey: 'test-key',
+      model: 'gpt-test',
       client: {
         responses: {
           create: async () =>
             streamEvents([
               {
-                type: "response.output_item.done",
+                type: 'response.output_item.done',
                 item: {
-                  type: "function_call",
-                  call_id: "call_1",
-                  name: "read_file",
-                  arguments: JSON.stringify({ path: "README.md" })
+                  type: 'function_call',
+                  call_id: 'call_1',
+                  name: 'read_file',
+                  arguments: JSON.stringify({ path: 'README.md' })
                 }
               },
-              { type: "response.completed", response: { id: "resp_tool" } }
+              { type: 'response.completed', response: { id: 'resp_tool' } }
             ])
         }
       }
@@ -237,42 +256,49 @@ describe("OpenAIResponsesClient", () => {
     await expect(
       collectEvents(
         client.streamTurn({
-          messages: [{ role: "user", content: "read README" }],
+          messages: [{ role: 'user', content: 'read README' }],
           tools: []
         })
       )
-    ).resolves.toEqual([{ type: "tool_call", id: "call_1", name: "read_file", args: { path: "README.md" } }]);
+    ).resolves.toEqual([
+      {
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'read_file',
+        args: { path: 'README.md' }
+      }
+    ]);
   });
 });
 
-describe("toDeepSeekChatTools", () => {
-  it("maps internal tool definitions to Chat Completions function tools", () => {
+describe('toDeepSeekChatTools', () => {
+  it('maps internal tool definitions to Chat Completions function tools', () => {
     const tools: ChatToolDefinition[] = [
       {
-        name: "read_file",
-        description: "Read a file",
+        name: 'read_file',
+        description: 'Read a file',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
-            path: { type: "string" }
+            path: { type: 'string' }
           },
-          required: ["path"]
+          required: ['path']
         }
       }
     ];
 
     expect(toDeepSeekChatTools(tools)).toEqual([
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "read_file",
-          description: "Read a file",
+          name: 'read_file',
+          description: 'Read a file',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              path: { type: "string" }
+              path: { type: 'string' }
             },
-            required: ["path"]
+            required: ['path']
           }
         }
       }
@@ -280,71 +306,81 @@ describe("toDeepSeekChatTools", () => {
   });
 });
 
-describe("toDeepSeekChatMessages", () => {
-  it("maps assistant tool calls and tool outputs to Chat Completions messages", () => {
+describe('toDeepSeekChatMessages', () => {
+  it('maps assistant tool calls and tool outputs to Chat Completions messages', () => {
     expect(
       toDeepSeekChatMessages([
-        { role: "system", content: "You are Kodeks." },
-        { role: "user", content: "read README" },
+        { role: 'system', content: 'You are Kodeks.' },
+        { role: 'user', content: 'read README' },
         {
-          role: "assistant",
-          content: "",
-          reasoningContent: "Need to inspect the README first.",
+          role: 'assistant',
+          content: '',
+          reasoningContent: 'Need to inspect the README first.',
           toolCalls: [
             {
-              id: "call_1",
-              name: "read_file",
-              args: { path: "README.md" }
+              id: 'call_1',
+              name: 'read_file',
+              args: { path: 'README.md' }
             }
           ]
         },
-        { role: "tool", content: "project docs", toolCallId: "call_1", name: "read_file" }
+        {
+          role: 'tool',
+          content: 'project docs',
+          toolCallId: 'call_1',
+          name: 'read_file'
+        }
       ])
     ).toEqual([
-      { role: "system", content: "You are Kodeks." },
-      { role: "user", content: "read README" },
+      { role: 'system', content: 'You are Kodeks.' },
+      { role: 'user', content: 'read README' },
       {
-        role: "assistant",
+        role: 'assistant',
         content: null,
-        reasoning_content: "Need to inspect the README first.",
+        reasoning_content: 'Need to inspect the README first.',
         tool_calls: [
           {
-            id: "call_1",
-            type: "function",
+            id: 'call_1',
+            type: 'function',
             function: {
-              name: "read_file",
-              arguments: JSON.stringify({ path: "README.md" })
+              name: 'read_file',
+              arguments: JSON.stringify({ path: 'README.md' })
             }
           }
         ]
       },
-      { role: "tool", content: "project docs", tool_call_id: "call_1", name: "read_file" }
+      {
+        role: 'tool',
+        content: 'project docs',
+        tool_call_id: 'call_1',
+        name: 'read_file'
+      }
     ]);
   });
 });
 
-describe("toDeepSeekThinkingOptions", () => {
-  it("disables thinking when reasoning effort is none", () => {
-    expect(toDeepSeekThinkingOptions("none")).toEqual({
-      thinking: { type: "disabled" }
+describe('toDeepSeekThinkingOptions', () => {
+  it('disables thinking when reasoning effort is none', () => {
+    expect(toDeepSeekThinkingOptions('none')).toEqual({
+      thinking: { type: 'disabled' }
     });
   });
 
-  it("maps xhigh to DeepSeek max thinking", () => {
-    expect(toDeepSeekThinkingOptions("xhigh")).toEqual({
-      thinking: { type: "enabled" },
-      reasoning_effort: "max"
+  it('maps xhigh to DeepSeek max thinking', () => {
+    expect(toDeepSeekThinkingOptions('xhigh')).toEqual({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'max'
     });
   });
 });
 
-describe("DeepSeekChatCompletionsClient", () => {
-  it("streams Chat Completions text without exposing reasoning content", async () => {
+describe('DeepSeekChatCompletionsClient', () => {
+  it('streams Chat Completions text without exposing reasoning content', async () => {
     const calls: unknown[] = [];
     const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      baseURL: "https://api.deepseek.test",
-      model: "deepseek-v4-pro",
+      apiKey: 'test-key',
+      baseURL: 'https://api.deepseek.test',
+      model: 'deepseek-v4-pro',
       client: {
         chat: {
           completions: {
@@ -352,16 +388,21 @@ describe("DeepSeekChatCompletionsClient", () => {
               calls.push(payload);
               return streamEvents([
                 {
-                  id: "chatcmpl_1",
-                  choices: [{ delta: { reasoning_content: "private chain" }, finish_reason: null }]
+                  id: 'chatcmpl_1',
+                  choices: [
+                    {
+                      delta: { reasoning_content: 'private chain' },
+                      finish_reason: null
+                    }
+                  ]
                 },
                 {
-                  id: "chatcmpl_1",
-                  choices: [{ delta: { content: "你好" }, finish_reason: null }]
+                  id: 'chatcmpl_1',
+                  choices: [{ delta: { content: '你好' }, finish_reason: null }]
                 },
                 {
-                  id: "chatcmpl_1",
-                  choices: [{ delta: {}, finish_reason: "stop" }]
+                  id: 'chatcmpl_1',
+                  choices: [{ delta: {}, finish_reason: 'stop' }]
                 }
               ]);
             }
@@ -372,45 +413,48 @@ describe("DeepSeekChatCompletionsClient", () => {
 
     const events = await collectEvents(
       client.streamTurn({
-        messages: [{ role: "user", content: "hello" }],
+        messages: [{ role: 'user', content: 'hello' }],
         tools: []
       })
     );
 
     expect(calls[0]).toMatchObject({
-      model: "deepseek-v4-pro",
-      messages: [{ role: "user", content: "hello" }],
-      thinking: { type: "enabled" },
-      reasoning_effort: "high",
+      model: 'deepseek-v4-pro',
+      messages: [{ role: 'user', content: 'hello' }],
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
       stream: true
     });
     expect(events).toEqual([
-      { type: "text_delta", text: "你好" },
-      { type: "response_completed", responseId: "chatcmpl_1" }
+      { type: 'text_delta', text: '你好' },
+      { type: 'response_completed', responseId: 'chatcmpl_1' }
     ]);
   });
 
-  it("merges streamed tool call chunks and preserves reasoning for continuation", async () => {
+  it('merges streamed tool call chunks and preserves reasoning for continuation', async () => {
     const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      model: "deepseek-v4-pro",
+      apiKey: 'test-key',
+      model: 'deepseek-v4-pro',
       client: {
         chat: {
           completions: {
             create: async () =>
               streamEvents([
                 {
-                  id: "chatcmpl_tool",
+                  id: 'chatcmpl_tool',
                   choices: [
                     {
                       delta: {
-                        reasoning_content: "Need the file.",
+                        reasoning_content: 'Need the file.',
                         tool_calls: [
                           {
                             index: 0,
-                            id: "call_1",
-                            type: "function",
-                            function: { name: "read_file", arguments: "{\"path\"" }
+                            id: 'call_1',
+                            type: 'function',
+                            function: {
+                              name: 'read_file',
+                              arguments: '{"path"'
+                            }
                           }
                         ]
                       },
@@ -419,19 +463,19 @@ describe("DeepSeekChatCompletionsClient", () => {
                   ]
                 },
                 {
-                  id: "chatcmpl_tool",
+                  id: 'chatcmpl_tool',
                   choices: [
                     {
                       delta: {
-                        reasoning_content: " Then summarize.",
+                        reasoning_content: ' Then summarize.',
                         tool_calls: [
                           {
                             index: 0,
-                            function: { arguments: ":\"README.md\"}" }
+                            function: { arguments: ':"README.md"}' }
                           }
                         ]
                       },
-                      finish_reason: "tool_calls"
+                      finish_reason: 'tool_calls'
                     }
                   ]
                 }
@@ -444,25 +488,25 @@ describe("DeepSeekChatCompletionsClient", () => {
     await expect(
       collectEvents(
         client.streamTurn({
-          messages: [{ role: "user", content: "read README" }],
+          messages: [{ role: 'user', content: 'read README' }],
           tools: []
         })
       )
     ).resolves.toEqual([
       {
-        type: "tool_call",
-        id: "call_1",
-        name: "read_file",
-        args: { path: "README.md" },
-        reasoningContent: "Need the file. Then summarize."
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'read_file',
+        args: { path: 'README.md' },
+        reasoningContent: 'Need the file. Then summarize.'
       }
     ]);
   });
 
-  it("returns empty tool args when streamed arguments are malformed", async () => {
+  it('returns empty tool args when streamed arguments are malformed', async () => {
     const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      model: "deepseek-v4-pro",
+      apiKey: 'test-key',
+      model: 'deepseek-v4-pro',
       client: {
         chat: {
           completions: {
@@ -475,12 +519,15 @@ describe("DeepSeekChatCompletionsClient", () => {
                         tool_calls: [
                           {
                             index: 0,
-                            id: "call_bad",
-                            function: { name: "read_file", arguments: "not-json" }
+                            id: 'call_bad',
+                            function: {
+                              name: 'read_file',
+                              arguments: 'not-json'
+                            }
                           }
                         ]
                       },
-                      finish_reason: "tool_calls"
+                      finish_reason: 'tool_calls'
                     }
                   ]
                 }
@@ -493,91 +540,167 @@ describe("DeepSeekChatCompletionsClient", () => {
     await expect(
       collectEvents(
         client.streamTurn({
-          messages: [{ role: "user", content: "read README" }],
+          messages: [{ role: 'user', content: 'read README' }],
           tools: []
         })
       )
-    ).resolves.toEqual([{ type: "tool_call", id: "call_bad", name: "read_file", args: {} }]);
+    ).resolves.toEqual([
+      { type: 'tool_call', id: 'call_bad', name: 'read_file', args: {} }
+    ]);
   });
 });
 
-describe("resolveModelClientOptions", () => {
-  it("prefers Moon Bridge Responses when configured", () => {
+describe('resolveModelClientOptions', () => {
+  it('prefers built-in bridge Responses when configured', () => {
     expect(
       resolveModelClientOptions({
-        MOONBRIDGE_ENABLED: "true",
-        MOONBRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
-        MOONBRIDGE_MODEL: "moonbridge",
-        DEEPSEEK_API_KEY: "deepseek-key",
-        OPENAI_API_KEY: "openai-key"
+        KODEKS_BRIDGE_ENABLED: 'true',
+        KODEKS_BRIDGE_BASE_URL: 'http://127.0.0.1:38440/v1',
+        KODEKS_BRIDGE_MODEL: 'bridge',
+        DEEPSEEK_API_KEY: 'deepseek-key',
+        OPENAI_API_KEY: 'openai-key'
       })
     ).toEqual({
-      provider: "moonbridge",
-      apiKey: "moonbridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "moonbridge",
-      reasoningEffort: "high"
+      provider: 'bridge',
+      apiKey: 'bridge',
+      baseURL: 'http://127.0.0.1:38440/v1',
+      model: 'bridge',
+      reasoningEffort: 'high'
     });
   });
 
-  it("uses Moon Bridge defaults when selected explicitly", () => {
+  it('uses bridge defaults when selected explicitly', () => {
     expect(
       resolveModelClientOptions({
-        KODEKS_MODEL_PROVIDER: "moonbridge"
+        KODEKS_MODEL_PROVIDER: 'bridge'
       })
     ).toEqual({
-      provider: "moonbridge",
-      apiKey: "moonbridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "moonbridge",
-      reasoningEffort: "high"
+      provider: 'bridge',
+      apiKey: 'bridge',
+      baseURL: 'http://127.0.0.1:38440/v1',
+      model: 'bridge',
+      reasoningEffort: 'high'
     });
   });
 
-  it("can force DeepSeek direct mode even when Moon Bridge env exists", () => {
+  it('keeps Moon Bridge environment names as compatibility aliases', () => {
     expect(
       resolveModelClientOptions({
-        KODEKS_MODEL_PROVIDER: "deepseek",
-        MOONBRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
-        DEEPSEEK_API_KEY: "deepseek-key"
+        KODEKS_MODEL_PROVIDER: 'moonbridge',
+        MOONBRIDGE_API_KEY: 'moonbridge-key',
+        MOONBRIDGE_BASE_URL: 'http://127.0.0.1:38440/v1',
+        MOONBRIDGE_MODEL: 'moonbridge'
       })
     ).toEqual({
-      provider: "deepseek",
-      apiKey: "deepseek-key",
-      baseURL: "https://api.deepseek.com",
-      model: "deepseek-v4-pro",
-      reasoningEffort: "high"
+      provider: 'moonbridge',
+      apiKey: 'moonbridge-key',
+      baseURL: 'http://127.0.0.1:38440/v1',
+      model: 'moonbridge',
+      reasoningEffort: 'high'
     });
   });
 
-  it("prefers DeepSeek over OpenAI when both keys are configured", () => {
+  it('can force DeepSeek direct mode even when bridge env exists', () => {
     expect(
       resolveModelClientOptions({
-        DEEPSEEK_API_KEY: "deepseek-key",
-        DEEPSEEK_BASE_URL: "https://api.deepseek.test",
-        DEEPSEEK_MODEL: "deepseek-test",
-        OPENAI_API_KEY: "openai-key"
+        KODEKS_MODEL_PROVIDER: 'deepseek',
+        KODEKS_BRIDGE_BASE_URL: 'http://127.0.0.1:38440/v1',
+        DEEPSEEK_API_KEY: 'deepseek-key'
       })
     ).toEqual({
-      provider: "deepseek",
-      apiKey: "deepseek-key",
-      baseURL: "https://api.deepseek.test",
-      model: "deepseek-test",
-      reasoningEffort: "high"
+      provider: 'deepseek',
+      apiKey: 'deepseek-key',
+      baseURL: 'https://api.deepseek.com',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: 'high'
     });
   });
 
-  it("falls back to OpenAI Responses when DeepSeek is not configured", () => {
+  it('uses request-level MoonBridge override before configured OpenAI', () => {
     expect(
-      resolveModelClientOptions({
-        OPENAI_API_KEY: "openai-key"
-      })
+      resolveModelClientOptions(
+        {
+          OPENAI_API_KEY: 'openai-key',
+          MOONBRIDGE_MODEL: 'moonbridge-session'
+        },
+        undefined,
+        'moonbridge'
+      )
     ).toEqual({
-      provider: "openai",
-      apiKey: "openai-key",
+      provider: 'moonbridge',
+      apiKey: 'bridge',
+      baseURL: 'http://127.0.0.1:38440/v1',
+      model: 'moonbridge-session',
+      reasoningEffort: 'high'
+    });
+  });
+
+  it('uses request-level OpenAI override before configured bridge', () => {
+    expect(
+      resolveModelClientOptions(
+        {
+          KODEKS_BRIDGE_ENABLED: 'true',
+          OPENAI_API_KEY: 'openai-key'
+        },
+        undefined,
+        'openai'
+      )
+    ).toEqual({
+      provider: 'openai',
+      apiKey: 'openai-key',
       baseURL: undefined,
-      model: "gpt-5.4-mini",
-      reasoningEffort: "medium"
+      model: 'gpt-5.4-mini',
+      reasoningEffort: 'medium'
+    });
+  });
+
+  it('uses request-level DeepSeek override before configured OpenAI', () => {
+    expect(
+      resolveModelClientOptions(
+        {
+          OPENAI_API_KEY: 'openai-key',
+          DEEPSEEK_API_KEY: 'deepseek-key'
+        },
+        undefined,
+        'deepseek'
+      )
+    ).toEqual({
+      provider: 'deepseek',
+      apiKey: 'deepseek-key',
+      baseURL: 'https://api.deepseek.com',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: 'high'
+    });
+  });
+
+  it('prefers OpenAI Responses over DeepSeek fallback when both keys are configured', () => {
+    expect(
+      resolveModelClientOptions({
+        DEEPSEEK_API_KEY: 'deepseek-key',
+        DEEPSEEK_BASE_URL: 'https://api.deepseek.test',
+        DEEPSEEK_MODEL: 'deepseek-test',
+        OPENAI_API_KEY: 'openai-key'
+      })
+    ).toEqual({
+      provider: 'openai',
+      apiKey: 'openai-key',
+      baseURL: undefined,
+      model: 'gpt-5.4-mini',
+      reasoningEffort: 'medium'
+    });
+  });
+
+  it('falls back to OpenAI Responses when DeepSeek is not configured', () => {
+    expect(
+      resolveModelClientOptions({
+        OPENAI_API_KEY: 'openai-key'
+      })
+    ).toEqual({
+      provider: 'openai',
+      apiKey: 'openai-key',
+      baseURL: undefined,
+      model: 'gpt-5.4-mini',
+      reasoningEffort: 'medium'
     });
   });
 });

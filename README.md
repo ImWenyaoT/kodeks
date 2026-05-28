@@ -14,10 +14,9 @@ The legacy Python implementation has been removed from the active repository; th
 
 - Next.js App Router web app and API routes.
 - Streaming chat over Server-Sent Events.
-- Moon Bridge Responses provider for running DeepSeek through an OpenAI Responses-compatible local bridge.
-- DeepSeek Chat Completions adapter with Thinking Mode and function tool streaming.
-- OpenAI Responses API adapter kept as a fallback provider.
-- OpenAI Agents SDK wrapper construction for agents and tools.
+- OpenAI Agents SDK as the primary agent runtime, pinned to the Responses API for OpenAI-compatible providers.
+- Built-in TypeScript Responses bridge for running DeepSeek through an OpenAI Responses-compatible local endpoint.
+- DeepSeek Chat Completions adapter kept as the non-Responses fallback with Thinking Mode and function tool streaming.
 - Workspace-scoped file tools with internal path blocking.
 - Shell execution harness with timeout and dangerous command detection.
 - SQLite-backed sessions, transcripts, memories, approvals, subagent runs, and audit logs.
@@ -27,8 +26,8 @@ The legacy Python implementation has been removed from the active repository; th
 ## Quick Start
 
 ```bash
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `http://127.0.0.1:3000`.
@@ -37,14 +36,14 @@ Next.js defaults to port 3000 when it is free. For repeatable local development,
 prefer an explicit port so another app on 3000 cannot change the URL you use:
 
 ```bash
-PORT=3001 bun run dev
+PORT=3001 pnpm run dev
 APP_URL=http://127.0.0.1:3001
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:PORT=3001; bun run dev
+$env:PORT=3001; pnpm run dev
 $env:APP_URL="http://127.0.0.1:3001"
 ```
 
@@ -77,15 +76,16 @@ curl -N -X POST "$APP_URL/api/chat/ui-stream" \
 
 Required:
 
-- `KODEKS_MODEL_PROVIDER=moonbridge` when Moon Bridge is running, or `DEEPSEEK_API_KEY` for direct DeepSeek Chat Completions, or `OPENAI_API_KEY` for the OpenAI Responses fallback.
+- `OPENAI_API_KEY` for the default OpenAI Agents SDK + Responses path, `KODEKS_MODEL_PROVIDER=bridge` with the local bridge, or `DEEPSEEK_API_KEY` for direct DeepSeek Chat Completions fallback.
 
 Optional:
 
-- `KODEKS_MODEL_PROVIDER` can be `moonbridge`, `deepseek`, or `openai`
-- `MOONBRIDGE_ENABLED=true` also enables the Moon Bridge Responses path
-- `MOONBRIDGE_BASE_URL` defaults to `http://127.0.0.1:38440/v1`
-- `MOONBRIDGE_MODEL` defaults to `moonbridge`
-- `MOONBRIDGE_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
+- `KODEKS_MODEL_PROVIDER` can be `bridge`, `moonbridge`, `deepseek`, or `openai`
+- `KODEKS_BRIDGE_ENABLED=true` enables the built-in bridge Responses path
+- `KODEKS_BRIDGE_BASE_URL` defaults to `http://127.0.0.1:38440/v1`
+- `KODEKS_BRIDGE_MODEL` defaults to `bridge`
+- `KODEKS_BRIDGE_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
+- `MOONBRIDGE_*` environment names are still accepted as compatibility aliases
 - `DEEPSEEK_BASE_URL` defaults to `https://api.deepseek.com`
 - `DEEPSEEK_MODEL` defaults to `deepseek-v4-pro`
 - `DEEPSEEK_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
@@ -97,31 +97,43 @@ Optional:
 
 Runtime state is written under `.kodeks/` by default and is intentionally ignored by Git.
 
-### Moon Bridge + DeepSeek Responses
+### Built-in Bridge + DeepSeek Responses
 
-DeepSeek's official Codex guide recommends using Moon Bridge as a local Responses-compatible bridge. Start Moon Bridge so it exposes `http://127.0.0.1:38440/v1/responses`, then run Kodeks with:
+Start the built-in TypeScript bridge so it exposes `http://127.0.0.1:38440/v1/responses`, then run Kodeks with:
 
 ```bash
-KODEKS_MODEL_PROVIDER=moonbridge bun run dev
+KODEKS_BRIDGE_DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY pnpm run bridge:start
+KODEKS_MODEL_PROVIDER=bridge pnpm run dev
 ```
 
-In this mode Kodeks sends Responses API-shaped requests to Moon Bridge, and Moon Bridge routes them to DeepSeek V4. See the DeepSeek guide: <https://github.com/deepseek-ai/awesome-deepseek-agent/blob/main/docs/codex.md>.
+In this mode Kodeks sends Responses API-shaped requests to its local bridge, and the bridge routes them to DeepSeek V4 through Chat Completions.
+
+Bridge helpers:
+
+```bash
+pnpm run bridge:start
+pnpm run bridge:health
+pnpm run bridge:smoke
+```
+
+The old `moonbridge:start`, `moonbridge:health`, and `moonbridge:smoke` scripts remain compatibility aliases for the built-in bridge.
 
 ## Development
 
 ```bash
-bun run test
-bun run typecheck
-bun run lint
-bun run build
-bun run start
+pnpm run test
+pnpm run typecheck
+pnpm run lint
+pnpm run build
+pnpm run start
 ```
 
-The repository uses Bun workspaces:
+The repository uses pnpm workspaces:
 
 - `apps/web`: UI, API routes, and stream adapters.
-- `packages/agent-runtime`: turn orchestration, context assembly, plan mode, and agent/tool wrappers.
-- `packages/model`: Moon Bridge Responses, DeepSeek Chat Completions, and OpenAI Responses model clients behind one runtime contract.
+- `packages/agent-runtime`: OpenAI Agents SDK turn orchestration, context assembly, plan mode, and local tool wrappers.
+- `packages/model`: fallback provider adapters for DeepSeek Chat Completions and direct Responses-compatible model calls.
+- `packages/responses-bridge`: built-in Responses-to-DeepSeek bridge with protocol adapters.
 - `packages/tools`: model-callable tool registry and policy wrappers.
 - `packages/workspace`: workspace path policy, file access, and shell execution.
 - `packages/storage`: SQLite repositories.

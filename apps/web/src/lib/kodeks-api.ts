@@ -1,10 +1,13 @@
-import { ChatMode, collectChatStream, type ChatStreamEvent } from "./chat-stream";
+import { collectChatStream, type ChatStreamEvent } from './chat-stream';
+import type { ChatMode } from './chat-stream';
+import type { ModelProviderOverride } from '@kodeks/model';
 
 export type SendChatMessageInput = {
   input: string;
   sessionId?: string;
   mode: ChatMode;
-  reasoningEffort: "low" | "medium" | "high" | "xhigh";
+  provider: ModelProviderOverride;
+  reasoningEffort: 'low' | 'medium' | 'high' | 'xhigh';
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
   onEvent: (event: ChatStreamEvent) => void;
@@ -15,20 +18,22 @@ export async function sendChatMessage({
   input,
   sessionId,
   mode,
+  provider,
   reasoningEffort,
   signal,
   onDelta,
   onEvent
 }: SendChatMessageInput): Promise<void> {
-  const response = await fetch("/api/chat/stream", {
-    method: "POST",
+  const response = await fetch('/api/chat/stream', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       input,
       ...(sessionId === undefined ? {} : { session_id: sessionId }),
       mode,
+      provider,
       reasoning_effort: reasoningEffort
     }),
     signal
