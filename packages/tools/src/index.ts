@@ -1,19 +1,16 @@
-import { readdir, readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { readdir, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-import type { KodeksDatabase } from "@kodeks/storage";
-import {
-  ShellCommandTimeoutError,
-  WorkspaceService,
-  runCommand
-} from "@kodeks/workspace";
+import type { KodeksDatabase } from '@kodeks/storage';
+import { ShellCommandTimeoutError, runCommand } from '@kodeks/workspace';
+import type { WorkspaceService } from '@kodeks/workspace';
 
-import { defaultToolDefinitions, type ToolDefinition } from "./definitions";
+import { defaultToolDefinitions, type ToolDefinition } from './definitions';
 
-export { defaultToolDefinitions, type ToolDefinition } from "./definitions";
+export { defaultToolDefinitions, type ToolDefinition } from './definitions';
 
-export type ToolExecutionStatus = "completed" | "failed" | "approval_required";
+export type ToolExecutionStatus = 'completed' | 'failed' | 'approval_required';
 
 export type ToolExecutionResult = {
   status: ToolExecutionStatus;
@@ -24,7 +21,10 @@ export type RegisteredTool = {
   definition: ToolDefinition;
   readOnly: boolean;
   mutating: boolean;
-  handler: (arguments_: Record<string, unknown>, context: ToolExecutionContext) => Promise<ToolExecutionResult>;
+  handler: (
+    arguments_: Record<string, unknown>,
+    context: ToolExecutionContext
+  ) => Promise<ToolExecutionResult>;
 };
 
 export type ToolRegistryServices = {
@@ -34,7 +34,10 @@ export type ToolRegistryServices = {
   fetch?: FetchLike;
 };
 
-type FetchLike = (url: string, init?: { headers?: Record<string, string> }) => Promise<{
+type FetchLike = (
+  url: string,
+  init?: { headers?: Record<string, string> }
+) => Promise<{
   ok: boolean;
   status: number;
   statusText: string;
@@ -67,7 +70,9 @@ export class ToolRegistry {
   // Returns provider-facing definitions in stable registration order.
   definitions(options: { readOnlyOnly?: boolean } = {}): ToolDefinition[] {
     return [...this.tools.values()]
-      .filter((tool) => !options.readOnlyOnly || (tool.readOnly && !tool.mutating))
+      .filter(
+        (tool) => !options.readOnlyOnly || (tool.readOnly && !tool.mutating)
+      )
       .map((tool) => tool.definition);
   }
 
@@ -86,7 +91,9 @@ export class ToolRegistry {
 }
 
 // Builds the MVP tool registry from deterministic local services.
-export function buildDefaultToolRegistry(services: ToolRegistryServices): ToolRegistry {
+export function buildDefaultToolRegistry(
+  services: ToolRegistryServices
+): ToolRegistry {
   return new ToolRegistry([
     {
       definition: defaultToolDefinitions[0],
@@ -116,13 +123,15 @@ export function buildDefaultToolRegistry(services: ToolRegistryServices): ToolRe
       definition: defaultToolDefinitions[4],
       readOnly: false,
       mutating: true,
-      handler: (arguments_, context) => executeRunShell(arguments_, context, services)
+      handler: (arguments_, context) =>
+        executeRunShell(arguments_, context, services)
     },
     {
       definition: defaultToolDefinitions[5],
       readOnly: false,
       mutating: true,
-      handler: (arguments_, context) => executeRememberFact(arguments_, context, services)
+      handler: (arguments_, context) =>
+        executeRememberFact(arguments_, context, services)
     },
     {
       definition: defaultToolDefinitions[6],
@@ -134,22 +143,29 @@ export function buildDefaultToolRegistry(services: ToolRegistryServices): ToolRe
       definition: defaultToolDefinitions[7],
       readOnly: true,
       mutating: false,
-      handler: (arguments_, context) => executeSpawnExploreAgent(arguments_, context, services)
+      handler: (arguments_) => executeReadMemoryArtifact(arguments_, services)
     },
     {
       definition: defaultToolDefinitions[8],
       readOnly: true,
       mutating: false,
-      handler: () => executeListMcpServers(services)
+      handler: (arguments_, context) =>
+        executeSpawnExploreAgent(arguments_, context, services)
     },
     {
       definition: defaultToolDefinitions[9],
       readOnly: true,
       mutating: false,
-      handler: (arguments_) => executeListSkills(arguments_, services)
+      handler: () => executeListMcpServers(services)
     },
     {
       definition: defaultToolDefinitions[10],
+      readOnly: true,
+      mutating: false,
+      handler: (arguments_) => executeListSkills(arguments_, services)
+    },
+    {
+      definition: defaultToolDefinitions[11],
       readOnly: true,
       mutating: false,
       handler: (arguments_) => executeReadSkill(arguments_, services)
@@ -162,9 +178,9 @@ async function executeReadFile(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const path = stringArgument(arguments_, "path");
+  const path = stringArgument(arguments_, 'path');
   if (path === null) {
-    return failedOutput("read_file requires a non-empty string path");
+    return failedOutput('read_file requires a non-empty string path');
   }
   try {
     const content = await services.workspace.readFile(path);
@@ -179,21 +195,21 @@ async function executeWriteFile(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const path = stringArgument(arguments_, "path");
-  const content = stringArgument(arguments_, "content", { allowEmpty: true });
+  const path = stringArgument(arguments_, 'path');
+  const content = stringArgument(arguments_, 'content', { allowEmpty: true });
   if (path === null) {
-    return failedOutput("write_file requires a non-empty string path");
+    return failedOutput('write_file requires a non-empty string path');
   }
   if (content === null) {
-    return failedOutput("write_file requires string content", { path });
+    return failedOutput('write_file requires string content', { path });
   }
   try {
     await services.workspace.writeFile(path, content);
     return completedOutput({
       ok: true,
       path,
-      strategy: "whole_file_overwrite",
-      bytesWritten: Buffer.byteLength(content, "utf8")
+      strategy: 'whole_file_overwrite',
+      bytesWritten: Buffer.byteLength(content, 'utf8')
     });
   } catch (error) {
     return failedOutput(errorMessage(error), { path });
@@ -205,11 +221,12 @@ async function executeGrep(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const query = stringArgument(arguments_, "query");
+  const query = stringArgument(arguments_, 'query');
   const rawLimit = arguments_.limit;
-  const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit) ? rawLimit : 20;
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit) ? rawLimit : 20;
   if (query === null) {
-    return failedOutput("grep requires a non-empty string query");
+    return failedOutput('grep requires a non-empty string query');
   }
   const matches: Array<{ path: string; line: number; text: string }> = [];
   for (const path of await services.workspace.listFiles()) {
@@ -223,7 +240,7 @@ async function executeGrep(
     const lines = content.split(/\r?\n/u);
     for (let index = 0; index < lines.length; index += 1) {
       if (lines[index]?.includes(query)) {
-        matches.push({ path, line: index + 1, text: lines[index] ?? "" });
+        matches.push({ path, line: index + 1, text: lines[index] ?? '' });
       }
       if (matches.length >= limit) {
         break;
@@ -238,48 +255,56 @@ async function executeWebSearch(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const query = stringArgument(arguments_, "query");
+  const query = stringArgument(arguments_, 'query');
   if (query === null) {
-    return failedOutput("web_search requires a non-empty string query");
+    return failedOutput('web_search requires a non-empty string query');
   }
 
   const environment = services.environment ?? process.env;
   const apiKey = environment.BRAVE_SEARCH_API_KEY ?? environment.BRAVE_API_KEY;
   if (apiKey === undefined || apiKey.trim().length === 0) {
-    return failedOutput("Brave Search is not configured. Set BRAVE_SEARCH_API_KEY to enable web_search.", {
-      query
-    });
+    return failedOutput(
+      'Brave Search is not configured. Set BRAVE_SEARCH_API_KEY to enable web_search.',
+      {
+        query
+      }
+    );
   }
 
   const fetchClient = services.fetch ?? globalThis.fetch;
   if (fetchClient === undefined) {
-    return failedOutput("No fetch implementation is available for web_search", { query });
+    return failedOutput('No fetch implementation is available for web_search', {
+      query
+    });
   }
 
   const count = clampInteger(arguments_.count, 1, 10, 5);
-  const url = new URL("https://api.search.brave.com/res/v1/web/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("count", String(count));
-  const country = stringArgument(arguments_, "country");
+  const url = new URL('https://api.search.brave.com/res/v1/web/search');
+  url.searchParams.set('q', query);
+  url.searchParams.set('count', String(count));
+  const country = stringArgument(arguments_, 'country');
   if (country !== null) {
-    url.searchParams.set("country", country.toUpperCase());
+    url.searchParams.set('country', country.toUpperCase());
   }
 
   const response = await fetchClient(url.toString(), {
     headers: {
-      Accept: "application/json",
-      "X-Subscription-Token": apiKey
+      Accept: 'application/json',
+      'X-Subscription-Token': apiKey
     }
   });
   if (!response.ok) {
-    return failedOutput(`Brave Search failed with ${response.status} ${response.statusText}`, { query });
+    return failedOutput(
+      `Brave Search failed with ${response.status} ${response.statusText}`,
+      { query }
+    );
   }
 
   const payload = await response.json();
   const results = readBraveResults(payload);
   return completedOutput({
     ok: true,
-    provider: "brave",
+    provider: 'brave',
     query,
     results
   });
@@ -291,12 +316,14 @@ async function executeRunShell(
   context: ToolExecutionContext,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const command = stringArgument(arguments_, "command");
+  const command = stringArgument(arguments_, 'command');
   if (command === null) {
-    return failedOutput("run_shell requires a non-empty string command");
+    return failedOutput('run_shell requires a non-empty string command');
   }
   try {
-    const result = await runCommand(command, { cwd: services.workspace.rootPath() });
+    const result = await runCommand(command, {
+      cwd: services.workspace.rootPath()
+    });
     if (result.approvalRequired) {
       const approval = await services.database.approvals.createApproval({
         sessionId: context.sessionId,
@@ -306,11 +333,11 @@ async function executeRunShell(
       });
       await services.database.auditLog.record({
         sessionId: context.sessionId,
-        eventType: "approval_required",
+        eventType: 'approval_required',
         payload: { approvalId: approval.id, command }
       });
       return {
-        status: "approval_required",
+        status: 'approval_required',
         output: jsonOutput({
           ok: false,
           approvalRequired: true,
@@ -331,7 +358,7 @@ async function executeRunShell(
     });
   } catch (error) {
     if (error instanceof ShellCommandTimeoutError) {
-      return failedOutput("Command timed out");
+      return failedOutput('Command timed out');
     }
     return failedOutput(errorMessage(error));
   }
@@ -343,10 +370,10 @@ async function executeRememberFact(
   context: ToolExecutionContext,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const content = stringArgument(arguments_, "content");
-  const scope = stringArgument(arguments_, "scope") ?? "project";
+  const content = stringArgument(arguments_, 'content');
+  const scope = stringArgument(arguments_, 'scope') ?? 'project';
   if (content === null) {
-    return failedOutput("remember_fact requires non-empty string content");
+    return failedOutput('remember_fact requires non-empty string content');
   }
   const memoryId = await services.database.memories.remember({
     scope,
@@ -361,14 +388,42 @@ async function executeRecallMemory(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const query = stringArgument(arguments_, "query");
+  const query = stringArgument(arguments_, 'query');
   const rawLimit = arguments_.limit;
-  const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit) ? rawLimit : 5;
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit) ? rawLimit : 5;
   if (query === null) {
-    return failedOutput("recall_memory requires a non-empty string query");
+    return failedOutput('recall_memory requires a non-empty string query');
   }
+  const layers = readMemoryLayers(arguments_.layers);
+  const layered = await services.database.memories.recallLayered(
+    query,
+    limit,
+    layers
+  );
   const memories = await services.database.memories.recall(query, limit);
-  return completedOutput({ ok: true, query, memories });
+  return completedOutput({ ok: true, query, layers, memories, layered });
+}
+
+// Executes read_memory_artifact through the memory repository.
+async function executeReadMemoryArtifact(
+  arguments_: Record<string, unknown>,
+  services: ToolRegistryServices
+): Promise<ToolExecutionResult> {
+  const refId = stringArgument(arguments_, 'refId');
+  if (refId === null) {
+    return failedOutput('read_memory_artifact requires a non-empty string refId');
+  }
+  const artifact = await services.database.memories.readArtifactContent(refId);
+  if (artifact === null) {
+    return failedOutput(`Unknown memory artifact: ${refId}`, { refId });
+  }
+  return completedOutput({
+    ok: true,
+    refId,
+    artifact: artifact.artifact,
+    content: artifact.content
+  });
 }
 
 // Executes a minimal read-only explore subagent run.
@@ -377,17 +432,20 @@ async function executeSpawnExploreAgent(
   context: ToolExecutionContext,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const task = stringArgument(arguments_, "task");
+  const task = stringArgument(arguments_, 'task');
   if (task === null) {
-    return failedOutput("spawn_explore_agent requires a non-empty string task");
+    return failedOutput('spawn_explore_agent requires a non-empty string task');
   }
   const run = await services.database.subagents.startRun({
-    parentSessionId: context.sessionId ?? "session_unknown",
-    agentName: "explore",
+    parentSessionId: context.sessionId ?? 'session_unknown',
+    agentName: 'explore',
     task
   });
   const summary = `Explore agent completed task: ${task}`;
-  const completedRun = await services.database.subagents.completeRun(run.id, summary);
+  const completedRun = await services.database.subagents.completeRun(
+    run.id,
+    summary
+  );
   return completedOutput({
     ok: true,
     runId: completedRun.id,
@@ -397,7 +455,9 @@ async function executeSpawnExploreAgent(
 }
 
 // Lists configured MCP server manifests without opening external connections.
-async function executeListMcpServers(services: ToolRegistryServices): Promise<ToolExecutionResult> {
+async function executeListMcpServers(
+  services: ToolRegistryServices
+): Promise<ToolExecutionResult> {
   const servers = readMcpServerManifests(services.environment ?? process.env);
   return completedOutput({
     ok: true,
@@ -411,12 +471,17 @@ async function executeListSkills(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const query = stringArgument(arguments_, "query");
+  const query = stringArgument(arguments_, 'query');
   const limit = clampInteger(arguments_.limit, 1, 50, 20);
   const skills = await discoverSkills(services);
-  const filtered = query === null
-    ? skills
-    : skills.filter((skill) => `${skill.name}\n${skill.title}`.toLowerCase().includes(query.toLowerCase()));
+  const filtered =
+    query === null
+      ? skills
+      : skills.filter((skill) =>
+          `${skill.name}\n${skill.title}`
+            .toLowerCase()
+            .includes(query.toLowerCase())
+        );
   return completedOutput({
     ok: true,
     skills: filtered.slice(0, limit)
@@ -428,16 +493,16 @@ async function executeReadSkill(
   arguments_: Record<string, unknown>,
   services: ToolRegistryServices
 ): Promise<ToolExecutionResult> {
-  const name = stringArgument(arguments_, "name");
+  const name = stringArgument(arguments_, 'name');
   if (name === null) {
-    return failedOutput("read_skill requires a non-empty string name");
+    return failedOutput('read_skill requires a non-empty string name');
   }
   const skills = await discoverSkills(services);
   const skill = skills.find((candidate) => candidate.name === name);
   if (skill === undefined) {
     return failedOutput(`Unknown skill: ${name}`);
   }
-  const content = await readFile(skill.path, "utf8");
+  const content = await readFile(skill.path, 'utf8');
   return completedOutput({
     ok: true,
     name: skill.name,
@@ -453,7 +518,7 @@ function stringArgument(
   options: { allowEmpty?: boolean } = {}
 ): string | null {
   const value = arguments_[name];
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmed = value.trim();
@@ -464,20 +529,43 @@ function stringArgument(
 }
 
 // Reads and clamps a numeric argument from model-provided JSON.
-function clampInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function clampInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
   }
   return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
 }
 
+// Reads optional memory layer filters from model-provided JSON.
+function readMemoryLayers(value: unknown): Array<'atom' | 'scenario' | 'artifact'> {
+  if (!Array.isArray(value)) {
+    return ['atom', 'scenario', 'artifact'];
+  }
+  const layers = value.filter(
+    (item): item is 'atom' | 'scenario' | 'artifact' =>
+      item === 'atom' || item === 'scenario' || item === 'artifact'
+  );
+  return layers.length === 0 ? ['atom', 'scenario', 'artifact'] : layers;
+}
+
 // Converts Brave's larger response payload into a stable small result shape.
-function readBraveResults(payload: unknown): Array<{ title: string; url: string; description: string }> {
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+function readBraveResults(
+  payload: unknown
+): Array<{ title: string; url: string; description: string }> {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
     return [];
   }
   const web = (payload as { web?: unknown }).web;
-  if (web === null || typeof web !== "object" || Array.isArray(web)) {
+  if (web === null || typeof web !== 'object' || Array.isArray(web)) {
     return [];
   }
   const results = (web as { results?: unknown }).results;
@@ -485,25 +573,32 @@ function readBraveResults(payload: unknown): Array<{ title: string; url: string;
     return [];
   }
   return results.flatMap((result) => {
-    if (result === null || typeof result !== "object" || Array.isArray(result)) {
+    if (
+      result === null ||
+      typeof result !== 'object' ||
+      Array.isArray(result)
+    ) {
       return [];
     }
     const record = result as Record<string, unknown>;
-    if (typeof record.title !== "string" || typeof record.url !== "string") {
+    if (typeof record.title !== 'string' || typeof record.url !== 'string') {
       return [];
     }
     return [
       {
         title: record.title,
         url: record.url,
-        description: typeof record.description === "string" ? record.description : ""
+        description:
+          typeof record.description === 'string' ? record.description : ''
       }
     ];
   });
 }
 
 // Reads MCP server manifests from environment variables without requiring a live MCP client yet.
-function readMcpServerManifests(environment: Record<string, string | undefined>): McpServerManifest[] {
+function readMcpServerManifests(
+  environment: Record<string, string | undefined>
+): McpServerManifest[] {
   const rawServers = environment.KODEKS_MCP_SERVERS;
   if (rawServers !== undefined && rawServers.trim().length > 0) {
     return parseMcpServerManifests(rawServers);
@@ -515,10 +610,10 @@ function readMcpServerManifests(environment: Record<string, string | undefined>)
   }
   return [
     {
-      label: environment.KODEKS_MCP_SERVER_LABEL ?? "default",
+      label: environment.KODEKS_MCP_SERVER_LABEL ?? 'default',
       url: url.trim(),
       allowedTools: splitCsv(environment.KODEKS_MCP_ALLOWED_TOOLS),
-      skipApproval: environment.KODEKS_MCP_SKIP_APPROVAL === "true"
+      skipApproval: environment.KODEKS_MCP_SKIP_APPROVAL === 'true'
     }
   ];
 }
@@ -529,16 +624,22 @@ function parseMcpServerManifests(rawServers: string): McpServerManifest[] {
     const parsed = JSON.parse(rawServers) as unknown;
     const items = Array.isArray(parsed) ? parsed : [parsed];
     return items.flatMap((item) => {
-      if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
         return [];
       }
       const record = item as Record<string, unknown>;
-      if (typeof record.label !== "string" || typeof record.url !== "string") {
+      if (typeof record.label !== 'string' || typeof record.url !== 'string') {
         return [];
       }
       const allowedTools = Array.isArray(record.allowedTools)
-        ? record.allowedTools.filter((tool): tool is string => typeof tool === "string")
-        : splitCsv(typeof record.allowedTools === "string" ? record.allowedTools : undefined);
+        ? record.allowedTools.filter(
+            (tool): tool is string => typeof tool === 'string'
+          )
+        : splitCsv(
+            typeof record.allowedTools === 'string'
+              ? record.allowedTools
+              : undefined
+          );
       return [
         {
           label: record.label,
@@ -558,23 +659,27 @@ function splitCsv(value: string | undefined): string[] {
   return value === undefined
     ? []
     : value
-        .split(",")
+        .split(',')
         .map((item) => item.trim())
         .filter((item) => item.length > 0);
 }
 
 // Discovers SKILL.md files from configured roots.
-async function discoverSkills(services: ToolRegistryServices): Promise<Array<{ name: string; title: string; path: string }>> {
+async function discoverSkills(
+  services: ToolRegistryServices
+): Promise<Array<{ name: string; title: string; path: string }>> {
   const roots = skillRoots(services);
   const skills = [];
   for (const root of roots) {
-    const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+    const entries = await readdir(root, { withFileTypes: true }).catch(
+      () => []
+    );
     for (const entry of entries) {
       if (!entry.isDirectory()) {
         continue;
       }
-      const path = join(root, entry.name, "SKILL.md");
-      const content = await readFile(path, "utf8").catch(() => null);
+      const path = join(root, entry.name, 'SKILL.md');
+      const content = await readFile(path, 'utf8').catch(() => null);
       if (content === null) {
         continue;
       }
@@ -592,28 +697,36 @@ async function discoverSkills(services: ToolRegistryServices): Promise<Array<{ n
 function skillRoots(services: ToolRegistryServices): string[] {
   const environment = services.environment ?? process.env;
   const configured = splitCsv(environment.KODEKS_SKILLS_PATHS);
-  const roots = configured.length > 0 ? configured : [join(services.workspace.rootPath(), ".kodeks", "skills")];
+  const roots =
+    configured.length > 0
+      ? configured
+      : [join(services.workspace.rootPath(), '.kodeks', 'skills')];
   return roots.map((root) => resolve(root.replace(/^~/u, homedir())));
 }
 
 // Reads the first markdown heading as the skill title.
 function readMarkdownTitle(content: string): string | null {
-  const heading = content.split(/\r?\n/u).find((line) => line.startsWith("# "));
-  return heading === undefined ? null : heading.replace(/^#\s+/u, "").trim();
+  const heading = content.split(/\r?\n/u).find((line) => line.startsWith('# '));
+  return heading === undefined ? null : heading.replace(/^#\s+/u, '').trim();
 }
 
 // Creates a successful JSON tool result.
-function completedOutput(payload: Record<string, unknown>): ToolExecutionResult {
+function completedOutput(
+  payload: Record<string, unknown>
+): ToolExecutionResult {
   return {
-    status: "completed",
+    status: 'completed',
     output: jsonOutput(payload)
   };
 }
 
 // Creates a failed JSON tool result.
-function failedOutput(message: string, extra: Record<string, unknown> = {}): ToolExecutionResult {
+function failedOutput(
+  message: string,
+  extra: Record<string, unknown> = {}
+): ToolExecutionResult {
   return {
-    status: "failed",
+    status: 'failed',
     output: jsonOutput({
       ok: false,
       error: message,

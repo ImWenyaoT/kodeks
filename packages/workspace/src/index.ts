@@ -1,8 +1,15 @@
-import { execFile } from "node:child_process";
-import { constants } from "node:fs";
-import { access, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
-import { promisify } from "node:util";
+import { execFile } from 'node:child_process';
+import { constants } from 'node:fs';
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile
+} from 'node:fs/promises';
+import { relative, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,14 +19,14 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 65_536;
 
 const BLOCKED_PATH_PARTS = new Set([
-  ".git",
-  ".kodeks",
-  ".venv",
-  "node_modules",
-  "__pycache__",
-  ".pytest_cache",
-  ".mypy_cache",
-  ".DS_Store"
+  '.git',
+  '.kodeks',
+  '.venv',
+  'node_modules',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.DS_Store'
 ]);
 
 const DANGEROUS_PATTERNS = [
@@ -57,7 +64,7 @@ export class WorkspacePathError extends Error {
   // Names workspace boundary failures for API and tool mapping.
   constructor(message: string) {
     super(message);
-    this.name = "WorkspacePathError";
+    this.name = 'WorkspacePathError';
   }
 }
 
@@ -65,7 +72,7 @@ export class ShellCommandTimeoutError extends Error {
   // Names subprocess timeouts for API and tool mapping.
   constructor(command: string) {
     super(`Shell command timed out: ${command}`);
-    this.name = "ShellCommandTimeoutError";
+    this.name = 'ShellCommandTimeoutError';
   }
 }
 
@@ -73,7 +80,11 @@ export class WorkspaceService {
   private readonly root: string;
   private readonly maxTextFileBytes: number;
   private readonly listCacheTtlMs: number;
-  private fileListCache: { createdAt: number; limit: number | null; files: string[] } | null = null;
+  private fileListCache: {
+    createdAt: number;
+    limit: number | null;
+    files: string[];
+  } | null = null;
 
   // Creates a workspace service bound to one authorized project root.
   constructor(
@@ -84,7 +95,8 @@ export class WorkspaceService {
     } = {}
   ) {
     this.root = resolve(root);
-    this.maxTextFileBytes = options.maxTextFileBytes ?? DEFAULT_MAX_TEXT_FILE_BYTES;
+    this.maxTextFileBytes =
+      options.maxTextFileBytes ?? DEFAULT_MAX_TEXT_FILE_BYTES;
     this.listCacheTtlMs = options.listCacheTtlMs ?? DEFAULT_LIST_CACHE_TTL_MS;
   }
 
@@ -97,11 +109,11 @@ export class WorkspaceService {
   resolvePath(relativePath: string): string {
     const target = resolve(this.root, relativePath);
     const relativeTarget = relative(this.root, target);
-    if (relativeTarget === "" || isEscapingRelativePath(relativeTarget)) {
-      throw new WorkspacePathError("Path escapes workspace");
+    if (relativeTarget === '' || isEscapingRelativePath(relativeTarget)) {
+      throw new WorkspacePathError('Path escapes workspace');
     }
     if (isBlockedRelativePath(relativeTarget)) {
-      throw new WorkspacePathError("Path is blocked");
+      throw new WorkspacePathError('Path is blocked');
     }
     return target;
   }
@@ -114,24 +126,26 @@ export class WorkspaceService {
       throw new Error(`File not found: ${relativePath}`);
     }
     if (fileStat.size > this.maxTextFileBytes) {
-      throw new Error("File is too large");
+      throw new Error('File is too large');
     }
-    return readFile(target, "utf8");
+    return readFile(target, 'utf8');
   }
 
   // Writes UTF-8 text to a workspace file using whole-file overwrite semantics.
   async writeFile(relativePath: string, content: string): Promise<void> {
-    if (Buffer.byteLength(content, "utf8") > this.maxTextFileBytes) {
-      throw new Error("File is too large");
+    if (Buffer.byteLength(content, 'utf8') > this.maxTextFileBytes) {
+      throw new Error('File is too large');
     }
     const target = this.resolvePath(relativePath);
-    await mkdir(resolve(target, ".."), { recursive: true });
-    await writeFile(target, content, "utf8");
+    await mkdir(resolve(target, '..'), { recursive: true });
+    await writeFile(target, content, 'utf8');
     this.invalidateFileListCache();
   }
 
   // Lists workspace files while pruning blocked internal subtrees.
-  async listFiles(options: { limit?: number; refresh?: boolean } = {}): Promise<string[]> {
+  async listFiles(
+    options: { limit?: number; refresh?: boolean } = {}
+  ): Promise<string[]> {
     const limit = options.limit ?? null;
     const now = Date.now();
     if (
@@ -159,12 +173,16 @@ export class WorkspaceService {
   }
 
   // Recursively walks a directory and appends visible file paths.
-  private async visitDirectory(directory: string, files: string[], limit: number | null): Promise<void> {
+  private async visitDirectory(
+    directory: string,
+    files: string[],
+    limit: number | null
+  ): Promise<void> {
     if (limit !== null && files.length >= limit) {
       return;
     }
-    const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) =>
-      left.name.localeCompare(right.name)
+    const entries = (await readdir(directory, { withFileTypes: true })).sort(
+      (left, right) => left.name.localeCompare(right.name)
     );
     for (const entry of entries) {
       if (limit !== null && files.length >= limit) {
@@ -178,7 +196,7 @@ export class WorkspaceService {
       if (entry.isDirectory()) {
         await this.visitDirectory(absolutePath, files, limit);
       } else if (entry.isFile()) {
-        files.push(relativePath.split(sep).join("/"));
+        files.push(relativePath.split(sep).join('/'));
       }
     }
   }
@@ -190,24 +208,34 @@ export function isDangerousCommand(command: string): boolean {
 }
 
 // Runs a command only when it passes the safe-command policy.
-export async function runCommand(command: string, options: RunCommandOptions): Promise<ShellResult> {
+export async function runCommand(
+  command: string,
+  options: RunCommandOptions
+): Promise<ShellResult> {
   if (isDangerousCommand(command)) {
     return {
       command,
       exitCode: null,
-      stdout: "",
-      stderr: "Command requires approval",
+      stdout: '',
+      stderr: 'Command requires approval',
       approvalRequired: true,
       stdoutTruncated: false,
       stderrTruncated: false
     };
   }
-  return runParsedCommand(command, options, "Command requires approval");
+  return runParsedCommand(command, options, 'Command requires approval');
 }
 
 // Runs a command after approval has already been granted by a higher layer.
-export async function runApprovedCommand(command: string, options: RunCommandOptions): Promise<ShellResult> {
-  return runParsedCommand(command, options, "Approved command could not be parsed");
+export async function runApprovedCommand(
+  command: string,
+  options: RunCommandOptions
+): Promise<ShellResult> {
+  return runParsedCommand(
+    command,
+    options,
+    'Approved command could not be parsed'
+  );
 }
 
 // Parses argv, executes without a shell, and truncates captured output.
@@ -221,9 +249,9 @@ async function runParsedCommand(
     return {
       command,
       exitCode: null,
-      stdout: "",
+      stdout: '',
       stderr: parseFailureMessage,
-      approvalRequired: parseFailureMessage === "Command requires approval",
+      approvalRequired: parseFailureMessage === 'Command requires approval',
       stdoutTruncated: false,
       stderrTruncated: false
     };
@@ -231,18 +259,21 @@ async function runParsedCommand(
 
   try {
     await access(options.cwd, constants.R_OK | constants.X_OK);
-    const completed = await execFileAsync(args[0] ?? "", args.slice(1), {
+    const completed = await execFileAsync(args[0] ?? '', args.slice(1), {
       cwd: options.cwd,
       timeout: options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
-      encoding: "utf8",
-      maxBuffer: Math.max((options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES) * 4, DEFAULT_MAX_OUTPUT_BYTES)
+      encoding: 'utf8',
+      maxBuffer: Math.max(
+        (options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES) * 4,
+        DEFAULT_MAX_OUTPUT_BYTES
+      )
     });
     const [stdout, stdoutTruncated] = truncateOutput(
-      String(completed.stdout ?? ""),
+      String(completed.stdout ?? ''),
       options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
     );
     const [stderr, stderrTruncated] = truncateOutput(
-      String(completed.stderr ?? ""),
+      String(completed.stderr ?? ''),
       options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
     );
     return {
@@ -258,18 +289,22 @@ async function runParsedCommand(
     if (isTimeoutError(error)) {
       throw new ShellCommandTimeoutError(command);
     }
-    const processError = error as { code?: number; stdout?: string; stderr?: string };
+    const processError = error as {
+      code?: number;
+      stdout?: string;
+      stderr?: string;
+    };
     const [stdout, stdoutTruncated] = truncateOutput(
-      String(processError.stdout ?? ""),
+      String(processError.stdout ?? ''),
       options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
     );
     const [stderr, stderrTruncated] = truncateOutput(
-      String(processError.stderr ?? ""),
+      String(processError.stderr ?? ''),
       options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
     );
     return {
       command,
-      exitCode: typeof processError.code === "number" ? processError.code : 1,
+      exitCode: typeof processError.code === 'number' ? processError.code : 1,
       stdout,
       stderr,
       approvalRequired: false,
@@ -282,8 +317,8 @@ async function runParsedCommand(
 // Parses a shell-like command string into argv without enabling shell interpretation.
 function parseCommandArgs(command: string): string[] | null {
   const args: string[] = [];
-  let current = "";
-  let quote: "'" | "\"" | null = null;
+  let current = '';
+  let quote: "'" | '"' | null = null;
 
   for (let index = 0; index < command.length; index += 1) {
     const char = command[index];
@@ -296,7 +331,7 @@ function parseCommandArgs(command: string): string[] | null {
       continue;
     }
 
-    if (char === "'" || char === "\"") {
+    if (char === "'" || char === '"') {
       quote = char;
       continue;
     }
@@ -304,7 +339,7 @@ function parseCommandArgs(command: string): string[] | null {
     if (/\s/u.test(char)) {
       if (current.length > 0) {
         args.push(current);
-        current = "";
+        current = '';
       }
       continue;
     }
@@ -323,16 +358,20 @@ function parseCommandArgs(command: string): string[] | null {
 
 // Truncates output to a UTF-8 byte limit without splitting characters.
 function truncateOutput(text: string, maxBytes: number): [string, boolean] {
-  const encoded = Buffer.from(text, "utf8");
+  const encoded = Buffer.from(text, 'utf8');
   if (encoded.byteLength <= maxBytes) {
     return [text, false];
   }
-  return [encoded.subarray(0, maxBytes).toString("utf8"), true];
+  return [encoded.subarray(0, maxBytes).toString('utf8'), true];
 }
 
 // Returns whether a resolved relative path escapes the workspace root.
 function isEscapingRelativePath(relativePath: string): boolean {
-  return relativePath === ".." || relativePath.startsWith(`..${sep}`) || relativePath.startsWith("../");
+  return (
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    relativePath.startsWith('../')
+  );
 }
 
 // Returns whether a workspace-relative path points at internal project data.
@@ -345,6 +384,14 @@ function isBlockedRelativePath(relativePath: string): boolean {
 
 // Detects Node child_process timeout failures across versions.
 function isTimeoutError(error: unknown): boolean {
-  const maybeError = error as { signal?: string; killed?: boolean; code?: string };
-  return maybeError.signal === "SIGTERM" || maybeError.killed === true || maybeError.code === "ETIMEDOUT";
+  const maybeError = error as {
+    signal?: string;
+    killed?: boolean;
+    code?: string;
+  };
+  return (
+    maybeError.signal === 'SIGTERM' ||
+    maybeError.killed === true ||
+    maybeError.code === 'ETIMEDOUT'
+  );
 }
