@@ -242,9 +242,11 @@ export async function* fromDeepSeekStream(
   options: { responseId?: string; model?: string } = {}
 ): AsyncIterable<ResponsesStreamEvent> {
   const pendingToolCalls = new Map<number, PendingToolCall>();
+  const completedOutputItems: unknown[] = [];
   let responseId = options.responseId ?? 'resp_bridge';
   const model = options.model ?? 'bridge';
   let outputIndex = 0;
+  let messageText = '';
 
   for await (const chunk of stream) {
     if (chunk.error?.message !== undefined) {
@@ -260,6 +262,7 @@ export async function* fromDeepSeekStream(
       delta.content !== null &&
       delta.content.length > 0
     ) {
+      messageText += delta.content;
       yield {
         type: 'response.output_text.delta',
         delta: delta.content,
@@ -275,21 +278,34 @@ export async function* fromDeepSeekStream(
 
     if (choice?.finish_reason === 'tool_calls') {
       for (const toolCall of pendingToolCalls.values()) {
+        const item = {
+          id: `fc_${toolCall.id}`,
+          type: 'function_call' as const,
+          call_id: toolCall.id,
+          name: toolCall.name,
+          arguments: toolCall.argumentsText,
+          status: 'completed' as const
+        };
+        completedOutputItems.push(item);
         yield {
           type: 'response.output_item.done',
           output_index: outputIndex,
-          item: {
-            id: `fc_${toolCall.id}`,
-            type: 'function_call',
-            call_id: toolCall.id,
-            name: toolCall.name,
-            arguments: toolCall.argumentsText,
-            status: 'completed'
-          }
+          item
         };
         outputIndex += 1;
       }
       pendingToolCalls.clear();
+      yield {
+        type: 'response.completed',
+        response: {
+          id: responseId,
+          model,
+          status: 'completed',
+          output: buildCompletedOutput(responseId, messageText, completedOutputItems)
+        }
+      };
+      messageText = '';
+      completedOutputItems.length = 0;
       continue;
     }
 
@@ -300,11 +316,35 @@ export async function* fromDeepSeekStream(
           id: responseId,
           model,
           status: 'completed',
-          output: []
+          output: buildCompletedOutput(responseId, messageText, completedOutputItems)
         }
       };
+      messageText = '';
+      completedOutputItems.length = 0;
     }
   }
+}
+
+// Builds the terminal Responses output items consumed by the OpenAI Agents SDK.
+function buildCompletedOutput(
+  responseId: string,
+  messageText: string,
+  completedOutputItems: unknown[]
+): unknown[] {
+  return [
+    ...(messageText.length === 0
+      ? []
+      : [
+          {
+            id: `msg_${responseId}`,
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [{ type: 'output_text', text: messageText }]
+          }
+        ]),
+    ...completedOutputItems
+  ];
 }
 
 // 处理 bridge 的 HTTP routes，并保持 OpenAI-compatible JSON/SSE 形态。

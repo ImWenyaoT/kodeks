@@ -320,10 +320,6 @@ describe('fromDeepSeekStream', () => {
             }
           ]
         },
-        {
-          id: 'chatcmpl_2',
-          choices: [{ delta: {}, finish_reason: 'stop' }]
-        },
         { error: { message: 'upstream failed' } }
       ],
       { model: 'bridge' }
@@ -347,9 +343,24 @@ describe('fromDeepSeekStream', () => {
       expect.objectContaining({
         type: 'response.completed',
         response: expect.objectContaining({
-          id: 'chatcmpl_2',
+          id: 'chatcmpl_1',
           model: 'bridge',
-          status: 'completed'
+          status: 'completed',
+          output: [
+            expect.objectContaining({
+              type: 'message',
+              content: [
+                expect.objectContaining({
+                  type: 'output_text',
+                  text: 'Hello'
+                })
+              ]
+            }),
+            expect.objectContaining({
+              type: 'function_call',
+              call_id: 'call_1'
+            })
+          ]
         })
       }),
       { type: 'error', message: 'upstream failed' }
