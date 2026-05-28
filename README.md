@@ -92,6 +92,11 @@ KODEKS_EMBEDDINGS_PROVIDER=ollama
 KODEKS_OLLAMA_BASE_URL=http://127.0.0.1:11434
 KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
 
+# Optional: LM Studio / OpenAI-compatible embeddings endpoint
+KODEKS_EMBEDDINGS_PROVIDER=lmstudio
+KODEKS_LMSTUDIO_BASE_URL=http://127.0.0.1:1234/v1
+KODEKS_LMSTUDIO_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
+
 # Optional: Hugging Face-compatible endpoint
 KODEKS_EMBEDDINGS_PROVIDER=huggingface
 KODEKS_HUGGINGFACE_EMBED_MODEL=ibm-granite/granite-embedding-97m-multilingual-r2

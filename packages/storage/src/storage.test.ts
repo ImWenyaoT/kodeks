@@ -383,6 +383,65 @@ describe('MemoryRepository', () => {
     });
     expect(context.recalledItems[0]?.score.semantic).toBeGreaterThan(0);
   });
+
+  it('supports LM Studio OpenAI-compatible embedding endpoints', async () => {
+    await database.memories.rememberAtom({
+      scope: 'project',
+      content:
+        'LM Studio can serve Qwen3 embeddings through an OpenAI-compatible endpoint.'
+    });
+    const requests: Array<{
+      url: string;
+      body: unknown;
+      authorization: string | undefined;
+    }> = [];
+    const service = new MemoryService({
+      database,
+      workspaceRoot: tempDir,
+      environment: {
+        KODEKS_EMBEDDINGS_ENABLED: 'true',
+        KODEKS_EMBEDDINGS_PROVIDER: 'lmstudio',
+        KODEKS_LMSTUDIO_BASE_URL: 'http://127.0.0.1:1234/v1',
+        KODEKS_LMSTUDIO_EMBED_MODEL: 'Qwen/Qwen3-Embedding-0.6B',
+        KODEKS_LMSTUDIO_API_KEY: 'lm-studio'
+      },
+      fetch: async (url, init) => {
+        requests.push({
+          url,
+          body: JSON.parse(init?.body ?? '{}'),
+          authorization: init?.headers?.authorization
+        });
+        return {
+          ok: true,
+          async json() {
+            return {
+              data: [
+                {
+                  embedding: [1, 0, 0]
+                }
+              ]
+            };
+          }
+        };
+      }
+    });
+
+    const context = await service.buildContext({
+      sessionId: 's1',
+      query: 'Qwen3 embeddings in LM Studio'
+    });
+
+    expect(requests[0]).toEqual({
+      url: 'http://127.0.0.1:1234/v1/embeddings',
+      body: {
+        model: 'Qwen/Qwen3-Embedding-0.6B',
+        input: 'Qwen3 embeddings in LM Studio',
+        encoding_format: 'float'
+      },
+      authorization: 'Bearer lm-studio'
+    });
+    expect(context.recalledItems[0]?.score.semantic).toBeGreaterThan(0);
+  });
 });
 
 describe('ApprovalRepository', () => {

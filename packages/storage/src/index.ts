@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 export type SessionMode = 'act' | 'plan';
@@ -408,10 +407,15 @@ export class KodeksDatabase {
   }
 }
 
-// 加载 Node 内置 SQLite，保持本地 runtime 不依赖 Bun。
+// 加载 Node 内置 SQLite，同时避开 bundler 对 node:sqlite CommonJS require 的静态改写。
 function loadSqliteDatabase(): SqliteDatabaseConstructor {
-  const require = createRequire(import.meta.url);
-  return require('node:sqlite').DatabaseSync as SqliteDatabaseConstructor;
+  const sqlite = process.getBuiltinModule('node:sqlite') as
+    | { DatabaseSync?: SqliteDatabaseConstructor }
+    | undefined;
+  if (sqlite?.DatabaseSync === undefined) {
+    throw new Error('Node built-in SQLite DatabaseSync is unavailable.');
+  }
+  return sqlite.DatabaseSync;
 }
 
 export class SessionRepository {
@@ -1334,6 +1338,13 @@ export class MemoryService {
     const model =
       provider === 'ollama'
         ? (this.environment.KODEKS_OLLAMA_EMBED_MODEL ?? 'embeddinggemma')
+        : provider === 'lmstudio' ||
+            provider === 'lm-studio' ||
+            provider === 'openai-compatible' ||
+            provider === 'openai'
+          ? (this.environment.KODEKS_LMSTUDIO_EMBED_MODEL ??
+            this.environment.KODEKS_OPENAI_COMPAT_EMBED_MODEL ??
+            'Qwen/Qwen3-Embedding-0.6B')
         : provider === 'huggingface' || provider === 'hf'
           ? (this.environment.KODEKS_HUGGINGFACE_EMBED_MODEL ??
             this.environment.KODEKS_HF_EMBED_MODEL ??
@@ -1365,6 +1376,14 @@ export class MemoryService {
     if (config.provider === 'ollama') {
       return this.fetchOllamaEmbedding(text, config.model);
     }
+    if (
+      config.provider === 'lmstudio' ||
+      config.provider === 'lm-studio' ||
+      config.provider === 'openai-compatible' ||
+      config.provider === 'openai'
+    ) {
+      return this.fetchOpenAICompatibleEmbedding(text, config.model);
+    }
     if (config.provider === 'huggingface' || config.provider === 'hf') {
       return this.fetchHuggingFaceEmbedding(text, config.model);
     }
@@ -1395,6 +1414,44 @@ export class MemoryService {
         return null;
       }
       return vector;
+    } catch {
+      return null;
+    }
+  }
+
+  // Embeds one text through an OpenAI-compatible /v1/embeddings endpoint such as LM Studio.
+  private async fetchOpenAICompatibleEmbedding(
+    text: string,
+    model: string
+  ): Promise<number[] | null> {
+    if (this.fetchClient === undefined) {
+      return null;
+    }
+    const baseUrl = trimTrailingSlash(
+      this.environment.KODEKS_LMSTUDIO_BASE_URL ??
+        this.environment.KODEKS_OPENAI_COMPAT_BASE_URL ??
+        'http://127.0.0.1:1234/v1'
+    );
+    const apiKey =
+      this.environment.KODEKS_LMSTUDIO_API_KEY ??
+      this.environment.KODEKS_OPENAI_COMPAT_API_KEY;
+    try {
+      const response = await this.fetchClient(`${baseUrl}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(apiKey === undefined ? {} : { authorization: `Bearer ${apiKey}` })
+        },
+        body: JSON.stringify({
+          model,
+          input: text,
+          encoding_format: 'float'
+        })
+      });
+      if (!response.ok) {
+        return null;
+      }
+      return readOpenAICompatibleEmbedding(await response.json());
     } catch {
       return null;
     }
@@ -2183,6 +2240,26 @@ function readOllamaEmbedding(payload: unknown): number[] | null {
   const embeddings = record.embeddings;
   if (Array.isArray(embeddings) && Array.isArray(embeddings[0])) {
     return readNumberVector(embeddings[0]);
+  }
+  return readNumberVector(record.embedding);
+}
+
+// Reads OpenAI-compatible embedding responses from /v1/embeddings.
+function readOpenAICompatibleEmbedding(payload: unknown): number[] | null {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const data = record.data;
+  if (Array.isArray(data) && data.length > 0) {
+    const first = data[0];
+    if (first !== null && typeof first === 'object' && !Array.isArray(first)) {
+      return readNumberVector((first as Record<string, unknown>).embedding);
+    }
   }
   return readNumberVector(record.embedding);
 }
