@@ -53,9 +53,6 @@ importers:
       '@next/env':
         specifier: 16.2.6
         version: 16.2.6
-      ai:
-        specifier: 6.0.182
-        version: 6.0.182(zod@4.1.13)
       next:
         specifier: 16.2.6
         version: 16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -220,22 +217,6 @@ importers:
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@1.21.7))
 
 packages:
-
-  '@ai-sdk/gateway@3.0.114':
-    resolution: {integrity: sha512-MqkZ5sd+qiq6RgIxELkoFQXg2/JwK+WCMaot7U+rtrZpWJl3fSyYvc28SC03b256o4F7OXjQtdjTqs81B2w+dA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/provider-utils@4.0.27':
-    resolution: {integrity: sha512-ubkAJ+xODouwtmN1tYlvTPphH1hPOBfZaEQe8U7skGvFAnIRs9PPpsq57bC2+Ky/MB4yzhd6YOsxTAx9sGpazw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/provider@3.0.10':
-    resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
-    engines: {node: '>=18'}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -1022,12 +1003,6 @@ packages:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
-
-  ai@6.0.182:
-    resolution: {integrity: sha512-ooJdziFjYrYRcsCx107roqA8gDTI3P82nUfroNWIhVvwrkYzEN3W1l50YK+XNqkUew8AiimaW0/SLBewRXMuHQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
@@ -3035,24 +3010,6 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@3.0.114(zod@4.1.13)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.1.13)
-      '@vercel/oidc': 3.2.0
-      zod: 4.1.13
-
-  '@ai-sdk/provider-utils@4.0.27(zod@4.1.13)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@standard-schema/spec': 1.1.0
-      eventsource-parser: 3.0.8
-      zod: 4.1.13
-
-  '@ai-sdk/provider@3.0.10':
-    dependencies:
-      json-schema: 0.4.0
-
   '@alloc/quick-lru@5.2.0': {}
 
   '@babel/code-frame@7.29.7':
@@ -3815,14 +3772,6 @@ snapshots:
       acorn: 8.16.0
 
   acorn@8.16.0: {}
-
-  ai@6.0.182(zod@4.1.13):
-    dependencies:
-      '@ai-sdk/gateway': 3.0.114(zod@4.1.13)
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.1.13)
-      '@opentelemetry/api': 1.9.1
-      zod: 4.1.13
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:

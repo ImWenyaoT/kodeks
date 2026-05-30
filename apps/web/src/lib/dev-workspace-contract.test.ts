@@ -59,7 +59,9 @@ describe('pnpm workspace development contract', () => {
     const chineseReadme = readWorkspaceText('README.zh-CN.md');
     const combinedDocs = `${ci}\n${englishReadme}\n${chineseReadme}`;
 
-    expect(ci).toContain('pnpm/action-setup@v4');
+    expect(ci).toContain('actions/checkout@v6');
+    expect(ci).toContain('pnpm/action-setup@v6');
+    expect(ci).toContain('actions/setup-node@v6');
     expect(ci).toContain('pnpm install --frozen-lockfile');
     expect(ci).toContain('pnpm run typecheck');
     expect(ci).toContain('pnpm run lint');

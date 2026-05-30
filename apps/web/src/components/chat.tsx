@@ -98,14 +98,14 @@ const Chat: React.FC<ChatProps> = ({
         <div className="shrink-0 p-3 px-2 md:p-4 md:px-10">
           <div className="flex items-center">
             <div className="flex w-full items-center pb-4 md:pb-1">
-              <div className="flex w-full flex-col gap-1.5 rounded-[20px] border border-stone-200 bg-white p-2.5 pl-1.5 shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex w-full flex-col gap-1.5 rounded-[14px] border border-stone-200 bg-white p-2.5 pl-1.5 shadow-sm transition-colors dark:border-[#343a40] dark:bg-[#24282d] dark:shadow-none">
                 <div className="flex items-end gap-1.5 pl-4 md:gap-2">
                   <div className="flex min-w-0 flex-1 flex-col">
                     {selectedFiles.length > 0 ? (
                       <div className="mb-1 flex flex-wrap gap-1.5 pr-2">
                         {selectedFiles.slice(0, 4).map((path) => (
                           <span
-                            className="kodeks-ui-caption max-w-48 truncate rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            className="kodeks-ui-caption max-w-48 truncate rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-[#2b3035] dark:text-slate-300"
                             key={path}
                             title={path}
                           >
@@ -113,14 +113,14 @@ const Chat: React.FC<ChatProps> = ({
                           </span>
                         ))}
                         {selectedFiles.length > 4 ? (
-                          <span className="kodeks-ui-caption rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                          <span className="kodeks-ui-caption rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-[#2b3035] dark:text-slate-300">
                             +{selectedFiles.length - 4}
                           </span>
                         ) : null}
                       </div>
                     ) : null}
                     <textarea
-                      className="kodeks-chat-text mb-2 resize-none border-0 bg-transparent px-0 pb-6 pt-2 text-zinc-950 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50 dark:placeholder:text-zinc-500"
+                      className="kodeks-chat-text mb-2 resize-none border-0 bg-transparent px-0 pb-6 pt-2 text-zinc-950 placeholder:text-zinc-400 focus:outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
                       dir="auto"
                       id="prompt-textarea"
                       onChange={(event) =>
@@ -137,7 +137,7 @@ const Chat: React.FC<ChatProps> = ({
                   </div>
                   <button
                     aria-label={copy.chat.send}
-                    className="flex size-8 items-center justify-center rounded-full bg-black text-white transition-colors hover:opacity-70 focus-visible:outline-none focus-visible:outline-black disabled:bg-[#D7D7D7] disabled:text-[#f4f4f4] disabled:hover:opacity-100 dark:bg-white dark:text-zinc-950 dark:focus-visible:outline-white dark:disabled:bg-zinc-700 dark:disabled:text-zinc-500"
+                    className="flex size-8 items-center justify-center rounded-full bg-black text-white transition-colors hover:opacity-70 focus-visible:outline-none focus-visible:outline-black disabled:bg-[#D7D7D7] disabled:text-[#f4f4f4] disabled:hover:opacity-100 dark:bg-slate-100 dark:text-slate-950 dark:focus-visible:outline-white dark:disabled:bg-[#343a40] dark:disabled:text-slate-500"
                     data-testid="send-button"
                     disabled={!inputMessageText.trim() || isAssistantLoading}
                     onClick={handleSendClick}
@@ -149,7 +149,7 @@ const Chat: React.FC<ChatProps> = ({
                 {isAssistantLoading ? (
                   <div className="flex justify-end pl-4">
                     <button
-                      className="kodeks-control-text inline-flex h-8 items-center gap-1.5 rounded-full bg-zinc-100 px-3 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                      className="kodeks-control-text inline-flex h-8 items-center gap-1.5 rounded-full bg-zinc-100 px-3 text-zinc-700 dark:bg-[#2b3035] dark:text-slate-200"
                       onClick={onStop}
                       type="button"
                     >

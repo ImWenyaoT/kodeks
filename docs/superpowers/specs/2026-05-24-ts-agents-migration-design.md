@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented on branch `codex/ts-agents-migration`. This document froze the original migration design before implementation; the active TypeScript workspace now follows this boundary, including both the custom SSE route and the Vercel AI SDK UIMessage stream adapter. Later changes supersede the package-manager and model API notes below: the active workspace now uses Bun workspaces, defaults to DeepSeek Chat Completions, and keeps OpenAI Responses API as a fallback adapter.
+Implemented on branch `codex/ts-agents-migration`. This document froze the original migration design before implementation. It is now historical context only: the active TypeScript workspace uses pnpm workspaces, exposes one custom SSE chat route, routes OpenAI Responses directly, and sends DeepSeek/Qwen-style Chat Completions endpoints through MoonBridge.
 
 ## Goal
 
@@ -31,11 +31,11 @@ The migration should translate patterns into a smaller TypeScript design. It sho
 ## Chosen Stack
 
 - TypeScript
-- Bun workspace
+- pnpm workspace
 - Next.js App Router
 - OpenAI Agents SDK for agent loop, tool execution, streaming, tracing, and subagent patterns
-- OpenAI JS SDK for OpenAI-compatible Chat Completions and Responses API clients with configurable base URLs
-- Vercel AI SDK for React chat state and UI stream helpers only
+- OpenAI JS SDK for Responses-compatible clients with configurable base URLs
+- MoonBridge for Chat Completions upstreams that need a Responses-shaped endpoint
 - SQLite for local durable state
 - zod for runtime schemas
 - vitest for unit and integration tests
@@ -146,7 +146,7 @@ Reasons:
 - The primary flow is server-to-client streaming.
 - Approval, session actions, and follow-up prompts fit ordinary HTTP POST endpoints.
 - SSE is simple to test with `curl -N`.
-- Next.js route handlers and Vercel AI SDK UI stream helpers fit HTTP streaming.
+- Next.js route handlers fit HTTP streaming.
 
 Do not use WebSocket until a feature requires true bidirectional long-lived interaction, such as an interactive terminal, collaborative sessions, or voice/realtime UX.
 
@@ -158,8 +158,19 @@ The app owns a stable internal event contract. OpenAI Agents SDK stream events m
 export type AgentEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_call"; id: string; name: string; args: unknown }
-  | { type: "tool_result"; id: string; name: string; output: string; status: "ok" | "error" | "approval_required" }
-  | { type: "approval_required"; approvalId: string; toolCallId: string; reason: string }
+  | {
+      type: "tool_result";
+      id: string;
+      name: string;
+      output: string;
+      status: "ok" | "error" | "approval_required";
+    }
+  | {
+      type: "approval_required";
+      approvalId: string;
+      toolCallId: string;
+      reason: string;
+    }
   | { type: "memory_recalled"; memoryIds: string[] }
   | { type: "subagent_started"; runId: string; agent: "explore" }
   | { type: "subagent_completed"; runId: string; summary: string }
@@ -167,7 +178,7 @@ export type AgentEvent =
   | { type: "error"; message: string; code?: string };
 ```
 
-The UI may convert these events into Vercel AI SDK UI messages, but `AgentEvent` remains the product-level event contract.
+The UI consumes these events directly; any future transport adapter should wrap `AgentEvent` instead of creating a second runtime path.
 
 ## Storage Design
 
@@ -283,13 +294,13 @@ MVP UI:
 - responsive session/sidebar shell
 - frontend tokens for color, spacing, radius, focus, and density
 
-Use Vercel AI SDK for React chat state and stream handling where it fits, but do not delegate runtime tool execution to `streamText` or Vercel AI SDK agents.
+Keep React chat state on top of the Kodeks SSE event contract, and do not delegate runtime tool execution to another agent loop.
 
 ## Migration Phases
 
 ### Phase 1: Spec and Scaffold
 
-- Add Bun workspace.
+- Add pnpm workspace.
 - Create `apps/web` and `packages/*`.
 - Add TypeScript, vitest, ESLint, and shared tsconfig.
 - Keep Python code in place during scaffold.
@@ -304,7 +315,7 @@ Use Vercel AI SDK for React chat state and stream handling where it fits, but do
 
 - Implement OpenAI Agents SDK tool wrappers.
 - Implement Build Agent, Plan Agent, and Explore Agent.
-- Implement model configuration with OpenAI JS SDK, covering DeepSeek Chat Completions and OpenAI Responses fallback.
+- Implement model configuration with OpenAI JS SDK, covering OpenAI Responses and MoonBridge-backed Chat Completions upstreams.
 - Implement `runChatTurn()` and `AgentEvent` mapping.
 
 ### Phase 4: API and UI
@@ -375,5 +386,5 @@ API/UI:
 ## Deferred Decisions
 
 - Python files stay in place during migration. After TS parity, move them to a clearly marked legacy archive or remove them in a dedicated cleanup change.
-- The active TS MVP now defaults to a DeepSeek Chat Completions provider adapter and keeps OpenAI Responses as a separate fallback adapter.
+- The active TS MVP exposes OpenAI Responses and MoonBridge only; DeepSeek/Qwen are upstreams behind MoonBridge.
 - Plan artifacts are stored in SQLite and mirrored to `.kodeks/plans/` in the MVP.

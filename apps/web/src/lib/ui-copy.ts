@@ -1,11 +1,11 @@
-export type UiLanguage = 'zh' | 'en';
-export type UiTheme = 'light' | 'dark';
-export type UiLanguagePreference = 'system' | UiLanguage;
-export type UiThemePreference = 'system' | UiTheme;
-type UiPreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
+export type UiLanguage = "zh" | "en";
+export type UiTheme = "light" | "dark";
+export type UiLanguagePreference = "system" | UiLanguage;
+export type UiThemePreference = "system" | UiTheme;
+type UiPreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
-export const defaultUiLanguagePreference: UiLanguagePreference = 'system';
-export const defaultUiThemePreference: UiThemePreference = 'system';
+export const defaultUiLanguagePreference: UiLanguagePreference = "system";
+export const defaultUiThemePreference: UiThemePreference = "system";
 
 export type UiCopy = {
   app: {
@@ -49,9 +49,12 @@ export type UiCopy = {
     debugPanel: string;
     appearancePreview: string;
     autoSession: string;
-    webSearch: string;
-    webSearchDescription: string;
-    braveProvider: string;
+    apiKey: string;
+    apiKeyConfigured: string;
+    save: string;
+    saved: string;
+    saving: string;
+    settingsError: string;
     userLocation: string;
     clear: string;
     country: string;
@@ -72,11 +75,26 @@ export type UiCopy = {
     skillSource: string;
     runtimeSettings: string;
     provider: string;
+    model: string;
+    bridgeHealth: string;
+    bridgeChecking: string;
+    bridgeReady: string;
+    bridgeUnavailable: string;
+    bridgeNotRequired: string;
+    bridgeCheckingMessage: string;
+    bridgeReadyMessage: string;
+    bridgeUnavailableMessage: string;
+    bridgeNotRequiredMessage: string;
+    bridgeRefresh: string;
+    bridgeEndpoint: string;
+    bridgeUpstream: string;
+    bridgeModel: string;
+    bridgeReason: string;
     reasoning: string;
     runtimeEvents: string;
     googleIntegration: string;
     connectGoogle: string;
-    reasoningOptions: Record<'low' | 'medium' | 'high' | 'xhigh', string>;
+    reasoningOptions: Record<"low" | "medium" | "high" | "xhigh", string>;
   };
   runtime: {
     memoryRecalled: string;
@@ -106,240 +124,278 @@ export type UiCopy = {
 export const uiCopy: Record<UiLanguage, UiCopy> = {
   zh: {
     app: {
-      welcome: '你好，我是 Kodeks。把要处理的代码上下文发给我吧。',
-      mobileToolsOpen: '打开工具面板',
-      mobileToolsClose: '关闭工具面板',
+      welcome: "你好，我是 Kodeks。把要处理的代码上下文发给我吧。",
+      mobileToolsOpen: "打开工具面板",
+      mobileToolsClose: "关闭工具面板",
       runtimeFailed: (message) => `运行失败：${message}`,
-      requestFailed: '请求失败。请确认本地 Next.js runtime 仍在运行。'
+      requestFailed: "请求失败。请确认本地 Next.js runtime 仍在运行。",
     },
     chat: {
-      composerPlaceholder: '给 Kodeks 发送消息...',
-      send: '发送消息',
-      stop: '停止'
+      composerPlaceholder: "给 Kodeks 发送消息...",
+      send: "发送消息",
+      stop: "停止",
     },
     tools: {
-      preferences: '界面',
-      language: '语言',
-      theme: '主题',
-      system: '跟随系统',
-      device: '设备',
-      light: '浅色',
-      dark: '深色',
-      fileSearch: '文件搜索',
+      preferences: "界面",
+      language: "语言",
+      theme: "主题",
+      system: "跟随系统",
+      device: "设备",
+      light: "浅色",
+      dark: "深色",
+      fileSearch: "文件搜索",
       fileSearchDescription:
-        '使用本地 workspace 文件搜索，并通过 Kodeks 工具执行 grep。',
-      selectFiles: '选择文件',
-      selectedFiles: '已选文件',
-      noFilesSelected: '尚未选择文件',
-      fileSearchPlaceholder: '搜索 workspace 文件...',
-      fileSearchLoading: '正在读取 workspace 文件...',
-      fileSearchError: '文件列表读取失败',
-      noFileMatches: '没有匹配的文件',
+        "使用本地 workspace 文件搜索，并通过 Kodeks 工具执行 grep。",
+      selectFiles: "选择文件",
+      selectedFiles: "已选文件",
+      noFilesSelected: "尚未选择文件",
+      fileSearchPlaceholder: "搜索 workspace 文件...",
+      fileSearchLoading: "正在读取 workspace 文件...",
+      fileSearchError: "文件列表读取失败",
+      noFileMatches: "没有匹配的文件",
       selectedFileCount: (count) => `已选择 ${count} 个文件`,
-      session: '会话',
-      newSession: '新会话',
-      sessionHistory: '最近会话',
-      loadingSessions: '正在读取会话...',
-      sessionLoadError: '会话列表读取失败',
-      noSessions: '暂无历史会话',
-      collapseSidebar: '折叠侧边栏',
-      expandSidebar: '展开侧边栏',
-      debugPanel: '调试',
-      appearancePreview: '外观',
-      autoSession: '自动会话',
-      webSearch: '网页搜索',
-      webSearchDescription:
-        '通过 Brave Search API 执行实时网页搜索；配置 BRAVE_SEARCH_API_KEY 后模型可调用 web_search。',
-      braveProvider: 'Brave Search',
-      userLocation: '用户位置',
-      clear: '清除',
-      country: '国家',
-      region: '区域',
-      city: '城市',
-      disabledForLocal: '本地 Kodeks 已禁用',
-      workspaceOnly: '仅 workspace',
-      notConfigured: '未配置',
-      codeInterpreter: '代码解释器',
-      act: '执行',
-      plan: '计划',
-      functions: '函数',
-      mcp: 'MCP',
+      session: "会话",
+      newSession: "新会话",
+      sessionHistory: "最近会话",
+      loadingSessions: "正在读取会话...",
+      sessionLoadError: "会话列表读取失败",
+      noSessions: "暂无历史会话",
+      collapseSidebar: "折叠侧边栏",
+      expandSidebar: "展开侧边栏",
+      debugPanel: "调试",
+      appearancePreview: "外观",
+      autoSession: "自动会话",
+      apiKey: "API Key",
+      apiKeyConfigured: "已保存",
+      save: "保存",
+      saved: "已保存",
+      saving: "保存中",
+      settingsError: "设置失败",
+      userLocation: "用户位置",
+      clear: "清除",
+      country: "国家",
+      region: "区域",
+      city: "城市",
+      disabledForLocal: "本地 Kodeks 已禁用",
+      workspaceOnly: "仅 workspace",
+      notConfigured: "未配置",
+      codeInterpreter: "代码解释器",
+      act: "执行",
+      plan: "计划",
+      functions: "函数",
+      mcp: "MCP",
       mcpDescription:
-        '读取 KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL 中的 MCP server manifest，作为后续 MCP tool 调用的入口。',
-      mcpManifest: '环境 manifest',
-      skills: 'Skills',
+        "读取 KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL 中的 MCP server manifest，作为后续 MCP tool 调用的入口。",
+      mcpManifest: "环境 manifest",
+      skills: "Skills",
       skillsDescription:
-        '从 KODEKS_SKILLS_PATHS 或 workspace .kodeks/skills 发现技能，并允许模型读取 SKILL.md。',
-      skillSource: '技能目录',
-      runtimeSettings: '运行设置',
-      provider: '模型服务',
-      reasoning: '推理强度',
-      runtimeEvents: '运行事件',
-      googleIntegration: 'Google 集成',
-      connectGoogle: '连接 Google 集成',
+        "从 KODEKS_SKILLS_PATHS 或 workspace .kodeks/skills 发现技能，并允许模型读取 SKILL.md。",
+      skillSource: "技能目录",
+      runtimeSettings: "运行设置",
+      provider: "模型服务",
+      model: "模型",
+      bridgeHealth: "MoonBridge",
+      bridgeChecking: "正在预检",
+      bridgeReady: "Bridge 已就绪",
+      bridgeUnavailable: "Bridge 不可用",
+      bridgeNotRequired: "无需 Bridge",
+      bridgeCheckingMessage: "正在确认当前 provider 的本地 bridge 状态...",
+      bridgeReadyMessage: "当前 MoonBridge 配置完整，本地 /health 可响应。",
+      bridgeUnavailableMessage: "当前 MoonBridge 还没有准备好。",
+      bridgeNotRequiredMessage:
+        "当前 provider 直连 Responses API，不需要本地 MoonBridge。",
+      bridgeRefresh: "重新预检 MoonBridge",
+      bridgeEndpoint: "Bridge",
+      bridgeUpstream: "上游",
+      bridgeModel: "模型",
+      bridgeReason: "原因",
+      reasoning: "推理强度",
+      runtimeEvents: "运行事件",
+      googleIntegration: "Google 集成",
+      connectGoogle: "连接 Google 集成",
       reasoningOptions: {
-        low: '低',
-        medium: '中',
-        high: '高',
-        xhigh: '极高'
-      }
+        low: "低",
+        medium: "中",
+        high: "高",
+        xhigh: "极高",
+      },
     },
     runtime: {
-      memoryRecalled: '已召回记忆',
-      zeroMemories: '0 条记忆',
-      planCreated: '计划已保存',
-      planRecovered: '已恢复计划',
+      memoryRecalled: "已召回记忆",
+      zeroMemories: "0 条记忆",
+      planCreated: "计划已保存",
+      planRecovered: "已恢复计划",
       planDetail: (title, stepCount) => `${title} · ${stepCount} 步`,
       subagentStarted: (agent) => `子代理 ${agent} 已启动`,
       subagentCompleted: (agent) => `子代理 ${agent} 已完成`,
-      responseCompleted: '响应完成',
-      status: '状态',
-      error: '后端错误'
+      responseCompleted: "响应完成",
+      status: "状态",
+      error: "后端错误",
     },
     toolCall: {
       approvalNeeded: (name) => `${name} 需要审批`,
       called: (name) => `已调用 ${name}`,
       calling: (name) => `正在调用 ${name}...`,
-      waitingForResult: '等待结果...'
+      waitingForResult: "等待结果...",
     },
     approval: {
       request: (id) => `Kodeks 请求批准工具调用 ${id}。`,
-      approve: '批准',
-      decline: '拒绝'
-    }
+      approve: "批准",
+      decline: "拒绝",
+    },
   },
   en: {
     app: {
-      welcome: 'Hi, I am Kodeks. Send me the code context you want handled.',
-      mobileToolsOpen: 'Open tools panel',
-      mobileToolsClose: 'Close tools panel',
+      welcome: "Hi, I am Kodeks. Send me the code context you want handled.",
+      mobileToolsOpen: "Open tools panel",
+      mobileToolsClose: "Close tools panel",
       runtimeFailed: (message) => `Runtime failed: ${message}`,
       requestFailed:
-        'Request failed. Confirm the local Next.js runtime is still running.'
+        "Request failed. Confirm the local Next.js runtime is still running.",
     },
     chat: {
-      composerPlaceholder: 'Message Kodeks...',
-      send: 'Send message',
-      stop: 'Stop'
+      composerPlaceholder: "Message Kodeks...",
+      send: "Send message",
+      stop: "Stop",
     },
     tools: {
-      preferences: 'Interface',
-      language: 'Language',
-      theme: 'Theme',
-      system: 'System',
-      device: 'Device',
-      light: 'Light',
-      dark: 'Dark',
-      fileSearch: 'File Search',
+      preferences: "Interface",
+      language: "Language",
+      theme: "Theme",
+      system: "System",
+      device: "Device",
+      light: "Light",
+      dark: "Dark",
+      fileSearch: "File Search",
       fileSearchDescription:
-        'Use local workspace file search and grep through Kodeks tools.',
-      selectFiles: 'Select files',
-      selectedFiles: 'Selected files',
-      noFilesSelected: 'No files selected',
-      fileSearchPlaceholder: 'Search workspace files...',
-      fileSearchLoading: 'Reading workspace files...',
-      fileSearchError: 'Failed to read file list',
-      noFileMatches: 'No matching files',
+        "Use local workspace file search and grep through Kodeks tools.",
+      selectFiles: "Select files",
+      selectedFiles: "Selected files",
+      noFilesSelected: "No files selected",
+      fileSearchPlaceholder: "Search workspace files...",
+      fileSearchLoading: "Reading workspace files...",
+      fileSearchError: "Failed to read file list",
+      noFileMatches: "No matching files",
       selectedFileCount: (count) =>
-        `${count} file${count === 1 ? '' : 's'} selected`,
-      session: 'Session',
-      newSession: 'New session',
-      sessionHistory: 'Recent sessions',
-      loadingSessions: 'Loading sessions...',
-      sessionLoadError: 'Failed to load sessions',
-      noSessions: 'No session history yet',
-      collapseSidebar: 'Collapse sidebar',
-      expandSidebar: 'Expand sidebar',
-      debugPanel: 'Debug',
-      appearancePreview: 'Appearance',
-      autoSession: 'auto session',
-      webSearch: 'Web Search',
-      webSearchDescription:
-        'Run live web search through the Brave Search API. Configure BRAVE_SEARCH_API_KEY to enable the web_search tool.',
-      braveProvider: 'Brave Search',
+        `${count} file${count === 1 ? "" : "s"} selected`,
+      session: "Session",
+      newSession: "New session",
+      sessionHistory: "Recent sessions",
+      loadingSessions: "Loading sessions...",
+      sessionLoadError: "Failed to load sessions",
+      noSessions: "No session history yet",
+      collapseSidebar: "Collapse sidebar",
+      expandSidebar: "Expand sidebar",
+      debugPanel: "Debug",
+      appearancePreview: "Appearance",
+      autoSession: "auto session",
+      apiKey: "API Key",
+      apiKeyConfigured: "Saved",
+      save: "Save",
+      saved: "Saved",
+      saving: "Saving",
+      settingsError: "Settings failed",
       userLocation: "User's location",
-      clear: 'Clear',
-      country: 'Country',
-      region: 'Region',
-      city: 'City',
-      disabledForLocal: 'Disabled for local Kodeks',
-      workspaceOnly: 'Workspace only',
-      notConfigured: 'Not configured',
-      codeInterpreter: 'Code Interpreter',
-      act: 'Act',
-      plan: 'Plan',
-      functions: 'Functions',
-      mcp: 'MCP',
+      clear: "Clear",
+      country: "Country",
+      region: "Region",
+      city: "City",
+      disabledForLocal: "Disabled for local Kodeks",
+      workspaceOnly: "Workspace only",
+      notConfigured: "Not configured",
+      codeInterpreter: "Code Interpreter",
+      act: "Act",
+      plan: "Plan",
+      functions: "Functions",
+      mcp: "MCP",
       mcpDescription:
-        'Reads MCP server manifests from KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL as the entry point for future MCP tool calls.',
-      mcpManifest: 'Env manifest',
-      skills: 'Skills',
+        "Reads MCP server manifests from KODEKS_MCP_SERVERS / KODEKS_MCP_SERVER_URL as the entry point for future MCP tool calls.",
+      mcpManifest: "Env manifest",
+      skills: "Skills",
       skillsDescription:
-        'Discovers skills from KODEKS_SKILLS_PATHS or workspace .kodeks/skills and lets the model read SKILL.md.',
-      skillSource: 'Skill roots',
-      runtimeSettings: 'Runtime',
-      provider: 'Provider',
-      reasoning: 'Reasoning',
-      runtimeEvents: 'Runtime events',
-      googleIntegration: 'Google Integration',
-      connectGoogle: 'Connect Google Integration',
+        "Discovers skills from KODEKS_SKILLS_PATHS or workspace .kodeks/skills and lets the model read SKILL.md.",
+      skillSource: "Skill roots",
+      runtimeSettings: "Runtime",
+      provider: "Provider",
+      model: "Model",
+      bridgeHealth: "MoonBridge",
+      bridgeChecking: "Checking",
+      bridgeReady: "Bridge ready",
+      bridgeUnavailable: "Bridge unavailable",
+      bridgeNotRequired: "Bridge not needed",
+      bridgeCheckingMessage:
+        "Checking the local bridge for the current provider...",
+      bridgeReadyMessage:
+        "MoonBridge is configured and local /health is responding.",
+      bridgeUnavailableMessage: "MoonBridge is not ready yet.",
+      bridgeNotRequiredMessage:
+        "The current provider connects to Responses directly and does not need MoonBridge.",
+      bridgeRefresh: "Refresh MoonBridge preflight",
+      bridgeEndpoint: "Bridge",
+      bridgeUpstream: "Upstream",
+      bridgeModel: "Model",
+      bridgeReason: "Reason",
+      reasoning: "Reasoning",
+      runtimeEvents: "Runtime events",
+      googleIntegration: "Google Integration",
+      connectGoogle: "Connect Google Integration",
       reasoningOptions: {
-        low: 'Low',
-        medium: 'Medium',
-        high: 'High',
-        xhigh: 'X-high'
-      }
+        low: "Low",
+        medium: "Medium",
+        high: "High",
+        xhigh: "X-high",
+      },
     },
     runtime: {
-      memoryRecalled: 'Memory recalled',
-      zeroMemories: '0 memories',
-      planCreated: 'Plan saved',
-      planRecovered: 'Plan recovered',
+      memoryRecalled: "Memory recalled",
+      zeroMemories: "0 memories",
+      planCreated: "Plan saved",
+      planRecovered: "Plan recovered",
       planDetail: (title, stepCount) => `${title} · ${stepCount} steps`,
       subagentStarted: (agent) => `Subagent ${agent} started`,
       subagentCompleted: (agent) => `Subagent ${agent} completed`,
-      responseCompleted: 'Response completed',
-      status: 'Status',
-      error: 'Backend error'
+      responseCompleted: "Response completed",
+      status: "Status",
+      error: "Backend error",
     },
     toolCall: {
       approvalNeeded: (name) => `Approval needed for ${name}`,
       called: (name) => `Called ${name}`,
       calling: (name) => `Calling ${name}...`,
-      waitingForResult: 'Waiting for result...'
+      waitingForResult: "Waiting for result...",
     },
     approval: {
       request: (id) => `Kodeks requests approval for tool call ${id}.`,
-      approve: 'Approve',
-      decline: 'Decline'
-    }
-  }
+      approve: "Approve",
+      decline: "Decline",
+    },
+  },
 };
 
 // 判断一个外部字符串是否是界面支持的语言偏好。
 export function isUiLanguagePreference(
-  value: string | null
+  value: string | null,
 ): value is UiLanguagePreference {
-  return value === 'system' || value === 'zh' || value === 'en';
+  return value === "system" || value === "zh" || value === "en";
 }
 
 // 判断一个外部字符串是否是界面支持的主题偏好。
 export function isUiThemePreference(
-  value: string | null
+  value: string | null,
 ): value is UiThemePreference {
-  return value === 'system' || value === 'light' || value === 'dark';
+  return value === "system" || value === "light" || value === "dark";
 }
 
 // 把 localStorage 或 URL 中的语言偏好解析成可发布的默认值。
 export function parseUiLanguagePreference(
-  value: string | null
+  value: string | null,
 ): UiLanguagePreference {
   return isUiLanguagePreference(value) ? value : defaultUiLanguagePreference;
 }
 
 // 把 localStorage 或 URL 中的主题偏好解析成可发布的默认值。
 export function parseUiThemePreference(
-  value: string | null
+  value: string | null,
 ): UiThemePreference {
   return isUiThemePreference(value) ? value : defaultUiThemePreference;
 }
@@ -347,23 +403,23 @@ export function parseUiThemePreference(
 // 在 system 模式下使用浏览器推断值，否则使用用户显式选择。
 export function resolveUiLanguage(
   preference: UiLanguagePreference,
-  systemLanguage: UiLanguage
+  systemLanguage: UiLanguage,
 ): UiLanguage {
-  return preference === 'system' ? systemLanguage : preference;
+  return preference === "system" ? systemLanguage : preference;
 }
 
 // 在 system 模式下使用系统深浅色，否则使用用户显式选择。
 export function resolveUiTheme(
   preference: UiThemePreference,
-  systemTheme: UiTheme
+  systemTheme: UiTheme,
 ): UiTheme {
-  return preference === 'system' ? systemTheme : preference;
+  return preference === "system" ? systemTheme : preference;
 }
 
 // 从本地存储读取语言偏好，遇到不可用或脏数据时回到 system。
 export function readUiLanguagePreference(
   storage: UiPreferenceStorage,
-  key: string
+  key: string,
 ): UiLanguagePreference {
   try {
     return parseUiLanguagePreference(storage.getItem(key));
@@ -375,7 +431,7 @@ export function readUiLanguagePreference(
 // 从本地存储读取主题偏好，遇到不可用或脏数据时回到 system。
 export function readUiThemePreference(
   storage: UiPreferenceStorage,
-  key: string
+  key: string,
 ): UiThemePreference {
   try {
     return parseUiThemePreference(storage.getItem(key));
@@ -388,7 +444,7 @@ export function readUiThemePreference(
 export function writeUiPreference(
   storage: UiPreferenceStorage,
   key: string,
-  value: UiLanguagePreference | UiThemePreference
+  value: UiLanguagePreference | UiThemePreference,
 ): boolean {
   try {
     storage.setItem(key, value);
@@ -400,18 +456,18 @@ export function writeUiPreference(
 
 const localizedWelcomeMessages = new Set([
   uiCopy.zh.app.welcome,
-  uiCopy.en.app.welcome
+  uiCopy.en.app.welcome,
 ]);
 const localizedRequestFailures = new Set([
   uiCopy.zh.app.requestFailed,
-  uiCopy.en.app.requestFailed
+  uiCopy.en.app.requestFailed,
 ]);
-const runtimeFailurePrefixes = ['运行失败：', 'Runtime failed: '] as const;
+const runtimeFailurePrefixes = ["运行失败：", "Runtime failed: "] as const;
 
 // 把框架级欢迎语和错误提示重新投影到当前语言，保留真实模型输出不变。
 export function localizeAssistantMessageContent(
   content: string,
-  copy: UiCopy
+  copy: UiCopy,
 ): string {
   if (localizedWelcomeMessages.has(content)) {
     return copy.app.welcome;

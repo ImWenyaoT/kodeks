@@ -1,9 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
-export type SessionMode = 'act' | 'plan';
+export type SessionMode = "act" | "plan";
 
 export type StoredSession = {
   id: string;
@@ -36,7 +36,7 @@ export type StoredMemory = {
   deletedAt: string | null;
 };
 
-export type MemoryLayer = 'atom' | 'scenario' | 'profile' | 'artifact';
+export type MemoryLayer = "atom" | "scenario" | "profile" | "artifact";
 
 export type StoredMemoryEvent = {
   id: string;
@@ -138,7 +138,7 @@ export type StoredApproval = {
   sessionId: string | null;
   toolCallId: string | null;
   command: unknown;
-  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  status: "pending" | "approved" | "rejected" | "executed";
   reason: string;
   createdAt: string;
   decidedAt: string | null;
@@ -150,12 +150,12 @@ export type StoredSubagentRun = {
   agentName: string;
   task: string;
   summary: string | null;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   createdAt: string;
   completedAt: string | null;
 };
 
-export type PlanStepStatus = 'pending' | 'in_progress' | 'completed';
+export type PlanStepStatus = "pending" | "in_progress" | "completed";
 
 export type StoredPlanStep = {
   id: string;
@@ -170,7 +170,7 @@ export type StoredPlanArtifact = {
   title: string;
   summary: string;
   steps: StoredPlanStep[];
-  status: 'active' | 'archived';
+  status: "active" | "archived";
   sourceMessageId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -200,7 +200,7 @@ export class ApprovalNotFoundError extends Error {
   // Names approval lookup failures so API routes can map them to 404.
   constructor(approvalId: string) {
     super(`Approval not found: ${approvalId}`);
-    this.name = 'ApprovalNotFoundError';
+    this.name = "ApprovalNotFoundError";
   }
 }
 
@@ -208,7 +208,7 @@ export class ApprovalAlreadyResolvedError extends Error {
   // Names double-decision failures so API routes can map them to 409.
   constructor(approvalId: string) {
     super(`Approval already resolved: ${approvalId}`);
-    this.name = 'ApprovalAlreadyResolvedError';
+    this.name = "ApprovalAlreadyResolvedError";
   }
 }
 
@@ -223,8 +223,8 @@ export class KodeksDatabase {
   private readonly database: SqliteDatabase;
 
   // 打开本地 SQLite 数据库，并初始化 MVP 需要的表结构。
-  constructor(path: string = ':memory:') {
-    if (path !== ':memory:') {
+  constructor(path: string = ":memory:") {
+    if (path !== ":memory:") {
       mkdirSync(dirname(path), { recursive: true });
     }
     this.database = new (loadSqliteDatabase())(path);
@@ -409,11 +409,11 @@ export class KodeksDatabase {
 
 // 加载 Node 内置 SQLite，同时避开 bundler 对 node:sqlite CommonJS require 的静态改写。
 function loadSqliteDatabase(): SqliteDatabaseConstructor {
-  const sqlite = process.getBuiltinModule('node:sqlite') as
+  const sqlite = process.getBuiltinModule("node:sqlite") as
     | { DatabaseSync?: SqliteDatabaseConstructor }
     | undefined;
   if (sqlite?.DatabaseSync === undefined) {
-    throw new Error('Node built-in SQLite DatabaseSync is unavailable.');
+    throw new Error("Node built-in SQLite DatabaseSync is unavailable.");
   }
   return sqlite.DatabaseSync;
 }
@@ -432,14 +432,14 @@ export class SessionRepository {
   }): Promise<StoredSession> {
     const now = currentTimestamp();
     const session: StoredSession = {
-      id: input.id ?? prefixedId('sess'),
+      id: input.id ?? prefixedId("sess"),
       title: input.title,
       mode: input.mode,
       workspaceRoot: input.workspaceRoot,
       parentSessionId: input.parentSessionId ?? null,
       createdAt: now,
       updatedAt: now,
-      archivedAt: null
+      archivedAt: null,
     };
     this.database
       .connection()
@@ -453,7 +453,7 @@ export class SessionRepository {
           workspace_root = excluded.workspace_root,
           parent_session_id = excluded.parent_session_id,
           updated_at = excluded.updated_at,
-          archived_at = excluded.archived_at`
+          archived_at = excluded.archived_at`,
       )
       .run(
         session.id,
@@ -463,7 +463,7 @@ export class SessionRepository {
         session.parentSessionId,
         session.createdAt,
         session.updatedAt,
-        session.archivedAt
+        session.archivedAt,
       );
     return session;
   }
@@ -472,7 +472,7 @@ export class SessionRepository {
   async getSession(id: string): Promise<StoredSession | null> {
     const row = this.database
       .connection()
-      .prepare('SELECT * FROM sessions WHERE id = ?')
+      .prepare("SELECT * FROM sessions WHERE id = ?")
       .get(id) as SessionRow | null | undefined;
     return row == null ? null : mapSession(row);
   }
@@ -482,7 +482,7 @@ export class SessionRepository {
     const rows = this.database
       .connection()
       .prepare(
-        'SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC, id ASC'
+        "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC, id ASC",
       )
       .all() as SessionRow[];
     return rows.map(mapSession);
@@ -492,7 +492,7 @@ export class SessionRepository {
   async updateMode(id: string, mode: SessionMode): Promise<void> {
     this.database
       .connection()
-      .prepare('UPDATE sessions SET mode = ?, updated_at = ? WHERE id = ?')
+      .prepare("UPDATE sessions SET mode = ?, updated_at = ? WHERE id = ?")
       .run(mode, currentTimestamp(), id);
   }
 
@@ -504,19 +504,19 @@ export class SessionRepository {
     agentEvent?: unknown | null;
   }): Promise<StoredMessage> {
     const message: StoredMessage = {
-      id: prefixedId('msg'),
+      id: prefixedId("msg"),
       sessionId: input.sessionId,
       role: input.role,
       content: input.content,
       agentEvent: input.agentEvent ?? null,
-      createdAt: currentTimestamp()
+      createdAt: currentTimestamp(),
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO messages
           (id, session_id, role, content_json, agent_event_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         message.id,
@@ -524,7 +524,7 @@ export class SessionRepository {
         message.role,
         JSON.stringify(message.content),
         message.agentEvent === null ? null : JSON.stringify(message.agentEvent),
-        message.createdAt
+        message.createdAt,
       );
     return message;
   }
@@ -533,7 +533,7 @@ export class SessionRepository {
   async getTranscript(sessionId: string): Promise<StoredMessage[]> {
     const rows = this.database
       .connection()
-      .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY rowid ASC')
+      .prepare("SELECT * FROM messages WHERE session_id = ? ORDER BY rowid ASC")
       .all(sessionId) as MessageRow[];
     return rows.map(mapMessage);
   }
@@ -545,23 +545,23 @@ export class MemoryRepository {
 
   // Stores one memory record and returns its id.
   async remember(input: {
-    scope: 'user' | 'project' | 'session' | string;
+    scope: "user" | "project" | "session" | string;
     content: string;
     sourceSessionId?: string | null;
     confidence?: number;
   }): Promise<string> {
     const content = input.content.trim();
     if (content.length === 0) {
-      throw new Error('Memory content is empty');
+      throw new Error("Memory content is empty");
     }
-    const id = prefixedId('mem');
+    const id = prefixedId("mem");
     const now = currentTimestamp();
     this.database
       .connection()
       .prepare(
         `INSERT INTO memories
           (id, scope, content, source_session_id, confidence, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .run(
         id,
@@ -570,7 +570,7 @@ export class MemoryRepository {
         input.sourceSessionId ?? null,
         input.confidence ?? 1,
         now,
-        now
+        now,
       );
     await this.rememberAtom({
       scope: input.scope,
@@ -578,7 +578,7 @@ export class MemoryRepository {
       sourceSessionId: input.sourceSessionId ?? null,
       confidence: input.confidence ?? 1,
       freshness: 1,
-      legacyMemoryId: id
+      legacyMemoryId: id,
     });
     return id;
   }
@@ -594,7 +594,7 @@ export class MemoryRepository {
       confidence: atom.confidence,
       createdAt: atom.createdAt,
       updatedAt: atom.updatedAt,
-      deletedAt: atom.deletedAt
+      deletedAt: atom.deletedAt,
     }));
   }
 
@@ -603,7 +603,7 @@ export class MemoryRepository {
     this.database
       .connection()
       .prepare(
-        'UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id = ?'
+        "UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id = ?",
       )
       .run(currentTimestamp(), currentTimestamp(), id);
     this.deleteAtomByLegacyMemoryId(id);
@@ -618,20 +618,20 @@ export class MemoryRepository {
     sourceId?: string | null;
   }): Promise<StoredMemoryEvent> {
     const event: StoredMemoryEvent = {
-      id: prefixedId('mevt'),
+      id: prefixedId("mevt"),
       sessionId: input.sessionId ?? null,
       role: input.role,
       content: input.content.trim(),
       eventType: input.eventType,
       sourceId: input.sourceId ?? null,
-      createdAt: currentTimestamp()
+      createdAt: currentTimestamp(),
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_events
           (id, session_id, role, content, event_type, source_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         event.id,
@@ -640,7 +640,7 @@ export class MemoryRepository {
         event.content,
         event.eventType,
         event.sourceId,
-        event.createdAt
+        event.createdAt,
       );
     return event;
   }
@@ -656,11 +656,11 @@ export class MemoryRepository {
   }): Promise<StoredMemoryAtom> {
     const content = input.content.trim();
     if (content.length === 0) {
-      throw new Error('Memory atom content is empty');
+      throw new Error("Memory atom content is empty");
     }
     const now = currentTimestamp();
     const atom: StoredMemoryAtom = {
-      id: prefixedId('matom'),
+      id: prefixedId("matom"),
       scope: input.scope,
       content,
       sourceSessionId: input.sourceSessionId ?? null,
@@ -669,14 +669,14 @@ export class MemoryRepository {
       legacyMemoryId: input.legacyMemoryId ?? null,
       createdAt: now,
       updatedAt: now,
-      deletedAt: null
+      deletedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_atoms
           (id, scope, content, source_session_id, confidence, freshness, legacy_memory_id, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .run(
         atom.id,
@@ -687,15 +687,15 @@ export class MemoryRepository {
         atom.freshness,
         atom.legacyMemoryId,
         atom.createdAt,
-        atom.updatedAt
+        atom.updatedAt,
       );
     this.indexSearchItem({
       id: atom.id,
-      layer: 'atom',
+      layer: "atom",
       scope: atom.scope,
       content: atom.content,
       sourceId: atom.sourceSessionId,
-      updatedAt: atom.updatedAt
+      updatedAt: atom.updatedAt,
     });
     return atom;
   }
@@ -711,23 +711,23 @@ export class MemoryRepository {
   }): Promise<StoredMemoryScenario> {
     const now = currentTimestamp();
     const scenario: StoredMemoryScenario = {
-      id: prefixedId('mscn'),
+      id: prefixedId("mscn"),
       scope: input.scope,
-      title: input.title.trim() || 'Scenario',
+      title: input.title.trim() || "Scenario",
       summary: input.summary.trim(),
       sourceSessionId: input.sourceSessionId ?? null,
       confidence: input.confidence ?? 1,
       freshness: input.freshness ?? 1,
       createdAt: now,
       updatedAt: now,
-      deletedAt: null
+      deletedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_scenarios
           (id, scope, title, summary, source_session_id, confidence, freshness, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .run(
         scenario.id,
@@ -738,15 +738,15 @@ export class MemoryRepository {
         scenario.confidence,
         scenario.freshness,
         scenario.createdAt,
-        scenario.updatedAt
+        scenario.updatedAt,
       );
     this.indexSearchItem({
       id: scenario.id,
-      layer: 'scenario',
+      layer: "scenario",
       scope: scenario.scope,
       content: `${scenario.title}\n${scenario.summary}`,
       sourceId: scenario.sourceSessionId,
-      updatedAt: scenario.updatedAt
+      updatedAt: scenario.updatedAt,
     });
     return scenario;
   }
@@ -762,7 +762,7 @@ export class MemoryRepository {
   }): Promise<StoredMemoryProfile> {
     const now = currentTimestamp();
     const profile: StoredMemoryProfile = {
-      id: prefixedId('mprf'),
+      id: prefixedId("mprf"),
       scope: input.scope,
       content: input.content.trim(),
       priority: input.priority ?? 1,
@@ -771,14 +771,14 @@ export class MemoryRepository {
       freshness: input.freshness ?? 1,
       createdAt: now,
       updatedAt: now,
-      deletedAt: null
+      deletedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_profiles
           (id, scope, content, priority, source_session_id, confidence, freshness, created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .run(
         profile.id,
@@ -789,7 +789,7 @@ export class MemoryRepository {
         profile.confidence,
         profile.freshness,
         profile.createdAt,
-        profile.updatedAt
+        profile.updatedAt,
       );
     return profile;
   }
@@ -799,7 +799,7 @@ export class MemoryRepository {
     const rows = this.database
       .connection()
       .prepare(
-        'SELECT * FROM memory_profiles WHERE deleted_at IS NULL ORDER BY priority DESC, updated_at DESC LIMIT ?'
+        "SELECT * FROM memory_profiles WHERE deleted_at IS NULL ORDER BY priority DESC, updated_at DESC LIMIT ?",
       )
       .all(limit) as MemoryProfileRow[];
     return rows.map(mapMemoryProfile);
@@ -817,7 +817,7 @@ export class MemoryRepository {
     contentHash: string;
   }): Promise<StoredMemoryArtifact> {
     const artifact: StoredMemoryArtifact = {
-      id: prefixedId('mart'),
+      id: prefixedId("mart"),
       refId: input.refId,
       sessionId: input.sessionId ?? null,
       toolCallId: input.toolCallId ?? null,
@@ -827,14 +827,14 @@ export class MemoryRepository {
       byteLength: input.byteLength,
       contentHash: input.contentHash,
       createdAt: currentTimestamp(),
-      deletedAt: null
+      deletedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_artifacts
           (id, ref_id, session_id, tool_call_id, tool_name, summary, file_path, byte_length, content_hash, created_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
       .run(
         artifact.id,
@@ -846,15 +846,15 @@ export class MemoryRepository {
         artifact.filePath,
         artifact.byteLength,
         artifact.contentHash,
-        artifact.createdAt
+        artifact.createdAt,
       );
     this.indexSearchItem({
       id: artifact.id,
-      layer: 'artifact',
-      scope: 'session',
+      layer: "artifact",
+      scope: "session",
       content: `${artifact.toolName}\n${artifact.summary}`,
       sourceId: artifact.refId,
-      updatedAt: artifact.createdAt
+      updatedAt: artifact.createdAt,
     });
     return artifact;
   }
@@ -864,7 +864,7 @@ export class MemoryRepository {
     const row = this.database
       .connection()
       .prepare(
-        'SELECT * FROM memory_artifacts WHERE ref_id = ? AND deleted_at IS NULL'
+        "SELECT * FROM memory_artifacts WHERE ref_id = ? AND deleted_at IS NULL",
       )
       .get(refId) as MemoryArtifactRow | null | undefined;
     return row == null ? null : mapMemoryArtifact(row);
@@ -881,7 +881,7 @@ export class MemoryRepository {
     }
     return {
       artifact,
-      content: await readFile(artifact.filePath, 'utf8')
+      content: await readFile(artifact.filePath, "utf8"),
     };
   }
 
@@ -901,26 +901,26 @@ export class MemoryRepository {
          ON CONFLICT(content_hash, embedding_model) DO UPDATE SET
           dimensions = excluded.dimensions,
           vector_blob = excluded.vector_blob,
-          updated_at = excluded.updated_at`
+          updated_at = excluded.updated_at`,
       )
       .run(
         input.contentHash,
         input.embeddingModel,
         vector.length,
         new Uint8Array(vector.buffer),
-        currentTimestamp()
+        currentTimestamp(),
       );
   }
 
   // Loads one cached embedding vector, or null when it has not been generated.
   async getEmbedding(
     contentHash: string,
-    embeddingModel: string
+    embeddingModel: string,
   ): Promise<number[] | null> {
     const row = this.database
       .connection()
       .prepare(
-        'SELECT * FROM memory_embeddings WHERE content_hash = ? AND embedding_model = ?'
+        "SELECT * FROM memory_embeddings WHERE content_hash = ? AND embedding_model = ?",
       )
       .get(contentHash, embeddingModel) as
       | MemoryEmbeddingRow
@@ -932,7 +932,7 @@ export class MemoryRepository {
     const bytes = row.vector_blob;
     const slice = bytes.buffer.slice(
       bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength
+      bytes.byteOffset + bytes.byteLength,
     );
     return [...new Float32Array(slice)];
   }
@@ -941,26 +941,26 @@ export class MemoryRepository {
   async recallLayered(
     query: string,
     limit = 5,
-    layers: MemoryLayer[] = ['atom', 'scenario', 'artifact']
+    layers: MemoryLayer[] = ["atom", "scenario", "artifact"],
   ): Promise<LayeredMemoryRecall> {
     const candidates = this.searchLayered(query, Math.max(30, limit), layers);
     const profiles = await this.listProfiles();
     return {
-      atoms: candidates.filter((item) => item.layer === 'atom').slice(0, limit),
+      atoms: candidates.filter((item) => item.layer === "atom").slice(0, limit),
       scenarios: candidates
-        .filter((item) => item.layer === 'scenario')
+        .filter((item) => item.layer === "scenario")
         .slice(0, limit),
       artifacts: candidates
-        .filter((item) => item.layer === 'artifact')
+        .filter((item) => item.layer === "artifact")
         .slice(0, limit),
-      profiles
+      profiles,
     };
   }
 
   // Applies semantic scores from an embedding provider to already recalled candidates.
   async applySemanticScores(
     items: LayeredMemoryItem[],
-    semanticScores: Map<string, number>
+    semanticScores: Map<string, number>,
   ): Promise<LayeredMemoryItem[]> {
     return items
       .map((item) => {
@@ -973,24 +973,24 @@ export class MemoryRepository {
             semantic * 0.3 +
             item.score.recency * 0.1 +
             item.score.confidence * 0.05 +
-            item.score.freshness * 0.05
+            item.score.freshness * 0.05,
         };
         return { ...item, score };
       })
       .sort(
         (left, right) =>
           right.score.total - left.score.total ||
-          right.updatedAt.localeCompare(left.updatedAt)
+          right.updatedAt.localeCompare(left.updatedAt),
       );
   }
 
   // Retrieves active L1 atom records for legacy recall.
   private async recallAtoms(
     query: string,
-    limit: number
+    limit: number,
   ): Promise<StoredMemoryAtom[]> {
-    const itemIds = this.searchLayered(query, limit, ['atom']).map(
-      (item) => item.id
+    const itemIds = this.searchLayered(query, limit, ["atom"]).map(
+      (item) => item.id,
     );
     if (itemIds.length === 0) {
       return [];
@@ -999,7 +999,7 @@ export class MemoryRepository {
       const row = this.database
         .connection()
         .prepare(
-          'SELECT * FROM memory_atoms WHERE id = ? AND deleted_at IS NULL'
+          "SELECT * FROM memory_atoms WHERE id = ? AND deleted_at IS NULL",
         )
         .get(id) as MemoryAtomRow | null | undefined;
       return row == null ? [] : [mapMemoryAtom(row)];
@@ -1017,14 +1017,14 @@ export class MemoryRepository {
   }): void {
     this.database
       .connection()
-      .prepare('DELETE FROM memory_search_fts WHERE id = ?')
+      .prepare("DELETE FROM memory_search_fts WHERE id = ?")
       .run(input.id);
     this.database
       .connection()
       .prepare(
         `INSERT INTO memory_search_fts
           (id, layer, scope, content, source_id, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -1032,7 +1032,7 @@ export class MemoryRepository {
         input.scope,
         input.content,
         input.sourceId,
-        input.updatedAt
+        input.updatedAt,
       );
   }
 
@@ -1041,18 +1041,18 @@ export class MemoryRepository {
     const now = currentTimestamp();
     const rows = this.database
       .connection()
-      .prepare('SELECT id FROM memory_atoms WHERE legacy_memory_id = ?')
+      .prepare("SELECT id FROM memory_atoms WHERE legacy_memory_id = ?")
       .all(legacyMemoryId) as Array<{ id: string }>;
     this.database
       .connection()
       .prepare(
-        'UPDATE memory_atoms SET deleted_at = ?, updated_at = ? WHERE legacy_memory_id = ?'
+        "UPDATE memory_atoms SET deleted_at = ?, updated_at = ? WHERE legacy_memory_id = ?",
       )
       .run(now, now, legacyMemoryId);
     for (const row of rows) {
       this.database
         .connection()
-        .prepare('DELETE FROM memory_search_fts WHERE id = ?')
+        .prepare("DELETE FROM memory_search_fts WHERE id = ?")
         .run(row.id);
     }
   }
@@ -1061,14 +1061,14 @@ export class MemoryRepository {
   private searchLayered(
     query: string,
     limit: number,
-    layers: MemoryLayer[]
+    layers: MemoryLayer[],
   ): LayeredMemoryItem[] {
     const queryTerms = memoryTerms(query);
     if (queryTerms.size === 0) {
       return [];
     }
-    const ftsQuery = [...queryTerms].map((term) => `${term}*`).join(' OR ');
-    const placeholders = layers.map(() => '?').join(', ');
+    const ftsQuery = [...queryTerms].map((term) => `${term}*`).join(" OR ");
+    const placeholders = layers.map(() => "?").join(", ");
     try {
       const rows = this.database
         .connection()
@@ -1078,7 +1078,7 @@ export class MemoryRepository {
             WHERE memory_search_fts MATCH ?
               AND layer IN (${placeholders})
             ORDER BY rank ASC
-            LIMIT ?`
+            LIMIT ?`,
         )
         .all(ftsQuery, ...layers, limit) as MemorySearchRow[];
       return rows.map((row) => mapSearchRow(row, queryTerms));
@@ -1091,11 +1091,11 @@ export class MemoryRepository {
   private searchLayeredByOverlap(
     queryTerms: Set<string>,
     limit: number,
-    layers: MemoryLayer[]
+    layers: MemoryLayer[],
   ): LayeredMemoryItem[] {
     const rows = this.database
       .connection()
-      .prepare('SELECT * FROM memory_search_fts')
+      .prepare("SELECT * FROM memory_search_fts")
       .all() as MemorySearchRow[];
     return rows
       .filter((row) => layers.includes(row.layer))
@@ -1104,7 +1104,7 @@ export class MemoryRepository {
       .sort(
         (left, right) =>
           right.score.total - left.score.total ||
-          right.updatedAt.localeCompare(left.updatedAt)
+          right.updatedAt.localeCompare(left.updatedAt),
       )
       .slice(0, limit);
   }
@@ -1112,7 +1112,7 @@ export class MemoryRepository {
 
 type MemoryServiceFetch = (
   url: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string }
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<{
   ok: boolean;
   json(): Promise<unknown>;
@@ -1126,7 +1126,7 @@ export type MemoryEmbeddingProviderInput = {
 };
 
 export type MemoryEmbeddingProvider = (
-  input: MemoryEmbeddingProviderInput
+  input: MemoryEmbeddingProviderInput,
 ) => Promise<number[] | null>;
 
 export type MemoryServiceOptions = {
@@ -1161,30 +1161,32 @@ export class MemoryService {
   }): Promise<MemoryContext> {
     const recall = await this.options.database.memories.recallLayered(
       input.query,
-      input.limit ?? 5
+      input.limit ?? 5,
     );
     const recalledItems = [
       ...recall.atoms,
       ...recall.scenarios,
-      ...recall.artifacts
+      ...recall.artifacts,
     ];
     const rerankedItems = await this.rerankWithEmbeddings(
       input.query,
-      recalledItems
+      recalledItems,
     );
     const artifactRefs = (
       await Promise.all(
         rerankedItems
-          .filter((item) => item.layer === 'artifact' && item.sourceId !== null)
+          .filter((item) => item.layer === "artifact" && item.sourceId !== null)
           .map((item) =>
-            this.options.database.memories.getArtifactByRef(item.sourceId ?? '')
-          )
+            this.options.database.memories.getArtifactByRef(
+              item.sourceId ?? "",
+            ),
+          ),
       )
     ).filter((artifact): artifact is StoredMemoryArtifact => artifact !== null);
     return {
       profiles: recall.profiles,
       recalledItems: rerankedItems.slice(0, input.limit ?? 5),
-      artifactRefs
+      artifactRefs,
     };
   }
 
@@ -1195,9 +1197,9 @@ export class MemoryService {
   }): Promise<void> {
     await this.options.database.memories.recordEvent({
       sessionId: input.sessionId,
-      role: 'user',
+      role: "user",
       content: input.content,
-      eventType: 'turn_input'
+      eventType: "turn_input",
     });
   }
 
@@ -1208,7 +1210,7 @@ export class MemoryService {
     toolName: string;
     output: string;
   }): Promise<string> {
-    const byteLength = Buffer.byteLength(input.output, 'utf8');
+    const byteLength = Buffer.byteLength(input.output, "utf8");
     if (byteLength <= this.artifactThresholdBytes) {
       return input.output;
     }
@@ -1216,8 +1218,8 @@ export class MemoryService {
     const refId = `memref_${contentHash.slice(0, 16)}`;
     const artifactDirectory = join(
       this.options.workspaceRoot,
-      '.kodeks',
-      'memory-artifacts'
+      ".kodeks",
+      "memory-artifacts",
     );
     await mkdir(artifactDirectory, { recursive: true });
     const filePath = join(artifactDirectory, `${refId}.md`);
@@ -1226,21 +1228,21 @@ export class MemoryService {
       filePath,
       [
         `# ${input.toolName} tool result`,
-        '',
+        "",
         `- ref: ${refId}`,
         `- session: ${input.sessionId}`,
-        `- toolCall: ${input.toolCallId ?? 'unknown'}`,
+        `- toolCall: ${input.toolCallId ?? "unknown"}`,
         `- bytes: ${byteLength}`,
-        '',
-        '## Summary',
-        '',
+        "",
+        "## Summary",
+        "",
         summary,
-        '',
-        '## Full Output',
-        '',
-        input.output
-      ].join('\n'),
-      'utf8'
+        "",
+        "## Full Output",
+        "",
+        input.output,
+      ].join("\n"),
+      "utf8",
     );
     const artifact = await this.options.database.memories.rememberArtifact({
       refId,
@@ -1250,7 +1252,7 @@ export class MemoryService {
       summary,
       filePath,
       byteLength,
-      contentHash
+      contentHash,
     });
     return JSON.stringify({
       ok: true,
@@ -1260,14 +1262,14 @@ export class MemoryService {
       summary: artifact.summary,
       byteLength: artifact.byteLength,
       message:
-        'Large tool output was stored as a memory artifact. Use read_memory_artifact with refId to inspect the full output.'
+        "Large tool output was stored as a memory artifact. Use read_memory_artifact with refId to inspect the full output.",
     });
   }
 
   // Adds local semantic scores from the configured embedding provider when reachable.
   private async rerankWithEmbeddings(
     query: string,
-    items: LayeredMemoryItem[]
+    items: LayeredMemoryItem[],
   ): Promise<LayeredMemoryItem[]> {
     if (!this.embeddingsEnabled() || items.length === 0) {
       return items;
@@ -1292,7 +1294,7 @@ export class MemoryService {
   // Returns true when embedding rerank is explicitly enabled.
   private embeddingsEnabled(): boolean {
     return (
-      this.environment.KODEKS_EMBEDDINGS_ENABLED === 'true' &&
+      this.environment.KODEKS_EMBEDDINGS_ENABLED === "true" &&
       this.resolveEmbeddingConfig() !== null
     );
   }
@@ -1306,7 +1308,7 @@ export class MemoryService {
     const contentHash = hashText(`${config.cacheModel}\n${text}`);
     const cached = await this.options.database.memories.getEmbedding(
       contentHash,
-      config.cacheModel
+      config.cacheModel,
     );
     if (cached !== null) {
       return cached;
@@ -1318,7 +1320,7 @@ export class MemoryService {
     await this.options.database.memories.rememberEmbedding({
       contentHash,
       embeddingModel: config.cacheModel,
-      vector
+      vector,
     });
     return vector;
   }
@@ -1330,61 +1332,61 @@ export class MemoryService {
     cacheModel: string;
   } | null {
     const provider = (
-      this.environment.KODEKS_EMBEDDINGS_PROVIDER ?? 'local'
+      this.environment.KODEKS_EMBEDDINGS_PROVIDER ?? "local"
     ).toLowerCase();
-    if (['disabled', 'none', 'off', 'false'].includes(provider)) {
+    if (["disabled", "none", "off", "false"].includes(provider)) {
       return null;
     }
     const model =
-      provider === 'ollama'
-        ? (this.environment.KODEKS_OLLAMA_EMBED_MODEL ?? 'embeddinggemma')
-        : provider === 'lmstudio' ||
-            provider === 'lm-studio' ||
-            provider === 'openai-compatible' ||
-            provider === 'openai'
+      provider === "ollama"
+        ? (this.environment.KODEKS_OLLAMA_EMBED_MODEL ?? "embeddinggemma")
+        : provider === "lmstudio" ||
+            provider === "lm-studio" ||
+            provider === "openai-compatible" ||
+            provider === "openai"
           ? (this.environment.KODEKS_LMSTUDIO_EMBED_MODEL ??
             this.environment.KODEKS_OPENAI_COMPAT_EMBED_MODEL ??
-            'Qwen/Qwen3-Embedding-0.6B')
-        : provider === 'huggingface' || provider === 'hf'
-          ? (this.environment.KODEKS_HUGGINGFACE_EMBED_MODEL ??
-            this.environment.KODEKS_HF_EMBED_MODEL ??
-            'ibm-granite/granite-embedding-97m-multilingual-r2')
-          : (this.environment.KODEKS_LOCAL_EMBED_MODEL ?? 'local-hash-v1');
+            "Qwen/Qwen3-Embedding-0.6B")
+          : provider === "huggingface" || provider === "hf"
+            ? (this.environment.KODEKS_HUGGINGFACE_EMBED_MODEL ??
+              this.environment.KODEKS_HF_EMBED_MODEL ??
+              "ibm-granite/granite-embedding-97m-multilingual-r2")
+            : (this.environment.KODEKS_LOCAL_EMBED_MODEL ?? "local-hash-v1");
     return {
       provider,
       model,
-      cacheModel: `${provider}:${model}`
+      cacheModel: `${provider}:${model}`,
     };
   }
 
   // Dispatches embedding generation to the injected, local, Ollama, or Hugging Face provider.
   private async fetchEmbedding(
     text: string,
-    config: { provider: string; model: string }
+    config: { provider: string; model: string },
   ): Promise<number[] | null> {
     if (this.embeddingProvider !== undefined) {
       return this.embeddingProvider({
         text,
         model: config.model,
         provider: config.provider,
-        environment: this.environment
+        environment: this.environment,
       });
     }
-    if (config.provider === 'local') {
+    if (config.provider === "local") {
       return createLocalHashEmbedding(text);
     }
-    if (config.provider === 'ollama') {
+    if (config.provider === "ollama") {
       return this.fetchOllamaEmbedding(text, config.model);
     }
     if (
-      config.provider === 'lmstudio' ||
-      config.provider === 'lm-studio' ||
-      config.provider === 'openai-compatible' ||
-      config.provider === 'openai'
+      config.provider === "lmstudio" ||
+      config.provider === "lm-studio" ||
+      config.provider === "openai-compatible" ||
+      config.provider === "openai"
     ) {
       return this.fetchOpenAICompatibleEmbedding(text, config.model);
     }
-    if (config.provider === 'huggingface' || config.provider === 'hf') {
+    if (config.provider === "huggingface" || config.provider === "hf") {
       return this.fetchHuggingFaceEmbedding(text, config.model);
     }
     return null;
@@ -1393,18 +1395,18 @@ export class MemoryService {
   // Embeds one text through Ollama's local /api/embed endpoint.
   private async fetchOllamaEmbedding(
     text: string,
-    model: string
+    model: string,
   ): Promise<number[] | null> {
     if (this.fetchClient === undefined) {
       return null;
     }
     const baseUrl =
-      this.environment.KODEKS_OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434';
+      this.environment.KODEKS_OLLAMA_BASE_URL ?? "http://127.0.0.1:11434";
     try {
       const response = await this.fetchClient(`${baseUrl}/api/embed`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model, input: text })
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, input: text }),
       });
       if (!response.ok) {
         return null;
@@ -1422,7 +1424,7 @@ export class MemoryService {
   // Embeds one text through an OpenAI-compatible /v1/embeddings endpoint such as LM Studio.
   private async fetchOpenAICompatibleEmbedding(
     text: string,
-    model: string
+    model: string,
   ): Promise<number[] | null> {
     if (this.fetchClient === undefined) {
       return null;
@@ -1430,23 +1432,25 @@ export class MemoryService {
     const baseUrl = trimTrailingSlash(
       this.environment.KODEKS_LMSTUDIO_BASE_URL ??
         this.environment.KODEKS_OPENAI_COMPAT_BASE_URL ??
-        'http://127.0.0.1:1234/v1'
+        "http://127.0.0.1:1234/v1",
     );
     const apiKey =
       this.environment.KODEKS_LMSTUDIO_API_KEY ??
       this.environment.KODEKS_OPENAI_COMPAT_API_KEY;
     try {
       const response = await this.fetchClient(`${baseUrl}/embeddings`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
-          ...(apiKey === undefined ? {} : { authorization: `Bearer ${apiKey}` })
+          "content-type": "application/json",
+          ...(apiKey === undefined
+            ? {}
+            : { authorization: `Bearer ${apiKey}` }),
         },
         body: JSON.stringify({
           model,
           input: text,
-          encoding_format: 'float'
-        })
+          encoding_format: "float",
+        }),
       });
       if (!response.ok) {
         return null;
@@ -1460,7 +1464,7 @@ export class MemoryService {
   // Embeds one text through a Hugging Face feature-extraction compatible endpoint.
   private async fetchHuggingFaceEmbedding(
     text: string,
-    model: string
+    model: string,
   ): Promise<number[] | null> {
     if (this.fetchClient === undefined) {
       return null;
@@ -1469,7 +1473,7 @@ export class MemoryService {
       this.environment.KODEKS_HUGGINGFACE_EMBED_URL ??
       `${trimTrailingSlash(
         this.environment.KODEKS_HUGGINGFACE_BASE_URL ??
-          'https://api-inference.huggingface.co'
+          "https://api-inference.huggingface.co",
       )}/pipeline/feature-extraction/${model}`;
     const token =
       this.environment.KODEKS_HUGGINGFACE_API_TOKEN ??
@@ -1477,12 +1481,12 @@ export class MemoryService {
       this.environment.HF_TOKEN;
     try {
       const response = await this.fetchClient(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
-          ...(token === undefined ? {} : { authorization: `Bearer ${token}` })
+          "content-type": "application/json",
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify({ inputs: text, normalize: true, truncate: true })
+        body: JSON.stringify({ inputs: text, normalize: true, truncate: true }),
       });
       if (!response.ok) {
         return null;
@@ -1506,21 +1510,21 @@ export class ApprovalRepository {
     reason: string;
   }): Promise<StoredApproval> {
     const approval: StoredApproval = {
-      id: prefixedId('appr'),
+      id: prefixedId("appr"),
       sessionId: input.sessionId ?? null,
       toolCallId: input.toolCallId ?? null,
       command: input.command,
-      status: 'pending',
+      status: "pending",
       reason: input.reason,
       createdAt: currentTimestamp(),
-      decidedAt: null
+      decidedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO approvals
           (id, session_id, tool_call_id, command_json, status, reason, created_at, decided_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         approval.id,
@@ -1530,7 +1534,7 @@ export class ApprovalRepository {
         approval.status,
         approval.reason,
         approval.createdAt,
-        approval.decidedAt
+        approval.decidedAt,
       );
     return approval;
   }
@@ -1539,7 +1543,7 @@ export class ApprovalRepository {
   async getApproval(id: string): Promise<StoredApproval> {
     const row = this.database
       .connection()
-      .prepare('SELECT * FROM approvals WHERE id = ?')
+      .prepare("SELECT * FROM approvals WHERE id = ?")
       .get(id) as ApprovalRow | null | undefined;
     if (row == null) {
       throw new ApprovalNotFoundError(id);
@@ -1549,60 +1553,60 @@ export class ApprovalRepository {
 
   // Marks a pending approval as approved exactly once.
   async approve(id: string): Promise<StoredApproval> {
-    return this.resolve(id, 'approved');
+    return this.resolve(id, "approved");
   }
 
   // Marks a pending approval as rejected exactly once.
   async reject(id: string, reason: string): Promise<StoredApproval> {
-    const approval = await this.resolve(id, 'rejected');
+    const approval = await this.resolve(id, "rejected");
     this.database
       .connection()
-      .prepare('UPDATE approvals SET reason = ? WHERE id = ?')
+      .prepare("UPDATE approvals SET reason = ? WHERE id = ?")
       .run(reason, id);
     return {
       ...approval,
-      reason
+      reason,
     };
   }
 
   // Marks an approved command as executed exactly once.
   async markExecuted(id: string): Promise<StoredApproval> {
     const approval = await this.getApproval(id);
-    if (approval.status !== 'approved') {
+    if (approval.status !== "approved") {
       throw new ApprovalAlreadyResolvedError(id);
     }
     const decidedAt = currentTimestamp();
     this.database
       .connection()
       .prepare(
-        "UPDATE approvals SET status = 'executed', decided_at = ? WHERE id = ?"
+        "UPDATE approvals SET status = 'executed', decided_at = ? WHERE id = ?",
       )
       .run(decidedAt, id);
     return {
       ...approval,
-      status: 'executed',
-      decidedAt
+      status: "executed",
+      decidedAt,
     };
   }
 
   // Resolves one pending approval while preventing double decisions.
   private async resolve(
     id: string,
-    status: 'approved' | 'rejected'
+    status: "approved" | "rejected",
   ): Promise<StoredApproval> {
     const approval = await this.getApproval(id);
-    if (approval.status !== 'pending') {
+    if (approval.status !== "pending") {
       throw new ApprovalAlreadyResolvedError(id);
     }
     const decidedAt = currentTimestamp();
     this.database
       .connection()
-      .prepare('UPDATE approvals SET status = ?, decided_at = ? WHERE id = ?')
+      .prepare("UPDATE approvals SET status = ?, decided_at = ? WHERE id = ?")
       .run(status, decidedAt, id);
     return {
       ...approval,
       status,
-      decidedAt
+      decidedAt,
     };
   }
 }
@@ -1614,25 +1618,25 @@ export class SubagentRepository {
   // Starts a subagent run and returns its durable id.
   async startRun(input: {
     parentSessionId: string;
-    agentName: 'explore' | string;
+    agentName: "explore" | string;
     task: string;
   }): Promise<StoredSubagentRun> {
     const run: StoredSubagentRun = {
-      id: prefixedId('sub'),
+      id: prefixedId("sub"),
       parentSessionId: input.parentSessionId,
       agentName: input.agentName,
       task: input.task,
       summary: null,
-      status: 'running',
+      status: "running",
       createdAt: currentTimestamp(),
-      completedAt: null
+      completedAt: null,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO subagent_runs
           (id, parent_session_id, agent_name, task, summary, status, created_at, completed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         run.id,
@@ -1642,7 +1646,7 @@ export class SubagentRepository {
         run.summary,
         run.status,
         run.createdAt,
-        run.completedAt
+        run.completedAt,
       );
     return run;
   }
@@ -1653,7 +1657,7 @@ export class SubagentRepository {
     this.database
       .connection()
       .prepare(
-        "UPDATE subagent_runs SET summary = ?, status = 'completed', completed_at = ? WHERE id = ?"
+        "UPDATE subagent_runs SET summary = ?, status = 'completed', completed_at = ? WHERE id = ?",
       )
       .run(summary, completedAt, id);
     const run = await this.getRun(id);
@@ -1667,7 +1671,7 @@ export class SubagentRepository {
   async getRun(id: string): Promise<StoredSubagentRun | null> {
     const row = this.database
       .connection()
-      .prepare('SELECT * FROM subagent_runs WHERE id = ?')
+      .prepare("SELECT * FROM subagent_runs WHERE id = ?")
       .get(id) as SubagentRow | null | undefined;
     return row == null ? null : mapSubagentRun(row);
   }
@@ -1689,27 +1693,27 @@ export class PlanRepository {
     this.database
       .connection()
       .prepare(
-        "UPDATE plan_artifacts SET status = 'archived', updated_at = ? WHERE session_id = ? AND status = 'active'"
+        "UPDATE plan_artifacts SET status = 'archived', updated_at = ? WHERE session_id = ? AND status = 'active'",
       )
       .run(now, input.sessionId);
 
     const plan: StoredPlanArtifact = {
-      id: prefixedId('plan'),
+      id: prefixedId("plan"),
       sessionId: input.sessionId,
-      title: input.title.trim() || 'Plan',
+      title: input.title.trim() || "Plan",
       summary: input.summary.trim(),
       steps: input.steps,
-      status: 'active',
+      status: "active",
       sourceMessageId: input.sourceMessageId ?? null,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO plan_artifacts
           (id, session_id, title, summary, steps_json, status, source_message_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         plan.id,
@@ -1720,19 +1724,19 @@ export class PlanRepository {
         plan.status,
         plan.sourceMessageId,
         plan.createdAt,
-        plan.updatedAt
+        plan.updatedAt,
       );
     return plan;
   }
 
   // Returns the latest active plan artifact for a session, if one exists.
   async getActiveBySession(
-    sessionId: string
+    sessionId: string,
   ): Promise<StoredPlanArtifact | null> {
     const row = this.database
       .connection()
       .prepare(
-        "SELECT * FROM plan_artifacts WHERE session_id = ? AND status = 'active' ORDER BY updated_at DESC, rowid DESC LIMIT 1"
+        "SELECT * FROM plan_artifacts WHERE session_id = ? AND status = 'active' ORDER BY updated_at DESC, rowid DESC LIMIT 1",
       )
       .get(sessionId) as PlanArtifactRow | null | undefined;
     return row == null ? null : mapPlanArtifact(row);
@@ -1743,7 +1747,7 @@ export class PlanRepository {
     const rows = this.database
       .connection()
       .prepare(
-        'SELECT * FROM plan_artifacts WHERE session_id = ? ORDER BY updated_at DESC, rowid DESC'
+        "SELECT * FROM plan_artifacts WHERE session_id = ? ORDER BY updated_at DESC, rowid DESC",
       )
       .all(sessionId) as PlanArtifactRow[];
     return rows.map(mapPlanArtifact);
@@ -1761,25 +1765,25 @@ export class AuditLogRepository {
     payload: unknown;
   }): Promise<StoredAuditLogEntry> {
     const entry: StoredAuditLogEntry = {
-      id: prefixedId('audit'),
+      id: prefixedId("audit"),
       sessionId: input.sessionId ?? null,
       eventType: input.eventType,
       payload: input.payload,
-      createdAt: currentTimestamp()
+      createdAt: currentTimestamp(),
     };
     this.database
       .connection()
       .prepare(
         `INSERT INTO audit_log
           (id, session_id, event_type, payload_json, created_at)
-         VALUES (?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?)`,
       )
       .run(
         entry.id,
         entry.sessionId,
         entry.eventType,
         JSON.stringify(entry.payload),
-        entry.createdAt
+        entry.createdAt,
       );
     return entry;
   }
@@ -1789,7 +1793,7 @@ export class AuditLogRepository {
     const rows = this.database
       .connection()
       .prepare(
-        'SELECT * FROM audit_log WHERE session_id = ? ORDER BY created_at ASC, id ASC'
+        "SELECT * FROM audit_log WHERE session_id = ? ORDER BY created_at ASC, id ASC",
       )
       .all(sessionId) as AuditLogRow[];
     return rows.map(mapAuditLogEntry);
@@ -1816,27 +1820,6 @@ type MessageRow = {
   created_at: string;
 };
 
-type MemoryRow = {
-  id: string;
-  scope: string;
-  content: string;
-  source_session_id: string | null;
-  confidence: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-};
-
-type MemoryEventRow = {
-  id: string;
-  session_id: string | null;
-  role: string;
-  content: string;
-  event_type: string;
-  source_id: string | null;
-  created_at: string;
-};
-
 type MemoryAtomRow = {
   id: string;
   scope: string;
@@ -1845,19 +1828,6 @@ type MemoryAtomRow = {
   confidence: number;
   freshness: number;
   legacy_memory_id: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-};
-
-type MemoryScenarioRow = {
-  id: string;
-  scope: string;
-  title: string;
-  summary: string;
-  source_session_id: string | null;
-  confidence: number;
-  freshness: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -1913,7 +1883,7 @@ type ApprovalRow = {
   session_id: string | null;
   tool_call_id: string | null;
   command_json: string;
-  status: StoredApproval['status'];
+  status: StoredApproval["status"];
   reason: string;
   created_at: string;
   decided_at: string | null;
@@ -1925,7 +1895,7 @@ type SubagentRow = {
   agent_name: string;
   task: string;
   summary: string | null;
-  status: StoredSubagentRun['status'];
+  status: StoredSubagentRun["status"];
   created_at: string;
   completed_at: string | null;
 };
@@ -1936,7 +1906,7 @@ type PlanArtifactRow = {
   title: string;
   summary: string;
   steps_json: string;
-  status: StoredPlanArtifact['status'];
+  status: StoredPlanArtifact["status"];
   source_message_id: string | null;
   created_at: string;
   updated_at: string;
@@ -1960,7 +1930,7 @@ function mapSession(row: SessionRow): StoredSession {
     parentSessionId: row.parent_session_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    archivedAt: row.archived_at
+    archivedAt: row.archived_at,
   };
 }
 
@@ -1975,21 +1945,7 @@ function mapMessage(row: MessageRow): StoredMessage {
       row.agent_event_json === null
         ? null
         : (JSON.parse(row.agent_event_json) as unknown),
-    createdAt: row.created_at
-  };
-}
-
-// Maps SQLite memory rows into memory domain objects.
-function mapMemory(row: MemoryRow): StoredMemory {
-  return {
-    id: row.id,
-    scope: row.scope,
-    content: row.content,
-    sourceSessionId: row.source_session_id,
-    confidence: row.confidence,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
   };
 }
 
@@ -2005,23 +1961,7 @@ function mapMemoryAtom(row: MemoryAtomRow): StoredMemoryAtom {
     legacyMemoryId: row.legacy_memory_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
-  };
-}
-
-// Maps SQLite L2 scenario rows into layered memory domain objects.
-function mapMemoryScenario(row: MemoryScenarioRow): StoredMemoryScenario {
-  return {
-    id: row.id,
-    scope: row.scope,
-    title: row.title,
-    summary: row.summary,
-    sourceSessionId: row.source_session_id,
-    confidence: row.confidence,
-    freshness: row.freshness,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -2037,7 +1977,7 @@ function mapMemoryProfile(row: MemoryProfileRow): StoredMemoryProfile {
     freshness: row.freshness,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    deletedAt: row.deleted_at
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -2054,7 +1994,7 @@ function mapMemoryArtifact(row: MemoryArtifactRow): StoredMemoryArtifact {
     byteLength: row.byte_length,
     contentHash: row.content_hash,
     createdAt: row.created_at,
-    deletedAt: row.deleted_at
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -2068,7 +2008,7 @@ function mapApproval(row: ApprovalRow): StoredApproval {
     status: row.status,
     reason: row.reason,
     createdAt: row.created_at,
-    decidedAt: row.decided_at
+    decidedAt: row.decided_at,
   };
 }
 
@@ -2082,7 +2022,7 @@ function mapSubagentRun(row: SubagentRow): StoredSubagentRun {
     summary: row.summary,
     status: row.status,
     createdAt: row.created_at,
-    completedAt: row.completed_at
+    completedAt: row.completed_at,
   };
 }
 
@@ -2097,7 +2037,7 @@ function mapPlanArtifact(row: PlanArtifactRow): StoredPlanArtifact {
     status: row.status,
     sourceMessageId: row.source_message_id,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 }
 
@@ -2108,13 +2048,13 @@ function mapAuditLogEntry(row: AuditLogRow): StoredAuditLogEntry {
     sessionId: row.session_id,
     eventType: row.event_type,
     payload: JSON.parse(row.payload_json) as unknown,
-    createdAt: row.created_at
+    createdAt: row.created_at,
   };
 }
 
 // Generates a compact durable id with a readable prefix.
 function prefixedId(prefix: string): string {
-  return `${prefix}_${randomUUID().replaceAll('-', '')}`;
+  return `${prefix}_${randomUUID().replaceAll("-", "")}`;
 }
 
 // Returns an ISO timestamp for records that need stable JSON serialization.
@@ -2129,11 +2069,11 @@ function readStoredPlanSteps(value: string): StoredPlanStep[] {
     return [];
   }
   return parsed.flatMap((item) => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
       return [];
     }
     const record = item as Record<string, unknown>;
-    if (typeof record.id !== 'string' || typeof record.title !== 'string') {
+    if (typeof record.id !== "string" || typeof record.title !== "string") {
       return [];
     }
     return [
@@ -2141,15 +2081,15 @@ function readStoredPlanSteps(value: string): StoredPlanStep[] {
         id: record.id,
         title: record.title,
         status: readPlanStepStatus(record.status),
-        details: typeof record.details === 'string' ? record.details : null
-      }
+        details: typeof record.details === "string" ? record.details : null,
+      },
     ];
   });
 }
 
 // Normalizes plan step status strings from persisted JSON.
 function readPlanStepStatus(value: unknown): PlanStepStatus {
-  return value === 'in_progress' || value === 'completed' ? value : 'pending';
+  return value === "in_progress" || value === "completed" ? value : "pending";
 }
 
 // Extracts lightweight recall terms for the MVP memory scorer.
@@ -2158,14 +2098,14 @@ function memoryTerms(text: string): Set<string> {
     text
       .toLowerCase()
       .match(/[a-z0-9_\u4e00-\u9fff]+/gu)
-      ?.filter((term) => term.length > 1) ?? []
+      ?.filter((term) => term.length > 1) ?? [],
   );
 }
 
 // Counts how many query terms are present in a memory record.
 function overlapScore(
   queryTerms: Set<string>,
-  contentTerms: Set<string>
+  contentTerms: Set<string>,
 ): number {
   let score = 0;
   for (const term of queryTerms) {
@@ -2179,7 +2119,7 @@ function overlapScore(
 // Maps one FTS row into a shared recall item with explainable component scores.
 function mapSearchRow(
   row: MemorySearchRow,
-  queryTerms: Set<string>
+  queryTerms: Set<string>,
 ): LayeredMemoryItem {
   const keyword =
     row.rank === undefined
@@ -2192,7 +2132,7 @@ function mapSearchRow(
     recency,
     confidence: 1,
     freshness: 1,
-    total: keyword * 0.7 + recency * 0.2 + 0.1
+    total: keyword * 0.7 + recency * 0.2 + 0.1,
   };
   return {
     id: row.id,
@@ -2201,7 +2141,7 @@ function mapSearchRow(
     content: row.content,
     sourceId: row.source_id,
     updatedAt: row.updated_at,
-    score
+    score,
   };
 }
 
@@ -2214,12 +2154,12 @@ function recencyScore(timestamp: string): number {
 
 // Hashes text for stable artifact refs and embedding cache keys.
 function hashText(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
+  return createHash("sha256").update(text).digest("hex");
 }
 
 // Summarizes large tool output before storing the full body behind an artifact ref.
 function summarizeArtifactOutput(toolName: string, output: string): string {
-  const compact = output.replace(/\s+/gu, ' ').trim();
+  const compact = output.replace(/\s+/gu, " ").trim();
   const summary =
     compact.length > 500 ? compact.slice(0, 500).trimEnd() : compact;
   return summary.length === 0
@@ -2231,7 +2171,7 @@ function summarizeArtifactOutput(toolName: string, output: string): string {
 function readOllamaEmbedding(payload: unknown): number[] | null {
   if (
     payload === null ||
-    typeof payload !== 'object' ||
+    typeof payload !== "object" ||
     Array.isArray(payload)
   ) {
     return null;
@@ -2248,7 +2188,7 @@ function readOllamaEmbedding(payload: unknown): number[] | null {
 function readOpenAICompatibleEmbedding(payload: unknown): number[] | null {
   if (
     payload === null ||
-    typeof payload !== 'object' ||
+    typeof payload !== "object" ||
     Array.isArray(payload)
   ) {
     return null;
@@ -2257,7 +2197,7 @@ function readOpenAICompatibleEmbedding(payload: unknown): number[] | null {
   const data = record.data;
   if (Array.isArray(data) && data.length > 0) {
     const first = data[0];
-    if (first !== null && typeof first === 'object' && !Array.isArray(first)) {
+    if (first !== null && typeof first === "object" && !Array.isArray(first)) {
       return readNumberVector((first as Record<string, unknown>).embedding);
     }
   }
@@ -2290,7 +2230,7 @@ function readNumberVector(value: unknown): number[] | null {
     return null;
   }
   const vector = value.filter(
-    (item): item is number => typeof item === 'number' && Number.isFinite(item)
+    (item): item is number => typeof item === "number" && Number.isFinite(item),
   );
   return vector.length === value.length && vector.length > 0 ? vector : null;
 }
@@ -2298,7 +2238,7 @@ function readNumberVector(value: unknown): number[] | null {
 // Pools token-level embeddings into one document vector.
 function averageVectors(vectors: Array<number[] | null>): number[] | null {
   const validVectors = vectors.filter(
-    (vector): vector is number[] => vector !== null
+    (vector): vector is number[] => vector !== null,
   );
   if (validVectors.length === 0) {
     return null;
@@ -2321,7 +2261,7 @@ function createLocalHashEmbedding(text: string, dimensions = 128): number[] {
   const vector = Array.from({ length: dimensions }, () => 0);
   const tokens = tokenizeForLocalEmbedding(text);
   for (const token of tokens) {
-    const digest = createHash('sha256').update(token).digest();
+    const digest = createHash("sha256").update(token).digest();
     const index = digest.readUInt32BE(0) % dimensions;
     vector[index] += 1;
   }
@@ -2335,7 +2275,7 @@ function tokenizeForLocalEmbedding(text: string): string[] {
     return tokens;
   }
   const compact = text.trim();
-  return compact.length === 0 ? [''] : [...compact];
+  return compact.length === 0 ? [""] : [...compact];
 }
 
 // Normalizes a vector for cosine scoring while preserving all-zero fallback vectors.
@@ -2349,7 +2289,7 @@ function normalizeVector(vector: number[]): number[] {
 
 // Removes a trailing slash before appending provider-specific endpoint paths.
 function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/u, '');
+  return value.replace(/\/+$/u, "");
 }
 
 // Computes cosine similarity for vectors returned by the same embedding model.

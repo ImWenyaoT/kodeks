@@ -73,9 +73,9 @@ describe('createBridgeServer', () => {
         stream: true
       },
       bridgeOptions: {
-        deepSeekApiKey: 'deepseek-key',
-        deepSeekBaseURL: 'https://deepseek.test/',
-        deepSeekModel: 'deepseek-local',
+        chatCompletionsApiKey: 'chat-key',
+        chatCompletionsBaseURL: 'https://qwen.test/v1/',
+        chatCompletionsModel: 'qwen-local',
         fetch: fetchImpl
       }
     });
@@ -84,14 +84,14 @@ describe('createBridgeServer', () => {
     expect(response.headers['Content-Type']).toBe('text/event-stream');
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]).toMatchObject({
-      url: 'https://deepseek.test/chat/completions'
+      url: 'https://qwen.test/v1/chat/completions'
     });
     expect(fetchCalls[0]?.init.headers).toMatchObject({
-      Authorization: 'Bearer deepseek-key',
+      Authorization: 'Bearer chat-key',
       'Content-Type': 'application/json'
     });
     expect(fetchCalls[0]?.payload).toMatchObject({
-      model: 'deepseek-local',
+      model: 'qwen-local',
       stream: true,
       thinking: { type: 'disabled' },
       messages: [
@@ -116,7 +116,7 @@ describe('createBridgeServer', () => {
     expect(response.body).toContain('data: [DONE]');
   });
 
-  it('fails Responses requests early when no DeepSeek key is configured', async () => {
+  it('fails Responses requests early when no Chat Completions key is configured', async () => {
     await expect(
       requestBridge('/v1/responses', {
         method: 'POST',
@@ -124,8 +124,45 @@ describe('createBridgeServer', () => {
       })
     ).resolves.toMatchObject({
       status: 500,
-      body: expect.stringContaining('KODEKS_BRIDGE_DEEPSEEK_API_KEY')
+      body: expect.stringContaining('KODEKS_CHAT_COMPLETIONS_API_KEY')
     });
+  });
+
+  it('keeps DeepSeek bridge option names as compatibility aliases', async () => {
+    const fetchCalls: Array<{ url: string; payload: Record<string, unknown> }> =
+      [];
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      fetchCalls.push({ url: String(url), payload });
+      return new Response(
+        [
+          sseData({
+            id: 'chatcmpl_bridge',
+            choices: [{ delta: {}, finish_reason: 'stop' }]
+          }),
+          'data: [DONE]\n\n'
+        ].join(''),
+        { status: 200 }
+      );
+    };
+
+    await requestBridge('/v1/responses', {
+      method: 'POST',
+      body: { model: 'bridge', input: 'hello', stream: true },
+      bridgeOptions: {
+        deepSeekApiKey: 'deepseek-key',
+        deepSeekBaseURL: 'https://deepseek.test',
+        deepSeekModel: 'deepseek-local',
+        fetch: fetchImpl
+      }
+    });
+
+    expect(fetchCalls).toEqual([
+      {
+        url: 'https://deepseek.test/chat/completions',
+        payload: expect.objectContaining({ model: 'deepseek-local' })
+      }
+    ]);
   });
 });
 

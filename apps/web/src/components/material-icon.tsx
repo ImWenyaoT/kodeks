@@ -1,4 +1,5 @@
 const materialIconPaths: Record<string, string> = {
+  add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z',
   account_tree:
     'M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3h7ZM7 9H4V5h3v4Zm13 10h-3v-4h3v4Zm0-10h-3V5h3v4Z',
   arrow_upward: 'M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12 12 4l-8 8Z',

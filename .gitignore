@@ -2,16 +2,23 @@
 node_modules/
 apps/*/node_modules/
 packages/*/node_modules/
+.pnpm-store/
+.npm/
 
 # Build output and framework caches
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
 apps/web/next-env.d.ts
 .next/
 apps/*/.next/
+apps/*/out/
 .turbo/
 .vite/
+.cache/
+.eslintcache
 *.tsbuildinfo
 
 # Runtime state and local databases
@@ -43,20 +50,30 @@ __pycache__/
 
 # OS and editor-local files
 .DS_Store
+._*
 Thumbs.db
 .idea/
 .vscode/*
 !.vscode/settings.json
 *.swp
 *.swo
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
 
 # Generated or exploratory documentation.
 # Keep product docs and Superpowers specs synced for handoff.
 docs/*
 !docs/PRD.md
+!docs/architecture.md
 !docs/2026-05-24-agent-feedback-retrospective.md
 !docs/superpowers/
 !docs/superpowers/**
+
+# Root-level design exports and scratch HTML prototypes.
+/*.html
 
 # Logs
 *.log

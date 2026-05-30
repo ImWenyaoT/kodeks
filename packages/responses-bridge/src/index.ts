@@ -7,6 +7,9 @@ import {
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export type ResponsesBridgeOptions = {
+  chatCompletionsApiKey?: string;
+  chatCompletionsBaseURL?: string;
+  chatCompletionsModel?: string;
   deepSeekApiKey?: string;
   deepSeekBaseURL?: string;
   deepSeekModel?: string;
@@ -174,11 +177,9 @@ type PendingToolCall = {
   argumentsText: string;
 };
 
-const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
-const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-pro';
 const DEFAULT_MODEL_ALIASES = ['bridge', 'moonbridge'];
 
-// 创建一个 Node HTTP server，用 OpenAI Responses 入口转发到 DeepSeek Chat Completions。
+// 创建一个 Node HTTP server，用 OpenAI Responses 入口转发到 Chat Completions。
 export function createBridgeServer(options: ResponsesBridgeOptions = {}) {
   return createServer((request, response) => {
     void handleBridgeRequest(request, response, options);
@@ -379,18 +380,18 @@ async function handleBridgeRequest(
   writeJson(response, 404, { error: { message: 'Not found.' } });
 }
 
-// 执行一次 Responses 请求转发，并把上游 DeepSeek SSE 流写回客户端。
+// 执行一次 Responses 请求转发，并把上游 Chat Completions SSE 流写回客户端。
 async function handleResponses(
   request: IncomingMessage,
   response: ServerResponse,
   options: ResponsesBridgeOptions
 ): Promise<void> {
-  const apiKey = options.deepSeekApiKey;
+  const apiKey = options.chatCompletionsApiKey ?? options.deepSeekApiKey;
   if (apiKey === undefined || apiKey.trim().length === 0) {
     writeJson(response, 500, {
       error: {
         message:
-          'KODEKS_BRIDGE_DEEPSEEK_API_KEY or DEEPSEEK_API_KEY is required.'
+          'KODEKS_CHAT_COMPLETIONS_API_KEY, KODEKS_BRIDGE_DEEPSEEK_API_KEY, or DEEPSEEK_API_KEY is required.'
       }
     });
     return;
@@ -398,8 +399,19 @@ async function handleResponses(
 
   const body = (await readJsonBody(request)) as ResponsesRequest;
   const coreRequest = toCoreRequest(body);
+  const upstreamModel = options.chatCompletionsModel ?? options.deepSeekModel;
+  if (upstreamModel === undefined || upstreamModel.trim().length === 0) {
+    writeJson(response, 500, {
+      error: {
+        message:
+          'KODEKS_CHAT_COMPLETIONS_MODEL, KODEKS_BRIDGE_DEEPSEEK_MODEL, or DEEPSEEK_MODEL is required.'
+      }
+    });
+    return;
+  }
+
   const deepSeekRequest = toDeepSeekChatRequest(coreRequest, {
-    model: options.deepSeekModel ?? DEFAULT_DEEPSEEK_MODEL
+    model: upstreamModel
   });
   const upstream = await fetchDeepSeekStream(deepSeekRequest, apiKey, options);
 
@@ -424,9 +436,18 @@ async function* fetchDeepSeekStream(
   options: ResponsesBridgeOptions
 ): AsyncIterable<DeepSeekStreamChunk> {
   const fetchImpl = options.fetch ?? fetch;
-  const baseURL = trimTrailingSlash(
-    options.deepSeekBaseURL ?? DEFAULT_DEEPSEEK_BASE_URL
-  );
+  const configuredBaseURL =
+    options.chatCompletionsBaseURL ?? options.deepSeekBaseURL;
+  if (configuredBaseURL === undefined || configuredBaseURL.trim().length === 0) {
+    yield {
+      error: {
+        message:
+          'KODEKS_CHAT_COMPLETIONS_BASE_URL, KODEKS_BRIDGE_DEEPSEEK_BASE_URL, or DEEPSEEK_BASE_URL is required.'
+      }
+    };
+    return;
+  }
+  const baseURL = trimTrailingSlash(configuredBaseURL);
   const response = await fetchImpl(`${baseURL}/chat/completions`, {
     method: 'POST',
     headers: {

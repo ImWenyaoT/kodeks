@@ -15,13 +15,12 @@ The legacy Python implementation has been removed from the active repository; th
 - Next.js App Router web app and API routes.
 - Streaming chat over Server-Sent Events.
 - OpenAI Agents SDK as the primary agent runtime, pinned to the Responses API for OpenAI-compatible providers.
-- Built-in TypeScript Responses bridge for running DeepSeek through an OpenAI Responses-compatible local endpoint.
-- DeepSeek Chat Completions adapter kept as the non-Responses fallback with Thinking Mode and function tool streaming.
+- Direct Responses-compatible endpoint support.
+- Built-in MoonBridge adapter for exposing Chat Completions-compatible endpoints through a local Responses API.
 - Workspace-scoped file tools with internal path blocking.
 - Shell execution harness with timeout and dangerous command detection.
 - SQLite-backed sessions, transcripts, memories, approvals, subagent runs, and audit logs.
 - Plan mode with read-only tool filtering.
-- Vercel AI SDK UIMessage stream adapter for SDK-native clients.
 
 ## Quick Start
 
@@ -64,19 +63,74 @@ curl -N -X POST "$APP_URL/api/chat/stream" \
   -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
 ```
 
-Vercel AI SDK UIMessage stream:
-
-```bash
-curl -N -X POST "$APP_URL/api/chat/ui-stream" \
-  -H "Content-Type: application/json" \
-  -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
-```
-
 ## Configuration
 
 Required:
 
-- `OPENAI_API_KEY` for the default OpenAI Agents SDK + Responses path, `KODEKS_MODEL_PROVIDER=bridge` with the local bridge, or `DEEPSEEK_API_KEY` for direct DeepSeek Chat Completions fallback.
+- A Responses-compatible endpoint, or a Chat Completions-compatible endpoint routed through MoonBridge.
+
+Kodeks no longer requires secrets to live in the repo `.env`. For local product-style use, put model configuration in the user config file outside the workspace:
+
+- Default: `~/.kodeks/config.json`
+- Override the directory with `KODEKS_CONFIG_DIR`
+- Override the exact file with `KODEKS_CONFIG_PATH`
+
+Kodeks still reads the earlier platform-specific config path as a compatibility fallback when the new `~/.kodeks/config.json` file does not exist.
+
+```json
+{
+  "model": {
+    "provider": "responses",
+    "responses": {
+      "apiKey": "sk-...",
+      "baseURL": "https://api.openai.com/v1",
+      "model": "gpt-5.4-mini"
+    }
+  }
+}
+```
+
+For an OpenAI-compatible service that already implements the Responses API, choose `provider: "responses"` and Kodeks will call it directly. For a service that only implements Chat Completions, such as many DeepSeek or Qwen deployments, choose MoonBridge and configure the upstream Chat Completions endpoint:
+
+```json
+{
+  "model": {
+    "provider": "moonbridge",
+    "chatCompletions": {
+      "apiKey": "sk-or-local-placeholder",
+      "baseURL": "https://chat-compatible.example/v1",
+      "model": "qwen-coder"
+    }
+  }
+}
+```
+
+Environment variables still work for development and deployment secrets. Explicit environment variables override the user config file.
+
+OpenClaw-style provider registries are also supported. Use `api: "responses"` for direct Responses-compatible endpoints and `api: "chat-completions"` for endpoints that should go through MoonBridge:
+
+```json
+{
+  "model": {
+    "primary": "qwen/qwen3.6",
+    "providers": {
+      "qwen": {
+        "api": "chat-completions",
+        "baseURL": "http://172.18.45.70:8010/v1",
+        "apiKey": "local-placeholder",
+        "models": [{ "id": "qwen3.6", "name": "Qwen 3.6" }]
+      }
+    }
+  },
+  "embeddings": {
+    "enabled": true,
+    "provider": "openai-compatible",
+    "baseURL": "http://172.18.45.70:8011/v1",
+    "apiKey": "local-placeholder",
+    "model": "qwen3-embedding-4b"
+  }
+}
+```
 
 Memory embedding rerank is optional. When enabled, it defaults to a no-download
 local hash embedding provider and caches vectors in SQLite. For stronger
@@ -105,15 +159,14 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 
 Optional:
 
-- `KODEKS_MODEL_PROVIDER` can be `bridge`, `moonbridge`, `deepseek`, or `openai`
+- `KODEKS_MODEL_PROVIDER` can be `responses`, `openai`, `bridge`, or `moonbridge`; legacy `deepseek` is treated as a MoonBridge alias
+- `KODEKS_RESPONSES_API_KEY`, `KODEKS_RESPONSES_BASE_URL`, and `KODEKS_RESPONSES_MODEL` configure a direct Responses-compatible endpoint; `OPENAI_*` names remain official OpenAI aliases
+- `KODEKS_CHAT_COMPLETIONS_API_KEY`, `KODEKS_CHAT_COMPLETIONS_BASE_URL`, and `KODEKS_CHAT_COMPLETIONS_MODEL` configure the upstream Chat Completions endpoint used by MoonBridge
 - `KODEKS_BRIDGE_ENABLED=true` enables the built-in bridge Responses path
-- `KODEKS_BRIDGE_BASE_URL` defaults to `http://127.0.0.1:38440/v1`
-- `KODEKS_BRIDGE_MODEL` defaults to `bridge`
+- `KODEKS_BRIDGE_BASE_URL` is the local MoonBridge Responses URL and defaults to `http://127.0.0.1:38440/v1`
+- `KODEKS_BRIDGE_MODEL` is the local MoonBridge model alias and defaults to `bridge`
 - `KODEKS_BRIDGE_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
-- `MOONBRIDGE_*` environment names are still accepted as compatibility aliases
-- `DEEPSEEK_BASE_URL` defaults to `https://api.deepseek.com`
-- `DEEPSEEK_MODEL` defaults to `deepseek-v4-pro`
-- `DEEPSEEK_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
+- `MOONBRIDGE_*`, `KODEKS_BRIDGE_DEEPSEEK_*`, and `DEEPSEEK_*` environment names are still accepted as compatibility aliases for Chat Completions upstreams
 - `OPENAI_BASE_URL`
 - `OPENAI_MODEL` defaults to `gpt-5.4-mini`
 - `OPENAI_REASONING_EFFORT` defaults to `medium`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
@@ -122,16 +175,22 @@ Optional:
 
 Runtime state is written under `.kodeks/` by default and is intentionally ignored by Git.
 
-### Built-in Bridge + DeepSeek Responses
+### MoonBridge for Chat Completions
 
-Start the built-in TypeScript bridge so it exposes `http://127.0.0.1:38440/v1/responses`, then run Kodeks with:
+MoonBridge exists for OpenAI-compatible services that expose Chat Completions but not Responses. Kodeks continues to send Responses-shaped requests to `http://127.0.0.1:38440/v1/responses`; MoonBridge converts those requests to `/chat/completions` upstream.
+
+Start the built-in TypeScript bridge, then run Kodeks with:
 
 ```bash
-KODEKS_BRIDGE_DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY pnpm run bridge:start
-KODEKS_MODEL_PROVIDER=bridge pnpm run dev
+KODEKS_CHAT_COMPLETIONS_API_KEY=$DEEPSEEK_API_KEY \
+KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
+KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
+pnpm run bridge:start
+
+KODEKS_MODEL_PROVIDER=moonbridge pnpm run dev
 ```
 
-In this mode Kodeks sends Responses API-shaped requests to its local bridge, and the bridge routes them to DeepSeek V4 through Chat Completions.
+If Kodeks manages the bridge from the Next.js runtime, setting the same `KODEKS_CHAT_COMPLETIONS_*` values and selecting `moonbridge` is enough; the runtime starts the local bridge when needed.
 
 Bridge helpers:
 
@@ -157,8 +216,8 @@ The repository uses pnpm workspaces:
 
 - `apps/web`: UI, API routes, and stream adapters.
 - `packages/agent-runtime`: OpenAI Agents SDK turn orchestration, context assembly, plan mode, and local tool wrappers.
-- `packages/model`: fallback provider adapters for DeepSeek Chat Completions and direct Responses-compatible model calls.
-- `packages/responses-bridge`: built-in Responses-to-DeepSeek bridge with protocol adapters.
+- `packages/model`: provider configuration and direct Responses-compatible model calls.
+- `packages/responses-bridge`: built-in Responses-to-Chat-Completions bridge with protocol adapters.
 - `packages/tools`: model-callable tool registry and policy wrappers.
 - `packages/workspace`: workspace path policy, file access, and shell execution.
 - `packages/storage`: SQLite repositories.

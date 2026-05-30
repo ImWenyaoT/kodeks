@@ -9,15 +9,16 @@ import {
   type RunStreamEvent,
   setTracingDisabled,
   tool,
-  user
-} from '@openai/agents';
+  user,
+} from "@openai/agents";
 import type {
   ChatMessage,
   ModelClient,
   ModelTurnRequest,
   ModelTurnStreamEvent,
-  ReasoningEffort
-} from '@kodeks/model';
+  ReasoningEffort,
+} from "@kodeks/model";
+import { loadModelRuntimeEnv } from "@kodeks/model";
 import type {
   KodeksDatabase,
   MemoryContext,
@@ -25,70 +26,70 @@ import type {
   SessionMode,
   StoredMessage,
   StoredPlanArtifact,
-  StoredPlanStep
-} from '@kodeks/storage';
-import { MemoryService as KodeksMemoryService } from '@kodeks/storage';
+  StoredPlanStep,
+} from "@kodeks/storage";
+import { MemoryService as KodeksMemoryService } from "@kodeks/storage";
 import {
   ToolExecutionContext,
   buildDefaultToolRegistry,
   type ToolDefinition,
   type ToolExecutionResult,
-  type ToolRegistry
-} from '@kodeks/tools';
-import { isDangerousCommand, type WorkspaceService } from '@kodeks/workspace';
+  type ToolRegistry,
+} from "@kodeks/tools";
+import { isDangerousCommand, type WorkspaceService } from "@kodeks/workspace";
 
 export type AgentEvent =
-  | { type: 'session_created'; sessionId: string }
-  | { type: 'assistant_status'; message: string; sessionId: string }
-  | { type: 'text_delta'; text: string; sessionId: string }
+  | { type: "session_created"; sessionId: string }
+  | { type: "assistant_status"; message: string; sessionId: string }
+  | { type: "text_delta"; text: string; sessionId: string }
   | {
-      type: 'tool_call';
+      type: "tool_call";
       id: string;
       name: string;
       args: unknown;
       sessionId: string;
     }
   | {
-      type: 'tool_result';
+      type: "tool_result";
       id: string;
       name: string;
       output: string;
-      status: 'ok' | 'error' | 'approval_required';
+      status: "ok" | "error" | "approval_required";
       sessionId: string;
     }
   | {
-      type: 'approval_required';
+      type: "approval_required";
       approvalId: string;
       toolCallId: string;
       reason: string;
       sessionId: string;
     }
   | {
-      type: 'memory_recalled';
+      type: "memory_recalled";
       memoryIds: string[];
       sessionId: string;
       layers?: Record<string, number>;
     }
   | {
-      type: 'plan_artifact';
-      action: 'created' | 'recovered';
+      type: "plan_artifact";
+      action: "created" | "recovered";
       plan: StoredPlanArtifact;
       sessionId: string;
     }
   | {
-      type: 'subagent_started';
+      type: "subagent_started";
       runId: string;
-      agent: 'explore';
+      agent: "explore";
       sessionId: string;
     }
   | {
-      type: 'subagent_completed';
+      type: "subagent_completed";
       runId: string;
       summary: string;
       sessionId: string;
     }
-  | { type: 'response_completed'; sessionId: string; responseId: string }
-  | { type: 'error'; message: string; code?: string; sessionId: string };
+  | { type: "response_completed"; sessionId: string; responseId: string }
+  | { type: "error"; message: string; code?: string; sessionId: string };
 
 export type RunChatTurnInput = {
   input: string;
@@ -97,6 +98,7 @@ export type RunChatTurnInput = {
   workspace: WorkspaceService;
   database: KodeksDatabase;
   selectedFiles?: SelectedWorkspaceFileContext[];
+  environment?: Record<string, string | undefined>;
   model?: ModelClient;
   agents?: AgentsSdkRuntimeConfig;
 };
@@ -113,11 +115,12 @@ export type BuildAgentsSdkBuildAgentInput = {
   memoryContext?: MemoryContext;
   activePlan?: StoredPlanArtifact | null;
   selectedFiles?: SelectedWorkspaceFileContext[];
+  environment?: Record<string, string | undefined>;
   approvalState?: Map<string, AgentsSdkApprovalMetadata>;
 };
 
 export type AgentsSdkRuntimeConfig = {
-  provider: 'openai' | 'bridge' | 'moonbridge';
+  provider: "openai" | "moonbridge";
   apiKey: string;
   baseURL?: string;
   model: string;
@@ -130,7 +133,7 @@ export type AgentsSdkRunner = {
   run(
     agent: Agent,
     input: string | AgentInputItem[],
-    options: { stream: true; signal?: AbortSignal; maxTurns?: number }
+    options: { stream: true; signal?: AbortSignal; maxTurns?: number },
   ): Promise<AgentsSdkStreamResult>;
 };
 
@@ -164,7 +167,7 @@ export type SelectedWorkspaceFileContext = {
 
 // Dispatches one product-level chat turn to the primary SDK runtime or the fallback model loop.
 export async function* runChatTurn(
-  input: RunChatTurnInput
+  input: RunChatTurnInput,
 ): AsyncIterable<AgentEvent> {
   const agents = input.agents;
   if (agents !== undefined) {
@@ -174,21 +177,21 @@ export async function* runChatTurn(
 
   if (input.model === undefined) {
     yield {
-      type: 'error',
-      message: 'No model runtime was configured.',
-      sessionId: input.sessionId ?? ''
+      type: "error",
+      message: "No model runtime was configured.",
+      sessionId: input.sessionId ?? "",
     };
     return;
   }
 
   yield* runModelClientChatTurn(
-    input as RunChatTurnInput & { model: ModelClient }
+    input as RunChatTurnInput & { model: ModelClient },
   );
 }
 
 // Runs one fallback ModelClient turn for non-Responses providers and deterministic tests.
 async function* runModelClientChatTurn(
-  input: RunChatTurnInput & { model: ModelClient }
+  input: RunChatTurnInput & { model: ModelClient },
 ): AsyncIterable<AgentEvent> {
   const { sessionId, activePlan, memoryContext, memoryService, registry } =
     yield* prepareTurnState(input);
@@ -200,7 +203,7 @@ async function* runModelClientChatTurn(
     memoryContext,
     activePlan,
     selectedFiles: input.selectedFiles,
-    registry
+    registry,
   });
 
   let pendingRequest: ModelTurnRequest | null = request;
@@ -217,78 +220,78 @@ async function* runModelClientChatTurn(
       args: Record<string, unknown>;
     }> = [];
     let assistantReasoningContent: string | undefined;
-    let roundAssistantText = '';
+    let roundAssistantText = "";
     let responseCompleted = false;
     let waitingForApproval = false;
 
     for await (const modelEvent of input.model.streamTurn(pendingRequest)) {
-      if (modelEvent.type === 'text_delta') {
+      if (modelEvent.type === "text_delta") {
         roundAssistantText += modelEvent.text;
-        yield { type: 'text_delta', text: modelEvent.text, sessionId };
+        yield { type: "text_delta", text: modelEvent.text, sessionId };
         continue;
       }
 
-      if (modelEvent.type === 'tool_call') {
+      if (modelEvent.type === "tool_call") {
         assistantReasoningContent =
           modelEvent.reasoningContent ?? assistantReasoningContent;
         toolCalls.push({
           id: modelEvent.id,
           name: modelEvent.name,
-          args: modelEvent.args
+          args: modelEvent.args,
         });
         yield {
-          type: 'assistant_status',
+          type: "assistant_status",
           message: `Using ${modelEvent.name}`,
-          sessionId
+          sessionId,
         };
         yield {
-          type: 'tool_call',
+          type: "tool_call",
           id: modelEvent.id,
           name: modelEvent.name,
           args: modelEvent.args,
-          sessionId
+          sessionId,
         };
         const rawResult = await registry.execute(
           modelEvent.name,
           modelEvent.args,
-          new ToolExecutionContext(sessionId, modelEvent.id)
+          new ToolExecutionContext(sessionId, modelEvent.id),
         );
         const result = await compactToolExecutionResult({
           result: rawResult,
           memoryService,
           sessionId,
           toolCallId: modelEvent.id,
-          toolName: modelEvent.name
+          toolName: modelEvent.name,
         });
         const mappedStatus = mapToolStatus(result.status);
         yield {
-          type: 'tool_result',
+          type: "tool_result",
           id: modelEvent.id,
           name: modelEvent.name,
           output: result.output,
           status: mappedStatus,
-          sessionId
+          sessionId,
         };
         toolMessages.push({
           toolCallId: modelEvent.id,
           name: modelEvent.name,
-          output: result.output
+          output: result.output,
         });
-        if (mappedStatus === 'approval_required') {
+        if (mappedStatus === "approval_required") {
           const parsedOutput = parseToolOutput(result.output);
           yield {
-            type: 'approval_required',
+            type: "approval_required",
             approvalId: stringFromParsed(parsedOutput.approvalId),
             toolCallId: modelEvent.id,
             reason: stringFromParsed(parsedOutput.reason),
-            sessionId
+            sessionId,
           };
           waitingForApproval = true;
         }
         continue;
       }
 
-      if (modelEvent.type === 'response_completed') {
+      if (modelEvent.type === "response_completed") {
         responseCompleted = true;
         yield* persistCompletedAssistantTurn({
           database: input.database,
@@ -296,15 +299,15 @@ async function* runModelClientChatTurn(
           mode: input.mode,
           userInput: input.input,
           assistantText: roundAssistantText,
-          responseId: modelEvent.responseId
+          responseId: modelEvent.responseId,
         });
         continue;
       }
 
       yield {
-        type: 'error',
+        type: "error",
         message: modelEvent.message,
-        sessionId
+        sessionId,
       };
     }
 
@@ -319,7 +322,7 @@ async function* runModelClientChatTurn(
       assistantContent: roundAssistantText,
       reasoningContent: assistantReasoningContent,
       toolCalls,
-      toolMessages
+      toolMessages,
     });
 
     pendingRequest = {
@@ -327,25 +330,25 @@ async function* runModelClientChatTurn(
       messages: [
         ...pendingRequest.messages,
         {
-          role: 'assistant' as const,
+          role: "assistant" as const,
           content: roundAssistantText,
           reasoningContent: assistantReasoningContent,
-          toolCalls
+          toolCalls,
         },
         ...toolMessages.map((message) => ({
-          role: 'tool' as const,
+          role: "tool" as const,
           content: message.output,
           toolCallId: message.toolCallId,
-          name: message.name
-        }))
-      ]
+          name: message.name,
+        })),
+      ],
     };
   }
 }
 
 // Runs the primary OpenAI Agents SDK + Responses API turn and maps SDK events to Kodeks events.
 async function* runAgentsSdkChatTurn(
-  input: RunChatTurnInput & { agents: AgentsSdkRuntimeConfig }
+  input: RunChatTurnInput & { agents: AgentsSdkRuntimeConfig },
 ): AsyncIterable<AgentEvent> {
   const { sessionId, activePlan, memoryContext, registry } =
     yield* prepareTurnState(input);
@@ -360,39 +363,39 @@ async function* runAgentsSdkChatTurn(
     memoryContext,
     activePlan,
     selectedFiles: input.selectedFiles,
-    approvalState
+    approvalState,
   });
   const runner = input.agents.runner ?? createAgentsSdkRunner(input.agents);
   const transcript = await input.database.sessions.getTranscript(sessionId);
   const result = await runner.run(agent, toAgentsSdkInputItems(transcript), {
     stream: true,
     signal: input.agents.signal,
-    maxTurns: 12
+    maxTurns: 12,
   });
-  let assistantText = '';
+  let assistantText = "";
   let waitingForApproval = false;
 
   for await (const event of result) {
     const textDelta = readAgentsSdkTextDelta(event);
     if (textDelta !== null) {
       assistantText += textDelta;
-      yield { type: 'text_delta', text: textDelta, sessionId };
+      yield { type: "text_delta", text: textDelta, sessionId };
       continue;
     }
 
     const toolCall = readAgentsSdkToolCall(event);
     if (toolCall !== null) {
       yield {
-        type: 'assistant_status',
+        type: "assistant_status",
         message: `Using ${toolCall.name}`,
-        sessionId
+        sessionId,
       };
       yield {
-        type: 'tool_call',
+        type: "tool_call",
         id: toolCall.id,
         name: toolCall.name,
         args: toolCall.args,
-        sessionId
+        sessionId,
       };
       continue;
     }
@@ -400,22 +403,22 @@ async function* runAgentsSdkChatTurn(
     const toolResult = readAgentsSdkToolResult(event);
     if (toolResult !== null) {
       yield {
-        type: 'tool_result',
+        type: "tool_result",
         id: toolResult.id,
         name: toolResult.name,
         output: toolResult.output,
         status: toolResult.status,
-        sessionId
+        sessionId,
       };
-      if (toolResult.status === 'approval_required') {
+      if (toolResult.status === "approval_required") {
         const parsedOutput = parseToolOutput(toolResult.output);
         waitingForApproval = true;
         yield {
-          type: 'approval_required',
+          type: "approval_required",
           approvalId: stringFromParsed(parsedOutput.approvalId),
           toolCallId: toolResult.id,
           reason: stringFromParsed(parsedOutput.reason),
-          sessionId
+          sessionId,
         };
       }
       continue;
@@ -425,11 +428,11 @@ async function* runAgentsSdkChatTurn(
     if (approval !== null) {
       waitingForApproval = true;
       yield {
-        type: 'approval_required',
+        type: "approval_required",
         approvalId: approval.approvalId,
         toolCallId: approval.toolCallId,
         reason: approval.reason,
-        sessionId
+        sessionId,
       };
     }
   }
@@ -441,11 +444,11 @@ async function* runAgentsSdkChatTurn(
     if (approval !== null) {
       waitingForApproval = true;
       yield {
-        type: 'approval_required',
+        type: "approval_required",
         approvalId: approval.approvalId,
         toolCallId: approval.toolCallId,
         reason: approval.reason,
-        sessionId
+        sessionId,
       };
     }
   }
@@ -466,27 +469,27 @@ async function* runAgentsSdkChatTurn(
     assistantText: finalText,
     responseId:
       result.lastResponseId ??
-      `agents_${crypto.randomUUID().replaceAll('-', '')}`
+      `agents_${crypto.randomUUID().replaceAll("-", "")}`,
   });
 }
 
 // Creates or resumes session state, recalls memory, and constructs the local tool registry.
 async function* prepareTurnState(
-  input: RunChatTurnInput
+  input: RunChatTurnInput,
 ): AsyncGenerator<AgentEvent, PreparedTurnState> {
   const sessionId =
     input.sessionId?.trim() ||
-    `sess_${crypto.randomUUID().replaceAll('-', '')}`;
+    `sess_${crypto.randomUUID().replaceAll("-", "")}`;
   const existingSession = await input.database.sessions.getSession(sessionId);
   if (existingSession === null) {
     await input.database.sessions.createSession({
       id: sessionId,
-      title: 'Kodeks session',
+      title: "Kodeks session",
       mode: input.mode,
-      workspaceRoot: input.workspace.rootPath()
+      workspaceRoot: input.workspace.rootPath(),
     });
     if (!input.sessionId) {
-      yield { type: 'session_created', sessionId };
+      yield { type: "session_created", sessionId };
     }
   } else if (existingSession.mode !== input.mode) {
     await input.database.sessions.updateMode(sessionId, input.mode);
@@ -494,78 +497,80 @@ async function* prepareTurnState(
 
   await input.database.sessions.appendMessage({
     sessionId,
-    role: 'user',
-    content: { text: input.input }
+    role: "user",
+    content: { text: input.input },
   });
 
   const activePlan = await input.database.plans.getActiveBySession(sessionId);
   if (activePlan !== null) {
     yield {
-      type: 'plan_artifact',
-      action: 'recovered',
+      type: "plan_artifact",
+      action: "recovered",
       plan: activePlan,
-      sessionId
+      sessionId,
     };
   }
 
   const memoryService = new KodeksMemoryService({
     database: input.database,
-    workspaceRoot: input.workspace.rootPath()
+    workspaceRoot: input.workspace.rootPath(),
+    environment: resolveRuntimeEnvironment(input.environment),
   });
   await memoryService.recordUserInput({ sessionId, content: input.input });
   const memoryContext = await memoryService.buildContext({
     sessionId,
-    query: input.input
+    query: input.input,
   });
   const memoryIds = [
     ...memoryContext.profiles.map((memory) => memory.id),
-    ...memoryContext.recalledItems.map((memory) => memory.id)
+    ...memoryContext.recalledItems.map((memory) => memory.id),
   ];
   if (memoryIds.length > 0) {
     yield {
-      type: 'memory_recalled',
+      type: "memory_recalled",
       memoryIds,
       sessionId,
-      layers: countMemoryLayers(memoryContext)
+      layers: countMemoryLayers(memoryContext),
     };
   }
 
   const registry = buildDefaultToolRegistry({
     workspace: input.workspace,
-    database: input.database
+    database: input.database,
   });
   return { sessionId, activePlan, memoryContext, memoryService, registry };
 }
 
 // Builds an OpenAI Agents SDK Agent with local function tool wrappers.
 export function buildAgentsSdkBuildAgent(
-  input: BuildAgentsSdkBuildAgentInput
+  input: BuildAgentsSdkBuildAgentInput,
 ): Agent {
   const registry =
     input.registry ??
     buildDefaultToolRegistry({
       workspace: input.workspace,
-      database: input.database
+      database: input.database,
     });
   return new Agent({
-    name: 'Kodeks Build Agent',
+    name: "Kodeks Build Agent",
     instructions: buildSystemContext(
       input.mode,
       input.memoryContext ?? emptyMemoryContext(),
       input.activePlan ?? null,
-      input.selectedFiles ?? []
+      input.selectedFiles ?? [],
     ),
     model: input.model,
     tools: registry
-      .definitions({ readOnlyOnly: input.mode === 'plan' })
+      .definitions({ readOnlyOnly: input.mode === "plan" })
       .map((definition) =>
         toAgentsSdkTool(definition, registry, {
           database: input.database,
           sessionId: input.sessionId ?? null,
           workspaceRoot: input.workspace.rootPath(),
-          approvalState: input.approvalState ?? new Map()
-        })
-      )
+          environment: input.environment,
+          approvalState: input.approvalState ?? new Map(),
+        }),
+      ),
   });
 }
 
@@ -581,22 +586,22 @@ async function buildModelTurnRequest(input: {
   registry: ToolRegistry;
 }): Promise<ModelTurnRequest> {
   const transcript = await input.database.sessions.getTranscript(
-    input.sessionId
+    input.sessionId,
   );
   return {
     messages: [
       {
-        role: 'system',
+        role: "system",
         content: buildSystemContext(
           input.mode,
           input.memoryContext,
           input.activePlan,
-          input.selectedFiles ?? []
-        )
+          input.selectedFiles ?? [],
+        ),
       },
-      ...transcript.flatMap(toModelTranscriptMessage)
+      ...transcript.flatMap(toModelTranscriptMessage),
     ],
-    tools: input.registry.definitions({ readOnlyOnly: input.mode === 'plan' })
+    tools: input.registry.definitions({ readOnlyOnly: input.mode === "plan" }),
   };
 }
 
@@ -611,83 +616,83 @@ async function appendToolContinuationMessages(input: {
 }): Promise<void> {
   await input.database.sessions.appendMessage({
     sessionId: input.sessionId,
-    role: 'assistant',
+    role: "assistant",
     content: {
       text: input.assistantContent,
       reasoningContent: input.reasoningContent,
-      toolCalls: input.toolCalls
-    }
+      toolCalls: input.toolCalls,
+    },
   });
 
   for (const message of input.toolMessages) {
     await input.database.sessions.appendMessage({
       sessionId: input.sessionId,
-      role: 'tool',
+      role: "tool",
       content: {
         text: message.output,
         toolCallId: message.toolCallId,
-        name: message.name
-      }
+        name: message.name,
+      },
     });
   }
 }
 
 // Converts stored transcript rows back into the model client's structured message contract.
 function toModelTranscriptMessage(message: StoredMessage): ChatMessage[] {
-  if (message.role === 'tool') {
+  if (message.role === "tool") {
     const content = readObjectContent(message.content);
     return [
       {
-        role: 'tool',
+        role: "tool",
         content: stringifyMessageContent(message.content),
-        toolCallId: stringField(content, 'toolCallId'),
-        name: stringField(content, 'name')
-      }
+        toolCallId: stringField(content, "toolCallId"),
+        name: stringField(content, "name"),
+      },
     ];
   }
 
-  if (message.role === 'assistant') {
+  if (message.role === "assistant") {
     const content = readObjectContent(message.content);
     return [
       {
-        role: 'assistant',
+        role: "assistant",
         content: stringifyMessageContent(message.content),
-        reasoningContent: stringField(content, 'reasoningContent'),
-        toolCalls: readToolCalls(content.toolCalls)
-      }
+        reasoningContent: stringField(content, "reasoningContent"),
+        toolCalls: readToolCalls(content.toolCalls),
+      },
     ];
   }
 
   return [
     {
-      role: 'user',
-      content: stringifyMessageContent(message.content)
-    }
+      role: "user",
+      content: stringifyMessageContent(message.content),
+    },
   ];
 }
 
 // Creates an OpenAI-compatible Agents SDK runner pinned to the Responses API.
 function createAgentsSdkRunner(
-  config: AgentsSdkRuntimeConfig
+  config: AgentsSdkRuntimeConfig,
 ): AgentsSdkRunner {
-  process.env.OPENAI_AGENTS_DISABLE_TRACING ??= '1';
-  setTracingDisabled(process.env.OPENAI_AGENTS_TRACING_DISABLED !== 'false');
+  process.env.OPENAI_AGENTS_DISABLE_TRACING ??= "1";
+  setTracingDisabled(process.env.OPENAI_AGENTS_TRACING_DISABLED !== "false");
   const provider = new OpenAIProvider({
     apiKey: config.apiKey,
     baseURL: config.baseURL,
-    useResponses: true
+    useResponses: true,
   });
   const modelSettings: ModelSettings = {
     reasoning: {
-      effort: config.reasoningEffort
-    }
+      effort: config.reasoningEffort,
+    },
   };
   return new Runner({
     modelProvider: provider,
     modelSettings,
-    tracingDisabled: process.env.OPENAI_AGENTS_TRACING_DISABLED !== 'false',
+    tracingDisabled: process.env.OPENAI_AGENTS_TRACING_DISABLED !== "false",
     traceIncludeSensitiveData: false,
-    workflowName: 'Kodeks chat turn'
+    workflowName: "Kodeks chat turn",
   });
 }
 
@@ -695,10 +700,10 @@ function createAgentsSdkRunner(
 function toAgentsSdkInputItems(transcript: StoredMessage[]): AgentInputItem[] {
   return transcript.flatMap((message) => {
     const text = stringifyMessageContent(message.content);
-    if (text.trim().length === 0 || message.role === 'tool') {
+    if (text.trim().length === 0 || message.role === "tool") {
       return [];
     }
-    if (message.role === 'assistant') {
+    if (message.role === "assistant") {
       return [assistant(text) as AgentInputItem];
     }
     return [user(text) as AgentInputItem];
@@ -717,27 +722,27 @@ async function* persistCompletedAssistantTurn(input: {
   if (input.assistantText.length > 0) {
     const assistantMessage = await input.database.sessions.appendMessage({
       sessionId: input.sessionId,
-      role: 'assistant',
-      content: { text: input.assistantText }
+      role: "assistant",
+      content: { text: input.assistantText },
     });
-    if (input.mode === 'plan') {
+    if (input.mode === "plan") {
       const plan = await input.database.plans.upsertActive({
         ...buildPlanArtifactContent(input.userInput, input.assistantText),
         sessionId: input.sessionId,
-        sourceMessageId: assistantMessage.id
+        sourceMessageId: assistantMessage.id,
       });
       yield {
-        type: 'plan_artifact',
-        action: 'created',
+        type: "plan_artifact",
+        action: "created",
         plan,
-        sessionId: input.sessionId
+        sessionId: input.sessionId,
       };
     }
   }
   yield {
-    type: 'response_completed',
+    type: "response_completed",
     sessionId: input.sessionId,
-    responseId: input.responseId
+    responseId: input.responseId,
   };
 }
 
@@ -745,22 +750,22 @@ async function* persistCompletedAssistantTurn(input: {
 function readAgentsSdkTextDelta(event: RunStreamEvent): string | null {
   const data = readObjectContent(readObjectContent(event).data);
   if (
-    data.type === 'output_text_delta' ||
-    data.type === 'response.output_text.delta'
+    data.type === "output_text_delta" ||
+    data.type === "response.output_text.delta"
   ) {
-    return typeof data.delta === 'string' ? data.delta : null;
+    return typeof data.delta === "string" ? data.delta : null;
   }
   return null;
 }
 
 // Reads function call starts from OpenAI Agents SDK run-item events.
 function readAgentsSdkToolCall(
-  event: RunStreamEvent
+  event: RunStreamEvent,
 ): { id: string; name: string; args: Record<string, unknown> } | null {
   const record = readObjectContent(event);
   if (
-    record.type !== 'run_item_stream_event' ||
-    record.name !== 'tool_called'
+    record.type !== "run_item_stream_event" ||
+    record.name !== "tool_called"
   ) {
     return null;
   }
@@ -769,13 +774,13 @@ function readAgentsSdkToolCall(
   const id =
     readToolCallId(rawItem) ??
     readToolCallId(item) ??
-    `tool_${crypto.randomUUID().replaceAll('-', '')}`;
+    `tool_${crypto.randomUUID().replaceAll("-", "")}`;
   const name =
-    stringField(rawItem, 'name') ?? stringField(item, 'name') ?? 'tool';
+    stringField(rawItem, "name") ?? stringField(item, "name") ?? "tool";
   return {
     id,
     name,
-    args: readToolArguments(rawItem.arguments)
+    args: readToolArguments(rawItem.arguments),
   };
 }
 
@@ -784,12 +789,12 @@ function readAgentsSdkToolResult(event: RunStreamEvent): {
   id: string;
   name: string;
   output: string;
-  status: 'ok' | 'error' | 'approval_required';
+  status: "ok" | "error" | "approval_required";
 } | null {
   const record = readObjectContent(event);
   if (
-    record.type !== 'run_item_stream_event' ||
-    record.name !== 'tool_output'
+    record.type !== "run_item_stream_event" ||
+    record.name !== "tool_output"
   ) {
     return null;
   }
@@ -798,28 +803,28 @@ function readAgentsSdkToolResult(event: RunStreamEvent): {
   const id =
     readToolCallId(rawItem) ??
     readToolCallId(item) ??
-    `tool_${crypto.randomUUID().replaceAll('-', '')}`;
+    `tool_${crypto.randomUUID().replaceAll("-", "")}`;
   const name =
-    stringField(rawItem, 'name') ?? stringField(item, 'name') ?? 'tool';
+    stringField(rawItem, "name") ?? stringField(item, "name") ?? "tool";
   const output = stringifyToolOutput(item.output ?? rawItem.output);
   const parsedOutput = parseToolOutput(output);
   return {
     id,
     name,
     output,
-    status: parsedOutput.approvalRequired === true ? 'approval_required' : 'ok'
+    status: parsedOutput.approvalRequired === true ? "approval_required" : "ok",
   };
 }
 
 // Reads SDK approval stream events and maps them back to Kodeks approval records.
 function readAgentsSdkApproval(
   event: RunStreamEvent,
-  approvalState: Map<string, AgentsSdkApprovalMetadata>
+  approvalState: Map<string, AgentsSdkApprovalMetadata>,
 ): AgentsSdkApprovalMetadata | null {
   const record = readObjectContent(event);
   if (
-    record.type !== 'run_item_stream_event' ||
-    record.name !== 'tool_approval_requested'
+    record.type !== "run_item_stream_event" ||
+    record.name !== "tool_approval_requested"
   ) {
     return null;
   }
@@ -829,7 +834,7 @@ function readAgentsSdkApproval(
 // Maps an SDK approval interruption to the matching durable approval metadata.
 function approvalFromSdkItem(
   item: unknown,
-  approvalState: Map<string, AgentsSdkApprovalMetadata>
+  approvalState: Map<string, AgentsSdkApprovalMetadata>,
 ): AgentsSdkApprovalMetadata | null {
   const record = readObjectContent(item);
   const rawItem = readObjectContent(record.rawItem);
@@ -841,7 +846,7 @@ function approvalFromSdkItem(
     approvalState.get(toolCallId) ?? {
       approvalId: toolCallId,
       toolCallId,
-      reason: 'Tool call requires approval'
+      reason: "Tool call requires approval",
     }
   );
 }
@@ -849,10 +854,10 @@ function approvalFromSdkItem(
 // Reads OpenAI/Responses function call ids across SDK and wire-format naming variants.
 function readToolCallId(item: Record<string, unknown>): string | null {
   return (
-    stringField(item, 'callId') ??
-    stringField(item, 'call_id') ??
-    stringField(item, 'id') ??
-    stringField(item, 'toolCallId') ??
+    stringField(item, "callId") ??
+    stringField(item, "call_id") ??
+    stringField(item, "id") ??
+    stringField(item, "toolCallId") ??
     null
   );
 }
@@ -862,7 +867,7 @@ function readToolArguments(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined) {
     return {};
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return parseToolOutput(value);
   }
   return readObjectContent(value);
@@ -870,18 +875,18 @@ function readToolArguments(value: unknown): Record<string, unknown> {
 
 // Turns SDK tool output into the string contract consumed by the existing UI.
 function stringifyToolOutput(output: unknown): string {
-  if (typeof output === 'string') {
+  if (typeof output === "string") {
     return output;
   }
-  return output === undefined ? '' : JSON.stringify(output);
+  return output === undefined ? "" : JSON.stringify(output);
 }
 
 // Converts final structured SDK output into assistant text when no raw deltas were streamed.
 function stringifyFinalOutput(output: unknown): string {
-  if (typeof output === 'string') {
+  if (typeof output === "string") {
     return output;
   }
-  return output === undefined || output === null ? '' : JSON.stringify(output);
+  return output === undefined || output === null ? "" : JSON.stringify(output);
 }
 
 // Converts one local registry definition into an OpenAI Agents SDK function tool.
@@ -892,8 +897,9 @@ function toAgentsSdkTool(
     database: KodeksDatabase;
     sessionId: string | null;
     workspaceRoot: string;
+    environment?: Record<string, string | undefined>;
     approvalState: Map<string, AgentsSdkApprovalMetadata>;
-  }
+  },
 ): FunctionTool {
   return tool({
     name: definition.name,
@@ -901,74 +907,82 @@ function toAgentsSdkTool(
     parameters: definition.parameters as never,
     strict: false,
     needsApproval:
-      definition.name === 'run_shell'
+      definition.name === "run_shell"
         ? async (_runContext, rawInput, callId) => {
             const args =
-              typeof rawInput === 'object' && rawInput !== null
+              typeof rawInput === "object" && rawInput !== null
                 ? (rawInput as Record<string, unknown>)
                 : {};
             const command =
-              typeof args.command === 'string' ? args.command : '';
+              typeof args.command === "string" ? args.command : "";
             if (!isDangerousCommand(command)) {
               return false;
             }
             const toolCallId =
-              callId ?? `tool_${crypto.randomUUID().replaceAll('-', '')}`;
+              callId ?? `tool_${crypto.randomUUID().replaceAll("-", "")}`;
             const approval = await options.database.approvals.createApproval({
               sessionId: options.sessionId,
               toolCallId,
               command: { command },
-              reason: 'Command requires approval'
+              reason: "Command requires approval",
             });
             await options.database.auditLog.record({
               sessionId: options.sessionId,
-              eventType: 'approval_required',
-              payload: { approvalId: approval.id, command }
+              eventType: "approval_required",
+              payload: { approvalId: approval.id, command },
             });
             options.approvalState.set(toolCallId, {
               approvalId: approval.id,
               toolCallId,
-              reason: approval.reason
+              reason: approval.reason,
             });
             return true;
           }
         : false,
     execute: async (rawInput, _runContext, details) => {
       const args =
-        typeof rawInput === 'object' && rawInput !== null
+        typeof rawInput === "object" && rawInput !== null
           ? (rawInput as Record<string, unknown>)
           : {};
       const toolCallId = details?.toolCall?.callId ?? null;
       const result = await registry.execute(
         definition.name,
         args,
-        new ToolExecutionContext(options.sessionId, toolCallId)
+        new ToolExecutionContext(options.sessionId, toolCallId),
       );
       const memoryService = new KodeksMemoryService({
         database: options.database,
-        workspaceRoot: options.workspaceRoot
+        workspaceRoot: options.workspaceRoot,
+        environment: resolveRuntimeEnvironment(options.environment),
       });
       const compactedResult = await compactToolExecutionResult({
         result,
         memoryService,
-        sessionId: options.sessionId ?? 'session_unknown',
+        sessionId: options.sessionId ?? "session_unknown",
         toolCallId,
-        toolName: definition.name
+        toolName: definition.name,
       });
       if (
-        compactedResult.status === 'approval_required' &&
+        compactedResult.status === "approval_required" &&
         toolCallId !== null
       ) {
         const parsedOutput = parseToolOutput(compactedResult.output);
         options.approvalState.set(toolCallId, {
           approvalId: stringFromParsed(parsedOutput.approvalId),
           toolCallId,
-          reason: stringFromParsed(parsedOutput.reason)
+          reason: stringFromParsed(parsedOutput.reason),
         });
       }
       return compactedResult.output;
-    }
+    },
   });
+}
+
+// 统一加载 repo 外用户配置，让 chat runtime 和 memory embedding 共用同一份 endpoint 设置。
+function resolveRuntimeEnvironment(
+  environment: Record<string, string | undefined> | undefined,
+): Record<string, string | undefined> {
+  return loadModelRuntimeEnv(environment ?? process.env);
 }
 
 // Replaces oversized successful tool outputs with memory artifact refs.
@@ -979,7 +993,7 @@ async function compactToolExecutionResult(input: {
   toolCallId: string | null;
   toolName: string;
 }): Promise<ToolExecutionResult> {
-  if (input.result.status !== 'completed') {
+  if (input.result.status !== "completed") {
     return input.result;
   }
   return {
@@ -988,14 +1002,14 @@ async function compactToolExecutionResult(input: {
       sessionId: input.sessionId,
       toolCallId: input.toolCallId,
       toolName: input.toolName,
-      output: input.result.output
-    })
+      output: input.result.output,
+    }),
   };
 }
 
 // Counts recalled memory layers for UI display without exposing full score details.
 function countMemoryLayers(
-  memoryContext: MemoryContext
+  memoryContext: MemoryContext,
 ): Record<string, number> {
   const counts: Record<string, number> = {};
   if (memoryContext.profiles.length > 0) {
@@ -1009,30 +1023,30 @@ function countMemoryLayers(
 
 // Builds mode-specific system instructions for the Agents SDK agent.
 function buildAgentInstructions(mode: SessionMode): string {
-  if (mode === 'plan') {
+  if (mode === "plan") {
     return [
-      'You are Kodeks Plan Agent.',
+      "You are Kodeks Plan Agent.",
       "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
-      'Inspect the workspace and produce a short, practical plan.',
-      'Structure the final answer with a title, short summary, numbered steps, and a verification note so Kodeks can persist it as a plan artifact.',
-      'Use read-only tools for workspace search, Brave web search, MCP manifests, and skills when useful.',
-      'Do not mutate files or run shell commands.',
-      'Do not reveal hidden reasoning or private scratchpad text.',
-      'Do not claim you opened a URL unless a tool result proves it.'
-    ].join('\n');
+      "Inspect the workspace and produce a short, practical plan.",
+      "Structure the final answer with a title, short summary, numbered steps, and a verification note so Kodeks can persist it as a plan artifact.",
+      "Use read-only tools for workspace search, memory recall, MCP manifests, and skills when useful.",
+      "Do not mutate files or run shell commands.",
+      "Do not reveal hidden reasoning or private scratchpad text.",
+      "Do not claim you opened a URL unless a tool result proves it.",
+    ].join("\n");
   }
   return [
-    'You are Kodeks Build Agent.',
+    "You are Kodeks Build Agent.",
     "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
-    'Help with coding tasks by using workspace tools, Brave web search, MCP manifests, skills, memory, and subagents.',
-    'Use workspace tools to read files, write files, and run shell commands when that is the right next step.',
-    'Use web search, memory, skills, and subagent tools only when they clearly help the task.',
-    'Ask for approval before dangerous shell commands or risky writes.',
-    'Do not reveal hidden reasoning or private scratchpad text.',
+    "Help with coding tasks by using workspace tools, MCP manifests, skills, memory, and subagents.",
+    "Use workspace tools to read files, write files, and run shell commands when that is the right next step.",
+    "Use memory, skills, and subagent tools only when they clearly help the task.",
+    "Ask for approval before dangerous shell commands or risky writes.",
+    "Do not reveal hidden reasoning or private scratchpad text.",
     'Do not write self-talk like "Let me explore" as the final answer.',
-    'Do not claim you opened a URL unless a tool result proves it.',
-    'Keep final answers concise: say what changed, how it was verified, and any remaining risk.'
-  ].join('\n');
+    "Do not claim you opened a URL unless a tool result proves it.",
+    "Keep final answers concise: say what changed, how it was verified, and any remaining risk.",
+  ].join("\n");
 }
 
 // Builds system context for the model client request.
@@ -1040,12 +1054,12 @@ function buildSystemContext(
   mode: SessionMode,
   memoryContext: MemoryContext,
   activePlan: StoredPlanArtifact | null,
-  selectedFiles: SelectedWorkspaceFileContext[] = []
+  selectedFiles: SelectedWorkspaceFileContext[] = [],
 ): string {
   const memoryBlock = formatMemoryContextForPrompt(memoryContext);
   const planBlock =
     activePlan === null
-      ? 'No active plan artifact.'
+      ? "No active plan artifact."
       : formatPlanArtifactForContext(activePlan);
   const selectedFilesBlock = formatSelectedFilesContext(selectedFiles);
   return `${buildAgentInstructions(mode)}\n\nSelected workspace files for this turn:\n${selectedFilesBlock}\n\nRecalled memory:\n${memoryBlock}\n\nActive plan artifact:\n${planBlock}`;
@@ -1053,23 +1067,23 @@ function buildSystemContext(
 
 // Formats user-selected workspace files as bounded turn context for the model.
 function formatSelectedFilesContext(
-  selectedFiles: SelectedWorkspaceFileContext[]
+  selectedFiles: SelectedWorkspaceFileContext[],
 ): string {
   if (selectedFiles.length === 0) {
-    return 'No files selected.';
+    return "No files selected.";
   }
   const lines = [
-    'The user explicitly selected these workspace files. Use them as high-priority context when relevant. If a file is truncated or an answer needs more detail, call read_file with its path.'
+    "The user explicitly selected these workspace files. Use them as high-priority context when relevant. If a file is truncated or an answer needs more detail, call read_file with its path.",
   ];
   for (const file of selectedFiles) {
-    lines.push(`\n--- ${file.path}${file.truncated ? ' (truncated)' : ''} ---`);
+    lines.push(`\n--- ${file.path}${file.truncated ? " (truncated)" : ""} ---`);
     if (file.error !== undefined) {
       lines.push(`Unable to read selected file: ${file.error}`);
       continue;
     }
-    lines.push(file.content ?? '');
+    lines.push(file.content ?? "");
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // Formats layered memory into a compact prompt block with artifact refs instead of large bodies.
@@ -1083,10 +1097,10 @@ function formatMemoryContextForPrompt(memoryContext: MemoryContext): string {
   }
   for (const artifact of memoryContext.artifactRefs) {
     lines.push(
-      `- [artifact:${artifact.refId}] ${artifact.summary} (use read_memory_artifact to inspect full output)`
+      `- [artifact:${artifact.refId}] ${artifact.summary} (use read_memory_artifact to inspect full output)`,
     );
   }
-  return lines.length === 0 ? 'No recalled memories.' : lines.join('\n');
+  return lines.length === 0 ? "No recalled memories." : lines.join("\n");
 }
 
 // Creates an empty layered memory context for direct agent construction tests.
@@ -1094,7 +1108,7 @@ function emptyMemoryContext(): MemoryContext {
   return {
     profiles: [],
     recalledItems: [],
-    artifactRefs: []
+    artifactRefs: [],
   };
 }
 
@@ -1102,16 +1116,16 @@ function emptyMemoryContext(): MemoryContext {
 function formatPlanArtifactForContext(plan: StoredPlanArtifact): string {
   const steps = plan.steps
     .map((step) => `- [${step.status}] ${step.title}`)
-    .join('\n');
+    .join("\n");
   return [`${plan.title} (${plan.id})`, plan.summary, steps]
     .filter(Boolean)
-    .join('\n');
+    .join("\n");
 }
 
 // Extracts a minimal structured plan from the assistant's plan-mode answer.
 function buildPlanArtifactContent(
   userPrompt: string,
-  assistantText: string
+  assistantText: string,
 ): {
   title: string;
   summary: string;
@@ -1122,7 +1136,7 @@ function buildPlanArtifactContent(
     .map((line) => line.trim())
     .filter(Boolean);
   const title =
-    readPlanTitle(lines) ?? compactText(userPrompt, 80) ?? 'Kodeks plan';
+    readPlanTitle(lines) ?? compactText(userPrompt, 80) ?? "Kodeks plan";
   const summary =
     readPlanSummary(lines, title) ?? compactText(assistantText, 240);
   const steps = readPlanSteps(lines);
@@ -1134,12 +1148,12 @@ function buildPlanArtifactContent(
         ? steps
         : [
             {
-              id: 'step_1',
-              title: summary || 'Review the generated plan',
-              status: 'pending',
-              details: null
-            }
-          ]
+              id: "step_1",
+              title: summary || "Review the generated plan",
+              status: "pending",
+              details: null,
+            },
+          ],
   };
 }
 
@@ -1147,18 +1161,18 @@ function buildPlanArtifactContent(
 function readPlanTitle(lines: string[]): string | null {
   const heading = lines.find((line) => /^#{1,3}\s+/u.test(line));
   if (heading !== undefined) {
-    return heading.replace(/^#{1,3}\s+/u, '').trim();
+    return heading.replace(/^#{1,3}\s+/u, "").trim();
   }
   const firstText = lines.find((line) => !isPlanStepLine(line));
   return firstText === undefined
     ? null
-    : compactText(firstText.replace(/[:：]$/u, ''), 80);
+    : compactText(firstText.replace(/[:：]$/u, ""), 80);
 }
 
 // Reads a concise summary line while skipping headings and step-like bullets.
 function readPlanSummary(lines: string[], title: string): string | null {
   const summary = lines.find((line) => {
-    const normalized = line.replace(/^#{1,3}\s+/u, '').trim();
+    const normalized = line.replace(/^#{1,3}\s+/u, "").trim();
     return (
       normalized !== title &&
       !isPlanStepLine(line) &&
@@ -1173,21 +1187,21 @@ function readPlanSteps(lines: string[]): StoredPlanStep[] {
   return lines
     .flatMap((line) => {
       const match = line.match(
-        /^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)(.+)$/u
+        /^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)(.+)$/u,
       );
       if (match === null) {
         return [];
       }
       const title = compactText(
-        match[1]?.replace(/^[-*]\s*/u, '').trim() ?? '',
-        160
+        match[1]?.replace(/^[-*]\s*/u, "").trim() ?? "",
+        160,
       );
       if (title.length === 0) {
         return [];
       }
-      const status: StoredPlanStep['status'] =
-        line.includes('[x]') || line.includes('[X]') ? 'completed' : 'pending';
-      return [{ id: '', title, status, details: null }];
+      const status: StoredPlanStep["status"] =
+        line.includes("[x]") || line.includes("[X]") ? "completed" : "pending";
+      return [{ id: "", title, status, details: null }];
     })
     .map((step, index) => ({ ...step, id: `step_${index + 1}` }));
 }
@@ -1199,7 +1213,7 @@ function isPlanStepLine(line: string): boolean {
 
 // Collapses whitespace and trims long model text for stable artifact fields.
 function compactText(text: string, maxLength: number): string {
-  const normalized = text.replace(/\s+/gu, ' ').trim();
+  const normalized = text.replace(/\s+/gu, " ").trim();
   if (normalized.length <= maxLength) {
     return normalized;
   }
@@ -1210,19 +1224,19 @@ function compactText(text: string, maxLength: number): string {
 function stringifyMessageContent(content: unknown): string {
   if (
     content !== null &&
-    typeof content === 'object' &&
-    'text' in content &&
-    typeof (content as { text?: unknown }).text === 'string'
+    typeof content === "object" &&
+    "text" in content &&
+    typeof (content as { text?: unknown }).text === "string"
   ) {
     return (content as { text: string }).text;
   }
-  return typeof content === 'string' ? content : JSON.stringify(content);
+  return typeof content === "string" ? content : JSON.stringify(content);
 }
 
 // Reads object-shaped message content without forcing callers to trust SQLite JSON.
 function readObjectContent(content: unknown): Record<string, unknown> {
   return content !== null &&
-    typeof content === 'object' &&
+    typeof content === "object" &&
     !Array.isArray(content)
     ? (content as Record<string, unknown>)
     : {};
@@ -1231,46 +1245,46 @@ function readObjectContent(content: unknown): Record<string, unknown> {
 // Reads one optional string field from stored message content.
 function stringField(
   content: Record<string, unknown>,
-  field: string
+  field: string,
 ): string | undefined {
   const value = content[field];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 // Reads persisted tool calls while discarding malformed historical entries.
-function readToolCalls(value: unknown): ChatMessage['toolCalls'] {
+function readToolCalls(value: unknown): ChatMessage["toolCalls"] {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
   const calls = value.flatMap((item) => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
       return [];
     }
     const record = item as Record<string, unknown>;
-    if (typeof record.id !== 'string' || typeof record.name !== 'string') {
+    if (typeof record.id !== "string" || typeof record.name !== "string") {
       return [];
     }
     return [
       {
         id: record.id,
         name: record.name,
-        args: readObjectContent(record.args)
-      }
+        args: readObjectContent(record.args),
+      },
     ];
   });
   return calls.length > 0 ? calls : undefined;
 }
 
 // Maps local tool statuses into the product event contract.
-function mapToolStatus(status: string): 'ok' | 'error' | 'approval_required' {
-  if (status === 'completed') {
-    return 'ok';
+function mapToolStatus(status: string): "ok" | "error" | "approval_required" {
+  if (status === "completed") {
+    return "ok";
   }
-  if (status === 'approval_required') {
-    return 'approval_required';
+  if (status === "approval_required") {
+    return "approval_required";
   }
-  return 'error';
+  return "error";
 }
 
 // Parses JSON tool output for approval metadata extraction.
@@ -1278,7 +1292,7 @@ function parseToolOutput(output: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(output) as unknown;
     return parsed !== null &&
-      typeof parsed === 'object' &&
+      typeof parsed === "object" &&
       !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : {};
@@ -1289,5 +1303,5 @@ function parseToolOutput(output: string): Record<string, unknown> {
 
 // Reads one string value from parsed tool JSON.
 function stringFromParsed(value: unknown): string {
-  return typeof value === 'string' ? value : '';
+  return typeof value === "string" ? value : "";
 }

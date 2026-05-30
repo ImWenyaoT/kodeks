@@ -168,14 +168,14 @@ function WorkspaceFilePicker({
   return (
     <div className="flex flex-col gap-3">
       <button
-        className="kodeks-control-text inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 text-white transition hover:opacity-80 dark:bg-zinc-50 dark:text-zinc-950"
+        className="kodeks-control-text inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-3 text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
         onClick={toggleFilePicker}
         type="button"
       >
         <MaterialIcon name="folder" size={16} />
         {copy.selectFiles}
       </button>
-      <div className="kodeks-ui-caption text-zinc-500 dark:text-zinc-400">
+      <div className="kodeks-ui-caption text-slate-500 dark:text-slate-400">
         {selectedFiles.length > 0
           ? copy.selectedFileCount(selectedFiles.length)
           : copy.noFilesSelected}
@@ -185,7 +185,7 @@ function WorkspaceFilePicker({
         <div className="flex flex-wrap gap-1.5">
           {selectedFiles.map((path) => (
             <button
-              className="kodeks-ui-caption max-w-full truncate rounded-md bg-zinc-100 px-2 py-1 text-left text-zinc-600 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="kodeks-ui-caption max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-left text-slate-600 transition hover:bg-slate-200 dark:bg-[#2b3035] dark:text-slate-300 dark:hover:bg-[#30353b]"
               key={path}
               onClick={() => toggleSelectedFile(path)}
               title={path}
@@ -198,24 +198,24 @@ function WorkspaceFilePicker({
       ) : null}
 
       {isOpen ? (
-        <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm dark:border-[#343a40] dark:bg-[#24282d] dark:shadow-none">
           <input
-            className="kodeks-ui-body mb-3 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:placeholder:text-zinc-500"
+            className="kodeks-ui-body mb-3 w-full rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400 dark:border-[#343a40] dark:bg-[#202428] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={copy.fileSearchPlaceholder}
             type="search"
             value={query}
           />
           {isLoading ? (
-            <div className="kodeks-ui-caption text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption text-slate-500 dark:text-slate-400">
               {copy.fileSearchLoading}
             </div>
           ) : error !== null ? (
-            <div className="kodeks-ui-caption text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption text-slate-500 dark:text-slate-400">
               {copy.fileSearchError}
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="kodeks-ui-caption text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption text-slate-500 dark:text-slate-400">
               {copy.noFileMatches}
             </div>
           ) : (
@@ -225,10 +225,10 @@ function WorkspaceFilePicker({
                 return (
                   <button
                     aria-pressed={isSelected}
-                    className={`kodeks-ui-body flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-left transition ${
+                    className={`kodeks-ui-body flex min-h-8 items-center gap-2 rounded-[10px] px-2 py-1.5 text-left transition ${
                       isSelected
-                        ? 'bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950'
-                        : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                        ? 'bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-950'
+                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#2b3035]'
                     }`}
                     key={path}
                     onClick={() => toggleSelectedFile(path)}
@@ -238,8 +238,8 @@ function WorkspaceFilePicker({
                     <span
                       className={`size-3 shrink-0 rounded-sm border ${
                         isSelected
-                          ? 'border-white bg-white dark:border-zinc-950 dark:bg-zinc-950'
-                          : 'border-zinc-300 dark:border-zinc-700'
+                          ? 'border-white bg-white dark:border-slate-950 dark:bg-slate-950'
+                          : 'border-slate-300 dark:border-slate-600'
                       }`}
                     />
                     <span className="min-w-0 truncate">{path}</span>
@@ -254,7 +254,7 @@ function WorkspaceFilePicker({
   );
 }
 
-// 渲染 ChatGPT-style 的折叠窄栏，只保留关键入口图标。
+// 渲染 NotebookLM-style 的折叠窄栏，只保留展开和新会话入口。
 function CollapsedWorkspaceRail({
   copy,
   onCollapseToggle,
@@ -266,13 +266,13 @@ function CollapsedWorkspaceRail({
 }) {
   return (
     <aside
-      className="flex h-full min-h-0 w-full flex-col items-center border border-stone-200 bg-zinc-50 py-4 text-zinc-950 dark:border-zinc-800 dark:bg-black dark:text-zinc-50"
+      className="flex h-full min-h-0 w-full flex-col items-center overflow-hidden rounded-[16px] border border-slate-200 bg-white py-3 text-slate-800 shadow-sm dark:border-[#343a40] dark:bg-[#202428] dark:text-slate-100 dark:shadow-none"
       data-testid="workspace-panel"
       data-state="collapsed"
     >
       <button
         aria-label={copy.expandSidebar}
-        className="mb-5 inline-flex size-9 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+        className="mb-4 inline-flex size-9 items-center justify-center rounded-[10px] text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-[#2b3035] dark:hover:text-white"
         data-testid="workspace-expand-button"
         onClick={onCollapseToggle}
         type="button"
@@ -281,14 +281,14 @@ function CollapsedWorkspaceRail({
       </button>
       <button
         aria-label={copy.newSession}
-        className="inline-flex size-9 items-center justify-center rounded-md text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+        className="inline-flex size-9 items-center justify-center rounded-[10px] text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-[#2b3035] dark:hover:text-white"
         onClick={onNewSession}
         type="button"
       >
-        <MaterialIcon name="smart_toy" size={18} />
+        <MaterialIcon name="add" size={20} />
       </button>
-      <div className="mt-4 h-px w-8 bg-stone-200 dark:bg-zinc-800" />
-      <div className="mt-auto flex size-8 items-center justify-center rounded-full border border-stone-200 text-[11px] font-semibold dark:border-zinc-800">
+      <div className="mt-4 h-px w-8 bg-slate-200 dark:bg-[#343a40]" />
+      <div className="mt-auto flex size-8 items-center justify-center rounded-full border border-slate-200 bg-slate-950 text-[11px] font-semibold text-white dark:border-[#343a40] dark:bg-slate-100 dark:text-slate-950">
         K
       </div>
     </aside>
@@ -346,7 +346,7 @@ export default function WorkspacePanel({
 
   return (
     <aside
-      className="flex h-full min-h-0 w-full flex-col border border-stone-200 bg-zinc-50 text-zinc-950 dark:border-zinc-800 dark:bg-black dark:text-zinc-50"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[16px] border border-slate-200 bg-white text-slate-950 shadow-sm dark:border-[#343a40] dark:bg-[#202428] dark:text-slate-100 dark:shadow-none"
       data-testid="workspace-panel"
       data-state="expanded"
     >
@@ -354,7 +354,7 @@ export default function WorkspacePanel({
         <div className="kodeks-ui-title">Kodeks</div>
         <button
           aria-label={copy.collapseSidebar}
-          className="inline-flex size-8 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+          className="inline-flex size-8 items-center justify-center rounded-[10px] text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-[#2b3035] dark:hover:text-white"
           data-testid="workspace-collapse-button"
           onClick={onCollapseToggle}
           type="button"
@@ -364,28 +364,28 @@ export default function WorkspacePanel({
       </div>
       <div className="kodeks-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
         <button
-          className="kodeks-ui-label flex h-9 items-center gap-2 rounded-md bg-zinc-200 px-3 text-left text-zinc-900 transition hover:bg-zinc-300 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          className="kodeks-ui-label flex h-9 items-center gap-2 rounded-full bg-slate-950 px-3 text-left text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
           onClick={onNewSession}
           type="button"
         >
-          <MaterialIcon name="smart_toy" size={16} />
+          <MaterialIcon name="add" size={18} />
           {copy.newSession}
         </button>
 
         <section className="space-y-2">
-          <h2 className="kodeks-ui-caption px-1 uppercase text-zinc-500 dark:text-zinc-500">
+          <h2 className="kodeks-ui-caption px-1 uppercase text-slate-500 dark:text-slate-400">
             {copy.sessionHistory}
           </h2>
           {isLoadingSessions && sessions.length === 0 ? (
-            <div className="kodeks-ui-caption px-2 text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption px-2 text-slate-500 dark:text-slate-400">
               {copy.loadingSessions}
             </div>
           ) : sessionError !== null ? (
-            <div className="kodeks-ui-caption px-2 text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption px-2 text-slate-500 dark:text-slate-400">
               {copy.sessionLoadError}
             </div>
           ) : sessions.length === 0 ? (
-            <div className="kodeks-ui-caption px-2 text-zinc-500 dark:text-zinc-400">
+            <div className="kodeks-ui-caption px-2 text-slate-500 dark:text-slate-400">
               {copy.noSessions}
             </div>
           ) : (
@@ -395,10 +395,10 @@ export default function WorkspacePanel({
                 return (
                   <button
                     aria-pressed={isCurrent}
-                    className={`group flex min-h-12 items-start gap-2 rounded-md px-2.5 py-2 text-left transition ${
+                    className={`group flex min-h-12 items-start gap-2 rounded-[10px] px-2.5 py-2 text-left transition ${
                       isCurrent
-                        ? 'bg-zinc-200 text-zinc-950 dark:bg-zinc-900 dark:text-zinc-50'
-                        : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'
+                        ? 'bg-slate-100 text-slate-950 dark:bg-[#30353b] dark:text-slate-100'
+                        : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[#24282d]'
                     }`}
                     key={session.id}
                     onClick={() => onSessionSelect(session.id)}
@@ -412,7 +412,7 @@ export default function WorkspacePanel({
                       <span className="kodeks-ui-body block truncate">
                         {session.title || copy.autoSession}
                       </span>
-                      <span className="kodeks-ui-caption block truncate text-zinc-400">
+                      <span className="kodeks-ui-caption block truncate text-slate-400 dark:text-slate-500">
                         {session.activePlan?.title ?? formatSessionTime(session.updatedAt)}
                       </span>
                     </span>
@@ -424,10 +424,10 @@ export default function WorkspacePanel({
         </section>
 
         <section className="space-y-3">
-          <h2 className="kodeks-ui-caption px-1 uppercase text-zinc-500 dark:text-zinc-500">
+          <h2 className="kodeks-ui-caption px-1 uppercase text-slate-500 dark:text-slate-400">
             {copy.fileSearch}
           </h2>
-          <p className="kodeks-ui-caption px-1 text-zinc-500 dark:text-zinc-400">
+          <p className="kodeks-ui-caption px-1 text-slate-500 dark:text-slate-400">
             {copy.fileSearchDescription}
           </p>
           <WorkspaceFilePicker

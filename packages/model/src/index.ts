@@ -8,27 +8,25 @@ export type {
   ModelProviderOverride,
   ModelTurnRequest,
   ModelTurnStreamEvent,
-  ReasoningEffort
-} from './types';
+  ReasoningEffort,
+} from "./types";
 export {
   createModelClientFromEnv,
   resolveModelClientOptions,
   type ModelClientOptions,
-  type RuntimeEnv
-} from './factory';
+  type RuntimeEnv,
+} from "./factory";
 export {
-  DeepSeekChatCompletionsClient,
-  toDeepSeekChatMessages,
-  toDeepSeekChatTools,
-  toDeepSeekThinkingOptions,
-  type DeepSeekChatCompletionsClientOptions,
-  type DeepSeekChatMessage,
-  type DeepSeekChatTool,
-  type DeepSeekThinkingOptions
-} from './providers/deepseek-chat';
+  loadConfiguredModelCatalog,
+  loadModelRuntimeEnv,
+  resolveKodeksConfigDir,
+  resolveKodeksConfigPath,
+  type ConfiguredModelCatalog,
+  type ConfiguredModelOption,
+} from "./config";
 export {
   OpenAIResponsesClient,
   toOpenAIResponsesInput,
   toOpenAIResponsesTools,
-  type OpenAIResponsesClientOptions
-} from './providers/openai-responses';
+  type OpenAIResponsesClientOptions,
+} from "./providers/openai-responses";

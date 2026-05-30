@@ -23,7 +23,7 @@ function renderWorkspacePanel() {
   );
 }
 
-// Renders the compact rail state that mirrors ChatGPT's collapsed sidebar.
+// Renders the compact rail state that mirrors NotebookLM's collapsed sidebar.
 function renderCollapsedWorkspacePanel() {
   return renderToStaticMarkup(
     createElement(WorkspacePanel, {
@@ -40,7 +40,7 @@ function renderCollapsedWorkspacePanel() {
 }
 
 describe('WorkspacePanel', () => {
-  it('renders ChatGPT-style session and file areas', () => {
+  it('renders NotebookLM-style session and file areas', () => {
     const markup = renderWorkspacePanel();
 
     expect(markup).toContain('data-testid="workspace-panel"');

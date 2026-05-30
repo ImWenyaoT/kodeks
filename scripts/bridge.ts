@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import { loadModelRuntimeEnv } from '../packages/model/src/config.ts';
 import { createBridgeServer } from '../packages/responses-bridge/src/index.ts';
 
 type Command = 'start' | 'health' | 'smoke';
@@ -9,7 +10,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:38440/v1';
 // Dispatches local bridge lifecycle commands for pnpm-first development.
 async function main(): Promise<void> {
   const command = readCommand(process.argv[2]);
-  const env = { ...loadDotEnv('.env'), ...process.env };
+  const env = loadModelRuntimeEnv({ ...loadDotEnv('.env'), ...process.env });
 
   if (command === 'start') {
     startBridge(env);
@@ -37,10 +38,14 @@ function startBridge(env: Record<string, string | undefined>): void {
   const baseURL = readBridgeBaseURL(env);
   const listenURL = new URL(baseURL);
   const server = createBridgeServer({
-    deepSeekApiKey: readDeepSeekApiKey(env),
-    deepSeekBaseURL:
-      env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ?? env.DEEPSEEK_BASE_URL,
-    deepSeekModel:
+    chatCompletionsApiKey: readChatCompletionsApiKey(env),
+    chatCompletionsBaseURL:
+      env.KODEKS_CHAT_COMPLETIONS_BASE_URL ??
+      env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ??
+      env.MOONBRIDGE_DEEPSEEK_BASE_URL ??
+      env.DEEPSEEK_BASE_URL,
+    chatCompletionsModel:
+      env.KODEKS_CHAT_COMPLETIONS_MODEL ??
       env.KODEKS_BRIDGE_DEEPSEEK_MODEL ??
       env.MOONBRIDGE_DEEPSEEK_MODEL ??
       env.DEEPSEEK_MODEL,
@@ -107,14 +112,18 @@ function readBridgeBaseURL(env: Record<string, string | undefined>): string {
   );
 }
 
-// Reads the DeepSeek key accepted by the built-in bridge.
-function readDeepSeekApiKey(
+// Reads the Chat Completions key accepted by the built-in bridge.
+function readChatCompletionsApiKey(
   env: Record<string, string | undefined>
 ): string | undefined {
   return (
+    env.KODEKS_CHAT_COMPLETIONS_API_KEY ??
     env.KODEKS_BRIDGE_DEEPSEEK_API_KEY ??
     env.MOONBRIDGE_DEEPSEEK_API_KEY ??
-    env.DEEPSEEK_API_KEY
+    env.DEEPSEEK_API_KEY ??
+    (env.KODEKS_CHAT_COMPLETIONS_BASE_URL === undefined
+      ? undefined
+      : 'not-needed')
   );
 }
 
