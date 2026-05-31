@@ -200,6 +200,57 @@ describe("runChatTurn", () => {
     ]);
   });
 
+  it("stops locally when a model requests an unavailable tool", async () => {
+    const model = new FakeModelClient([
+      [
+        {
+          type: "tool_call",
+          id: "call_glob",
+          name: "glob",
+          args: { pattern: "**/*.ts" },
+        },
+      ],
+      [{ type: "text_delta", text: "This continuation must not run." }],
+    ]);
+
+    const events = await collectEvents(
+      runIsolatedChatTurn({
+        input: "find files",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model,
+      }),
+    );
+
+    expect(events).toEqual([
+      { type: "assistant_status", message: "Using glob", sessionId: "s1" },
+      {
+        type: "tool_call",
+        id: "call_glob",
+        name: "glob",
+        args: { pattern: "**/*.ts" },
+        sessionId: "s1",
+      },
+      {
+        type: "tool_result",
+        id: "call_glob",
+        name: "glob",
+        output: "Unknown tool requested by model: glob",
+        status: "error",
+        sessionId: "s1",
+      },
+      {
+        type: "error",
+        message: "Unknown tool requested by model: glob",
+        code: "model_requested_unknown_tool",
+        sessionId: "s1",
+      },
+    ]);
+    expect(model.requests).toHaveLength(1);
+  });
+
   it("replays persisted DeepSeek reasoning content after a tool-call turn", async () => {
     const firstModel = new FakeModelClient([
       [

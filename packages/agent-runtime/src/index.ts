@@ -227,6 +227,7 @@ async function* runModelClientChatTurn(
     let roundAssistantText = "";
     let responseCompleted = false;
     let waitingForApproval = false;
+    let haltToolLoop = false;
 
     for await (const modelEvent of input.model.streamTurn(pendingRequest)) {
       if (modelEvent.type === "text_delta") {
@@ -255,6 +256,25 @@ async function* runModelClientChatTurn(
           args: modelEvent.args,
           sessionId,
         };
+        if (!registry.has(modelEvent.name)) {
+          const output = `Unknown tool requested by model: ${modelEvent.name}`;
+          yield {
+            type: "tool_result",
+            id: modelEvent.id,
+            name: modelEvent.name,
+            output,
+            status: "error",
+            sessionId,
+          };
+          yield {
+            type: "error",
+            message: output,
+            code: "model_requested_unknown_tool",
+            sessionId,
+          };
+          haltToolLoop = true;
+          continue;
+        }
         const rawResult = await registry.execute(
           modelEvent.name,
           modelEvent.args,
@@ -315,7 +335,12 @@ async function* runModelClientChatTurn(
       };
     }
 
-    if (responseCompleted || toolMessages.length === 0 || waitingForApproval) {
+    if (
+      responseCompleted ||
+      toolMessages.length === 0 ||
+      waitingForApproval ||
+      haltToolLoop
+    ) {
       pendingRequest = null;
       continue;
     }

@@ -61,6 +61,8 @@ describe("ToolRegistry", () => {
       "list_skills",
       "read_skill",
     ]);
+    expect(registry.has("read_file")).toBe(true);
+    expect(registry.has("glob")).toBe(false);
   });
 
   it("executes read_file and write_file through workspace boundaries", async () => {

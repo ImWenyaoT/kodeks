@@ -65,6 +65,11 @@ export class ToolRegistry {
       .map((tool) => tool.definition);
   }
 
+  // Checks whether a model-requested tool is actually registered in this harness.
+  has(toolName: string): boolean {
+    return this.tools.has(toolName);
+  }
+
   // Executes a registered tool and turns unknown names into model-readable failures.
   async execute(
     toolName: string,
