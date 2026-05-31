@@ -69,6 +69,7 @@ docs/*
 !docs/PRD.md
 !docs/architecture.md
 !docs/MODERNIZATION.md
+!docs/refactor-parity.md
 !docs/2026-05-24-agent-feedback-retrospective.md
 !docs/superpowers/
 !docs/superpowers/**

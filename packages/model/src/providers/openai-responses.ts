@@ -1,11 +1,11 @@
-import OpenAI from 'openai';
+import OpenAI from "openai";
 import type {
   EasyInputMessage,
   FunctionTool,
   ResponseInput,
   ResponseOutputText,
-  ResponseStreamEvent
-} from 'openai/resources/responses/responses';
+  ResponseStreamEvent,
+} from "openai/resources/responses/responses";
 
 import type {
   ChatMessage,
@@ -13,9 +13,9 @@ import type {
   ModelClient,
   ModelTurnRequest,
   ModelTurnStreamEvent,
-  ReasoningEffort
-} from '../types';
-import { parseToolArguments, stringifyToolArguments } from './common';
+  ReasoningEffort,
+} from "../types";
+import { parseToolArguments, stringifyToolArguments } from "./common";
 
 export type OpenAIResponsesClientOptions = {
   apiKey?: string;
@@ -40,21 +40,29 @@ type ResponsesCreatePayload = {
 type OpenAIResponsesApiClient = {
   responses: {
     create(
-      payload: ResponsesCreatePayload
+      payload: ResponsesCreatePayload,
     ): PromiseLike<AsyncIterable<unknown>> | AsyncIterable<unknown>;
   };
 };
 
+type ResponsesFunctionCallItem = {
+  type: "function_call";
+  call_id: string;
+  name: string;
+  arguments: string;
+  reasoning_content?: string | null;
+};
+
 // 把内部工具定义转换为 OpenAI Responses API 的 function tool。
 export function toOpenAIResponsesTools(
-  tools: ChatToolDefinition[]
+  tools: ChatToolDefinition[],
 ): FunctionTool[] {
   return tools.map((definition) => ({
-    type: 'function',
+    type: "function",
     name: definition.name,
     description: definition.description,
     parameters: definition.parameters,
-    strict: false
+    strict: false,
   }));
 }
 
@@ -70,7 +78,7 @@ export class OpenAIResponsesClient implements ModelClient {
       // Narrow the SDK client to the small Responses surface this adapter uses.
       (new OpenAI({
         apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
-        baseURL: options.baseURL
+        baseURL: options.baseURL,
       }) as unknown as OpenAIResponsesApiClient);
     this.model = options.model;
     this.reasoningEffort = options.reasoningEffort;
@@ -78,7 +86,7 @@ export class OpenAIResponsesClient implements ModelClient {
 
   // 执行一轮 Responses API 调用，并映射为 runtime 稳定事件。
   async *streamTurn(
-    request: ModelTurnRequest
+    request: ModelTurnRequest,
   ): AsyncIterable<ModelTurnStreamEvent> {
     const mappedInput = toOpenAIResponsesInput(request.messages);
     const payload: ResponsesCreatePayload = {
@@ -89,48 +97,53 @@ export class OpenAIResponsesClient implements ModelClient {
       ...(this.reasoningEffort === undefined
         ? {}
         : { reasoning: { effort: this.reasoningEffort } }),
-      stream: true
+      stream: true,
     };
     const stream = await this.client.responses.create(payload);
     let sawToolCall = false;
 
     for await (const chunk of stream) {
       const event = chunk as ResponseStreamEvent;
-      if (event.type === 'response.output_text.delta') {
-        yield { type: 'text_delta', text: event.delta };
+      if (event.type === "response.output_text.delta") {
+        yield { type: "text_delta", text: event.delta };
         continue;
       }
 
       if (
-        event.type === 'response.output_item.done' &&
-        event.item.type === 'function_call'
+        event.type === "response.output_item.done" &&
+        event.item.type === "function_call"
       ) {
+        const item = event.item as ResponsesFunctionCallItem;
         sawToolCall = true;
         yield {
-          type: 'tool_call',
-          id: event.item.call_id,
-          name: event.item.name,
-          args: parseToolArguments(event.item.arguments)
+          type: "tool_call" as const,
+          id: item.call_id,
+          name: item.name,
+          args: parseToolArguments(item.arguments),
+          ...(typeof item.reasoning_content === "string" &&
+          item.reasoning_content.length > 0
+            ? { reasoningContent: item.reasoning_content }
+            : {}),
         };
         continue;
       }
 
-      if (event.type === 'response.completed') {
+      if (event.type === "response.completed") {
         if (!sawToolCall) {
-          yield { type: 'response_completed', responseId: event.response.id };
+          yield { type: "response_completed", responseId: event.response.id };
         }
         continue;
       }
 
-      if (event.type === 'error') {
-        yield { type: 'error', message: event.message };
+      if (event.type === "error") {
+        yield { type: "error", message: event.message };
         continue;
       }
 
-      if (event.type === 'response.failed') {
+      if (event.type === "response.failed") {
         yield {
-          type: 'error',
-          message: event.response.error?.message ?? 'Response failed.'
+          type: "error",
+          message: event.response.error?.message ?? "Response failed.",
         };
       }
     }
@@ -143,27 +156,27 @@ export function toOpenAIResponsesInput(messages: ChatMessage[]): {
   input: ResponseInput;
 } {
   const instructions = messages
-    .filter((message) => message.role === 'system')
+    .filter((message) => message.role === "system")
     .map((message) => message.content)
-    .join('\n\n');
+    .join("\n\n");
   const input: ResponseInput = [];
 
   for (const message of messages) {
-    if (message.role === 'system') {
+    if (message.role === "system") {
       continue;
     }
 
-    if (message.role === 'tool') {
+    if (message.role === "tool") {
       input.push({
-        type: 'function_call_output',
-        call_id: message.toolCallId ?? '',
-        output: message.content
+        type: "function_call_output",
+        call_id: message.toolCallId ?? "",
+        output: message.content,
       });
       continue;
     }
 
     if (
-      message.role === 'assistant' &&
+      message.role === "assistant" &&
       message.toolCalls !== undefined &&
       message.toolCalls.length > 0
     ) {
@@ -172,10 +185,13 @@ export function toOpenAIResponsesInput(messages: ChatMessage[]): {
       }
       for (const toolCall of message.toolCalls) {
         input.push({
-          type: 'function_call',
+          type: "function_call",
           call_id: toolCall.id,
           name: toolCall.name,
-          arguments: stringifyToolArguments(toolCall.args)
+          arguments: stringifyToolArguments(toolCall.args),
+          ...(message.reasoningContent === undefined
+            ? {}
+            : { reasoning_content: message.reasoningContent }),
         });
       }
       continue;
@@ -189,25 +205,25 @@ export function toOpenAIResponsesInput(messages: ChatMessage[]): {
 
 // 把纯文本 user/assistant 消息转换为 Responses API message item。
 function toResponsesMessage(message: ChatMessage): EasyInputMessage {
-  if (message.role === 'assistant') {
+  if (message.role === "assistant") {
     const assistantMessage = {
-      type: 'message',
-      role: 'assistant',
+      type: "message",
+      role: "assistant",
       content: [
         {
-          type: 'output_text',
+          type: "output_text",
           text: message.content,
-          annotations: []
-        } satisfies ResponseOutputText
-      ]
+          annotations: [],
+        } satisfies ResponseOutputText,
+      ],
     };
     // The SDK response input union does not expose this assistant item shape directly.
     return assistantMessage as unknown as EasyInputMessage;
   }
 
   return {
-    type: 'message',
-    role: 'user',
-    content: [{ type: 'input_text', text: message.content }]
+    type: "message",
+    role: "user",
+    content: [{ type: "input_text", text: message.content }],
   };
 }

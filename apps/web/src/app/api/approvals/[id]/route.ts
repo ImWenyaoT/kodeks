@@ -1,21 +1,21 @@
-import type { NextRequest } from 'next/server';
+import type { NextRequest } from "next/server";
 
 import {
   ApprovalAlreadyResolvedError,
-  ApprovalNotFoundError
-} from '@kodeks/storage';
+  ApprovalNotFoundError,
+} from "@kodeks/storage";
 import {
   ShellCommandTimeoutError,
-  runApprovedCommand
-} from '@kodeks/workspace';
+  runApprovedCommand,
+} from "@kodeks/workspace";
 
 import {
   getKodeksDatabase,
-  getKodeksWorkspace
-} from '@/lib/server/kodeks-runtime';
+  getKodeksWorkspace,
+} from "@/lib/server/kodeks-runtime";
 
 // Next.js API routes 需要 Node runtime 以访问本地文件系统和 SQLite。
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,7 +24,7 @@ type RouteContext = {
 // 按 id 读取一个 approval record。
 export async function GET(
   _request: NextRequest,
-  context: RouteContext
+  context: RouteContext,
 ): Promise<Response> {
   const { id } = await context.params;
   try {
@@ -38,7 +38,7 @@ export async function GET(
 // 批准或拒绝一个 pending approval；批准后的 shell command 只会执行一次。
 export async function POST(
   request: NextRequest,
-  context: RouteContext
+  context: RouteContext,
 ): Promise<Response> {
   const { id } = await context.params;
   const body = (await request.json().catch(() => ({}))) as Record<
@@ -49,23 +49,23 @@ export async function POST(
   if (decision === null) {
     return Response.json(
       { error: 'Invalid decision. Expected "approve" or "reject".' },
-      { status: 400 }
+      { status: 400 },
     );
   }
   const database = getKodeksDatabase();
 
   try {
-    if (decision === 'reject') {
+    if (decision === "reject") {
       const approval = await database.approvals.reject(
         id,
-        typeof body.reason === 'string' && body.reason.trim()
+        typeof body.reason === "string" && body.reason.trim()
           ? body.reason.trim()
-          : 'Rejected by user'
+          : "Rejected by user",
       );
       await database.auditLog.record({
         sessionId: approval.sessionId,
-        eventType: 'approval_rejected',
-        payload: { approvalId: approval.id }
+        eventType: "approval_rejected",
+        payload: { approvalId: approval.id },
       });
       return Response.json({ approval });
     }
@@ -74,26 +74,26 @@ export async function POST(
     const command = extractApprovedCommand(pendingApproval.command);
     if (command === null) {
       return Response.json(
-        { error: 'Approval does not contain an executable command.' },
-        { status: 400 }
+        { error: "Approval does not contain an executable command." },
+        { status: 400 },
       );
     }
 
     const approved = await database.approvals.approve(id);
     const result = await runApprovedCommand(command, {
-      cwd: getKodeksWorkspace().rootPath()
+      cwd: getKodeksWorkspace().rootPath(),
     });
     const executed = await database.approvals.markExecuted(id);
     await database.auditLog.record({
       sessionId: approved.sessionId,
-      eventType: 'approval_executed',
+      eventType: "approval_executed",
       payload: {
         approvalId: approved.id,
         command,
         exitCode: result.exitCode,
         stdout: result.stdout,
-        stderr: result.stderr
-      }
+        stderr: result.stderr,
+      },
     });
 
     return Response.json({ approval: executed, result });
@@ -107,9 +107,9 @@ export async function POST(
 
 // Parses an explicit approval decision value.
 export function parseApprovalDecision(
-  decision: unknown
-): 'approve' | 'reject' | null {
-  if (decision === 'approve' || decision === 'reject') {
+  decision: unknown,
+): "approve" | "reject" | null {
+  if (decision === "approve" || decision === "reject") {
     return decision;
   }
   return null;
@@ -119,9 +119,9 @@ export function parseApprovalDecision(
 function extractApprovedCommand(command: unknown): string | null {
   if (
     command !== null &&
-    typeof command === 'object' &&
-    'command' in command &&
-    typeof (command as { command?: unknown }).command === 'string' &&
+    typeof command === "object" &&
+    "command" in command &&
+    typeof (command as { command?: unknown }).command === "string" &&
     (command as { command: string }).command.trim().length > 0
   ) {
     return (command as { command: string }).command.trim();
@@ -139,6 +139,6 @@ function approvalErrorResponse(error: unknown): Response {
   }
   return Response.json(
     { error: error instanceof Error ? error.message : String(error) },
-    { status: 500 }
+    { status: 500 },
   );
 }

@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
-import { MaterialIcon } from '@/components/material-icon';
-import type { UiCopy } from '@/lib/ui-copy';
+import { MaterialIcon } from "@/components/material-icon";
+import type { UiCopy } from "@/lib/ui-copy";
 
 type WorkspacePanelProps = {
   collapsed: boolean;
-  copy: UiCopy['tools'];
+  copy: UiCopy["tools"];
   currentSessionId: string;
   selectedFiles: string[];
   onCollapseToggle: () => void;
@@ -23,7 +23,7 @@ type WorkspaceFilesResponse = {
 type SessionSummary = {
   id: string;
   title: string;
-  mode: 'act' | 'plan';
+  mode: "act" | "plan";
   updatedAt: string;
   activePlan?: { title?: string } | null;
 };
@@ -34,19 +34,19 @@ type SessionsResponse = {
 
 // 读取 workspace 文件列表，供本地文件选择器按需展示。
 async function fetchWorkspaceFiles(): Promise<string[]> {
-  const response = await fetch('/api/workspace/files');
+  const response = await fetch("/api/workspace/files");
   if (!response.ok) {
     throw new Error(`Workspace file request failed with ${response.status}`);
   }
   const body = (await response.json()) as WorkspaceFilesResponse;
   return Array.isArray(body.files)
-    ? body.files.filter((file): file is string => typeof file === 'string')
+    ? body.files.filter((file): file is string => typeof file === "string")
     : [];
 }
 
 // 读取本地 sessions 列表，并过滤掉不完整的后端响应项。
 async function fetchSessions(): Promise<SessionSummary[]> {
-  const response = await fetch('/api/sessions');
+  const response = await fetch("/api/sessions");
   if (!response.ok) {
     throw new Error(`Session list request failed with ${response.status}`);
   }
@@ -58,23 +58,23 @@ async function fetchSessions(): Promise<SessionSummary[]> {
     .filter((session): session is Record<string, unknown> => {
       return (
         session !== null &&
-        typeof session === 'object' &&
-        typeof session.id === 'string' &&
-        typeof session.title === 'string' &&
-        typeof session.updatedAt === 'string'
+        typeof session === "object" &&
+        typeof session.id === "string" &&
+        typeof session.title === "string" &&
+        typeof session.updatedAt === "string"
       );
     })
     .map((session) => ({
       id: session.id as string,
       title: session.title as string,
-      mode: session.mode === 'plan' ? 'plan' : 'act',
+      mode: session.mode === "plan" ? "plan" : "act",
       updatedAt: session.updatedAt as string,
       activePlan:
         session.activePlan !== null &&
-        typeof session.activePlan === 'object' &&
-        typeof (session.activePlan as { title?: unknown }).title === 'string'
+        typeof session.activePlan === "object" &&
+        typeof (session.activePlan as { title?: unknown }).title === "string"
           ? { title: (session.activePlan as { title: string }).title }
-          : null
+          : null,
     }));
 }
 
@@ -85,10 +85,10 @@ function formatSessionTime(updatedAt: string): string {
     return updatedAt;
   }
   return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 }
 
@@ -96,14 +96,14 @@ function formatSessionTime(updatedAt: string): string {
 function WorkspaceFilePicker({
   copy,
   selectedFiles,
-  onSelectedFilesChange
+  onSelectedFilesChange,
 }: {
-  copy: UiCopy['tools'];
+  copy: UiCopy["tools"];
   selectedFiles: string[];
   onSelectedFilesChange: (files: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [files, setFiles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +121,7 @@ function WorkspaceFilePicker({
       })
       .catch((fetchError: unknown) => {
         if (!isCancelled) {
-          setError(fetchError instanceof Error ? fetchError.message : 'failed');
+          setError(fetchError instanceof Error ? fetchError.message : "failed");
         }
       })
       .finally(() => {
@@ -227,8 +227,8 @@ function WorkspaceFilePicker({
                     aria-pressed={isSelected}
                     className={`kodeks-ui-body flex min-h-8 items-center gap-2 rounded-[10px] px-2 py-1.5 text-left transition ${
                       isSelected
-                        ? 'bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-950'
-                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#2b3035]'
+                        ? "bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-950"
+                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#2b3035]"
                     }`}
                     key={path}
                     onClick={() => toggleSelectedFile(path)}
@@ -238,8 +238,8 @@ function WorkspaceFilePicker({
                     <span
                       className={`size-3 shrink-0 rounded-sm border ${
                         isSelected
-                          ? 'border-white bg-white dark:border-slate-950 dark:bg-slate-950'
-                          : 'border-slate-300 dark:border-slate-600'
+                          ? "border-white bg-white dark:border-slate-950 dark:bg-slate-950"
+                          : "border-slate-300 dark:border-slate-600"
                       }`}
                     />
                     <span className="min-w-0 truncate">{path}</span>
@@ -258,9 +258,9 @@ function WorkspaceFilePicker({
 function CollapsedWorkspaceRail({
   copy,
   onCollapseToggle,
-  onNewSession
+  onNewSession,
 }: {
-  copy: UiCopy['tools'];
+  copy: UiCopy["tools"];
   onCollapseToggle: () => void;
   onNewSession: () => void;
 }) {
@@ -304,7 +304,7 @@ export default function WorkspacePanel({
   onCollapseToggle,
   onNewSession,
   onSelectedFilesChange,
-  onSessionSelect
+  onSessionSelect,
 }: WorkspacePanelProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -321,7 +321,7 @@ export default function WorkspacePanel({
       })
       .catch((error: unknown) => {
         if (!isCancelled) {
-          setSessionError(error instanceof Error ? error.message : 'failed');
+          setSessionError(error instanceof Error ? error.message : "failed");
         }
       })
       .finally(() => {
@@ -397,15 +397,17 @@ export default function WorkspacePanel({
                     aria-pressed={isCurrent}
                     className={`group flex min-h-12 items-start gap-2 rounded-[10px] px-2.5 py-2 text-left transition ${
                       isCurrent
-                        ? 'bg-slate-100 text-slate-950 dark:bg-[#30353b] dark:text-slate-100'
-                        : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[#24282d]'
+                        ? "bg-slate-100 text-slate-950 dark:bg-[#30353b] dark:text-slate-100"
+                        : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[#24282d]"
                     }`}
                     key={session.id}
                     onClick={() => onSessionSelect(session.id)}
                     type="button"
                   >
                     <MaterialIcon
-                      name={session.mode === 'plan' ? 'account_tree' : 'terminal'}
+                      name={
+                        session.mode === "plan" ? "account_tree" : "terminal"
+                      }
                       size={15}
                     />
                     <span className="min-w-0 flex-1">
@@ -413,7 +415,8 @@ export default function WorkspacePanel({
                         {session.title || copy.autoSession}
                       </span>
                       <span className="kodeks-ui-caption block truncate text-slate-400 dark:text-slate-500">
-                        {session.activePlan?.title ?? formatSessionTime(session.updatedAt)}
+                        {session.activePlan?.title ??
+                          formatSessionTime(session.updatedAt)}
                       </span>
                     </span>
                   </button>

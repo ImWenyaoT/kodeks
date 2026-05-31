@@ -26,7 +26,6 @@ import type {
   SessionMode,
   StoredMessage,
   StoredPlanArtifact,
-  StoredPlanStep,
 } from "@kodeks/storage";
 import { MemoryService as KodeksMemoryService } from "@kodeks/storage";
 import {
@@ -37,6 +36,8 @@ import {
   type ToolRegistry,
 } from "@kodeks/tools";
 import { isDangerousCommand, type WorkspaceService } from "@kodeks/workspace";
+
+import { buildPlanArtifactContent } from "./plan-artifacts";
 
 export type AgentEvent =
   | { type: "session_created"; sessionId: string }
@@ -1030,6 +1031,7 @@ function buildAgentInstructions(mode: SessionMode): string {
       "Inspect the workspace and produce a short, practical plan.",
       "Structure the final answer with a title, short summary, numbered steps, and a verification note so Kodeks can persist it as a plan artifact.",
       "Use read-only tools for workspace search, memory recall, MCP manifests, and skills when useful.",
+      "Use tool calls for workspace facts; keep visible text concise and separate from private reasoning.",
       "Do not mutate files or run shell commands.",
       "Do not reveal hidden reasoning or private scratchpad text.",
       "Do not claim you opened a URL unless a tool result proves it.",
@@ -1040,6 +1042,7 @@ function buildAgentInstructions(mode: SessionMode): string {
     "Reply in the user's language. If the user writes Chinese, reply in Chinese.",
     "Help with coding tasks by using workspace tools, MCP manifests, skills, memory, and subagents.",
     "Use workspace tools to read files, write files, and run shell commands when that is the right next step.",
+    "Use tool calls for workspace facts; keep visible text concise and separate from private reasoning.",
     "Use memory, skills, and subagent tools only when they clearly help the task.",
     "Ask for approval before dangerous shell commands or risky writes.",
     "Do not reveal hidden reasoning or private scratchpad text.",
@@ -1120,104 +1123,6 @@ function formatPlanArtifactForContext(plan: StoredPlanArtifact): string {
   return [`${plan.title} (${plan.id})`, plan.summary, steps]
     .filter(Boolean)
     .join("\n");
-}
-
-// Extracts a minimal structured plan from the assistant's plan-mode answer.
-function buildPlanArtifactContent(
-  userPrompt: string,
-  assistantText: string,
-): {
-  title: string;
-  summary: string;
-  steps: StoredPlanStep[];
-} {
-  const lines = assistantText
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const title =
-    readPlanTitle(lines) ?? compactText(userPrompt, 80) ?? "Kodeks plan";
-  const summary =
-    readPlanSummary(lines, title) ?? compactText(assistantText, 240);
-  const steps = readPlanSteps(lines);
-  return {
-    title,
-    summary,
-    steps:
-      steps.length > 0
-        ? steps
-        : [
-            {
-              id: "step_1",
-              title: summary || "Review the generated plan",
-              status: "pending",
-              details: null,
-            },
-          ],
-  };
-}
-
-// Reads a markdown heading or the first short non-list line as a plan title.
-function readPlanTitle(lines: string[]): string | null {
-  const heading = lines.find((line) => /^#{1,3}\s+/u.test(line));
-  if (heading !== undefined) {
-    return heading.replace(/^#{1,3}\s+/u, "").trim();
-  }
-  const firstText = lines.find((line) => !isPlanStepLine(line));
-  return firstText === undefined
-    ? null
-    : compactText(firstText.replace(/[:：]$/u, ""), 80);
-}
-
-// Reads a concise summary line while skipping headings and step-like bullets.
-function readPlanSummary(lines: string[], title: string): string | null {
-  const summary = lines.find((line) => {
-    const normalized = line.replace(/^#{1,3}\s+/u, "").trim();
-    return (
-      normalized !== title &&
-      !isPlanStepLine(line) &&
-      !/^(summary|摘要|计划|steps|步骤)[:：]?$/iu.test(normalized)
-    );
-  });
-  return summary === undefined ? null : compactText(summary, 240);
-}
-
-// Extracts numbered, bulleted, or checkbox lines as structured plan steps.
-function readPlanSteps(lines: string[]): StoredPlanStep[] {
-  return lines
-    .flatMap((line) => {
-      const match = line.match(
-        /^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)(.+)$/u,
-      );
-      if (match === null) {
-        return [];
-      }
-      const title = compactText(
-        match[1]?.replace(/^[-*]\s*/u, "").trim() ?? "",
-        160,
-      );
-      if (title.length === 0) {
-        return [];
-      }
-      const status: StoredPlanStep["status"] =
-        line.includes("[x]") || line.includes("[X]") ? "completed" : "pending";
-      return [{ id: "", title, status, details: null }];
-    })
-    .map((step, index) => ({ ...step, id: `step_${index + 1}` }));
-}
-
-// Checks whether a line looks like a markdown/list plan step.
-function isPlanStepLine(line: string): boolean {
-  return /^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)、]\s+)/u.test(line);
-}
-
-// Collapses whitespace and trims long model text for stable artifact fields.
-function compactText(text: string, maxLength: number): string {
-  const normalized = text.replace(/\s+/gu, " ").trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd();
 }
 
 // Converts stored JSON message content into text for model input.

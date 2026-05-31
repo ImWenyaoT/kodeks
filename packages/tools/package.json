@@ -9,10 +9,8 @@
     "./definitions": "./src/definitions.ts"
   },
   "dependencies": {
-    "@kodeks/shared": "workspace:*",
     "@kodeks/storage": "workspace:*",
-    "@kodeks/workspace": "workspace:*",
-    "zod": "4.4.3"
+    "@kodeks/workspace": "workspace:*"
   },
   "scripts": {
     "lint": "tsc --noEmit",

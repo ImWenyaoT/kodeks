@@ -9,11 +9,14 @@ import {
   type SelectedWorkspaceFileContext,
 } from "@kodeks/agent-runtime";
 import {
-  DEFAULT_CHAT_COMPLETIONS_BASE_URL,
-  DEFAULT_DEEPSEEK_MODEL,
   loadConfiguredModelCatalog,
   loadModelRuntimeEnv,
   ModelConfigurationError,
+  readChatCompletionsApiKey,
+  readChatCompletionsBaseURL,
+  readChatCompletionsConfig,
+  readChatCompletionsModel,
+  readChatCompletionsSignature,
   resolveModelClientOptions,
   type ConfiguredModelCatalog,
   type ModelClientOptions,
@@ -187,7 +190,11 @@ export async function inspectMoonBridgePreflight(
   );
   let modelOptions: ModelClientOptions | null;
   try {
-    modelOptions = resolveModelClientOptions(modelEnv, undefined, body.provider);
+    modelOptions = resolveModelClientOptions(
+      modelEnv,
+      undefined,
+      body.provider,
+    );
   } catch (error) {
     return {
       status: "unavailable",
@@ -659,48 +666,7 @@ function createManagedBridgeBaseURL(baseURL: URL, port: number): string {
 
 // 记录托管 bridge 的上游配置指纹；用户切换模型或 endpoint 时需要重启 bridge。
 function readManagedBridgeUpstreamSignature(env: RuntimeEnv): string {
-  return JSON.stringify({
-    apiKey: readChatCompletionsApiKey(env) ?? "",
-    baseURL: readChatCompletionsBaseURL(env),
-    model: readChatCompletionsModel(env),
-  });
-}
-
-// 读取 MoonBridge 上游 Chat Completions key；本地 endpoint 可使用占位 key。
-function readChatCompletionsApiKey(env: RuntimeEnv): string | undefined {
-  const localBaseURL = isLocalHttpURL(readChatCompletionsBaseURL(env));
-  return (
-    env.KODEKS_CHAT_COMPLETIONS_API_KEY ??
-    (localBaseURL ? "not-needed" : undefined)
-  );
-}
-
-// 读取标准 Chat Completions base URL，DeepSeek-first 场景默认走官方 OpenAI-format 地址。
-function readChatCompletionsBaseURL(env: RuntimeEnv): string {
-  return env.KODEKS_CHAT_COMPLETIONS_BASE_URL ?? DEFAULT_CHAT_COMPLETIONS_BASE_URL;
-}
-
-// 读取标准 Chat Completions 模型，默认使用当前 DeepSeek 官方 V4 Flash ID。
-function readChatCompletionsModel(env: RuntimeEnv): string {
-  return env.KODEKS_CHAT_COMPLETIONS_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
-}
-
-// 判断 endpoint 是否是本机无鉴权开发服务；只有这种场景才自动补占位 key。
-function isLocalHttpURL(value: string | undefined): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "http:" &&
-      (url.hostname === "127.0.0.1" ||
-        url.hostname === "localhost" ||
-        url.hostname === "::1")
-    );
-  } catch {
-    return false;
-  }
+  return readChatCompletionsSignature(env);
 }
 
 // 读取 MoonBridge 上游配置并列出会导致实际请求失败的缺失项。
@@ -710,22 +676,7 @@ function readChatCompletionsPreflightConfig(env: RuntimeEnv): {
   model?: string;
   missing: string[];
 } {
-  const apiKey = readChatCompletionsApiKey(env);
-  const baseURL = readChatCompletionsBaseURL(env);
-  const model = readChatCompletionsModel(env);
-  const missing: string[] = [];
-
-  if (apiKey === undefined || apiKey.trim().length === 0) {
-    missing.push("KODEKS_CHAT_COMPLETIONS_API_KEY");
-  }
-  if (baseURL === undefined || baseURL.trim().length === 0) {
-    missing.push("KODEKS_CHAT_COMPLETIONS_BASE_URL");
-  }
-  if (model === undefined || model.trim().length === 0) {
-    missing.push("KODEKS_CHAT_COMPLETIONS_MODEL");
-  }
-
-  return { apiKey, baseURL, model, missing };
+  return readChatCompletionsConfig(env);
 }
 
 // Reads the bridge URL only for local HTTP endpoints that the web runtime can manage.

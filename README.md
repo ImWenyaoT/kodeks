@@ -86,7 +86,7 @@ DeepSeek-first is the default routing strategy. Configure the standard Chat Comp
     "chatCompletions": {
       "apiKey": "sk-...",
       "baseURL": "https://api.deepseek.com",
-      "model": "deepseek-v4-flash"
+      "model": "deepseek-v4-pro"
     }
   }
 }
@@ -110,9 +110,15 @@ For an OpenAI-compatible service that already implements the Responses API, choo
 DeepSeek defaults:
 
 - `KODEKS_CHAT_COMPLETIONS_BASE_URL` defaults to `https://api.deepseek.com`
-- `KODEKS_CHAT_COMPLETIONS_MODEL` defaults to `deepseek-v4-flash`
+- `KODEKS_CHAT_COMPLETIONS_MODEL` defaults to `deepseek-v4-pro`
 - `KODEKS_MODEL_PROVIDER=moonbridge` forces the DeepSeek/MoonBridge path
 - `KODEKS_MODEL_PROVIDER=openai` forces the Responses/OpenAI path
+
+DeepSeek V4 thinking mode is enabled through MoonBridge unless
+`KODEKS_BRIDGE_REASONING_EFFORT=none` is set. When the model calls tools,
+MoonBridge preserves DeepSeek's `reasoning_content` on assistant tool-call
+messages so subsequent Chat Completions requests keep the context shape the
+DeepSeek API requires.
 
 Environment variables still work for development and deployment secrets. Explicit environment variables override the user config file.
 
@@ -201,7 +207,7 @@ Start the built-in TypeScript bridge, then run Kodeks with:
 ```bash
 KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
 KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
-KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-flash \
+KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
 pnpm run bridge:start
 
 KODEKS_MODEL_PROVIDER=moonbridge pnpm run dev

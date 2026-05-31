@@ -7,9 +7,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@kodeks/shared": "workspace:*"
-  },
+  "dependencies": {},
   "scripts": {
     "lint": "tsc --noEmit",
     "test": "vitest run",

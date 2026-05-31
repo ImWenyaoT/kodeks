@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 const sourceFilePatterns = [
   "apps/**/*.{js,jsx,mjs,ts,tsx,mts,cts}",
   "packages/**/*.{js,jsx,mjs,ts,tsx,mts,cts}",
-  "scripts/**/*.{js,mjs,ts,mts,cts}"
+  "scripts/**/*.{js,mjs,ts,mts,cts}",
 ];
 
 export default [

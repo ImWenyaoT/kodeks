@@ -1,4 +1,4 @@
-import Assistant from '@/components/assistant';
+import Assistant from "@/components/assistant";
 
 // 渲染 Kodeks 的主工作台外壳。
 export default function Main() {

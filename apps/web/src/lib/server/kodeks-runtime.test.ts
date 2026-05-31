@@ -156,13 +156,13 @@ describe("inspectMoonBridgePreflight", () => {
     clearModelProviderEnv();
 
     expect(listConfiguredModelCatalog()).toMatchObject({
-      primary: "deepseek/deepseek-v4-flash",
+      primary: "deepseek/deepseek-v4-pro",
       models: [
         {
-          ref: "deepseek/deepseek-v4-flash",
+          ref: "deepseek/deepseek-v4-pro",
           providerId: "deepseek",
           providerName: "DeepSeek",
-          modelId: "deepseek-v4-flash",
+          modelId: "deepseek-v4-pro",
           api: "chat-completions",
           requiresBridge: true,
           baseURL: "https://api.deepseek.com",
@@ -510,16 +510,16 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects legacy bridge provider selection", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "bridge",
       }),
     ).toThrow('KODEKS_MODEL_PROVIDER="bridge" has been removed');
   });
 
   it("rejects MoonBridge environment compatibility aliases", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "moonbridge",
         MOONBRIDGE_MODEL: "moonbridge",
       }),
@@ -546,8 +546,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects request-level bridge override", () => {
-    expect(
-      () => resolveModelClientOptions(
+    expect(() =>
+      resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
           KODEKS_BRIDGE_MODEL: "bridge-session",
@@ -559,8 +559,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects a legacy request-level DeepSeek override", () => {
-    expect(
-      () => resolveModelClientOptions(
+    expect(() =>
+      resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
         },
@@ -589,8 +589,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects legacy DeepSeek-only env", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         DEEPSEEK_API_KEY: "deepseek-key",
       }),
     ).toThrow("DEEPSEEK_API_KEY has been removed");

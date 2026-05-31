@@ -29,7 +29,7 @@ const DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:38440/v1";
 const DEFAULT_BRIDGE_MODEL = "bridge";
 const DEFAULT_BRIDGE_REASONING_EFFORT: ReasoningEffort = "high";
 export const DEFAULT_CHAT_COMPLETIONS_BASE_URL = "https://api.deepseek.com";
-export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro";
 const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 const DEFAULT_OPENAI_REASONING_EFFORT: ReasoningEffort = "medium";
 const LOCAL_ENDPOINT_API_KEY = "not-needed";
@@ -111,7 +111,9 @@ export function resolveModelClientOptions(
     );
   }
 
-  const configuredProvider = resolveConfiguredProvider(env.KODEKS_MODEL_PROVIDER);
+  const configuredProvider = resolveConfiguredProvider(
+    env.KODEKS_MODEL_PROVIDER,
+  );
   if (configuredProvider === "openai") {
     return resolveOpenAIOptions(env, requestedReasoningEffort);
   }
@@ -253,7 +255,9 @@ function resolveProviderOverride(
 }
 
 // 读取环境级 provider，并拒绝已下线 alias，避免静默切换模型通道。
-function resolveConfiguredProvider(value: string | undefined): ModelProvider | null {
+function resolveConfiguredProvider(
+  value: string | undefined,
+): ModelProvider | null {
   if (value === undefined || value.length === 0) {
     return null;
   }

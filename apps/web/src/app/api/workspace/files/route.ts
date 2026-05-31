@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-import { WorkspaceService } from '@kodeks/workspace';
+import { WorkspaceService } from "@kodeks/workspace";
 
-import { resolveWorkspaceRoot } from '@/lib/server/kodeks-runtime';
+import { resolveWorkspaceRoot } from "@/lib/server/kodeks-runtime";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 const MAX_WORKSPACE_FILES = 500;
 

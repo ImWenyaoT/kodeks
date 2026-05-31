@@ -1,40 +1,43 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from "node:fs";
 
-import { loadModelRuntimeEnv } from '../packages/model/src/config.ts';
-import { createBridgeServer } from '../packages/responses-bridge/src/index.ts';
+import {
+  loadModelRuntimeEnv,
+  readChatCompletionsApiKey,
+  readChatCompletionsBaseURL,
+  readChatCompletionsModel,
+} from "../packages/model/src/index.ts";
+import { createBridgeServer } from "../packages/responses-bridge/src/index.ts";
 
-type Command = 'start' | 'health' | 'smoke';
+type Command = "start" | "health" | "smoke";
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:38440/v1';
-const DEFAULT_CHAT_COMPLETIONS_BASE_URL = 'https://api.deepseek.com';
-const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash';
+const DEFAULT_BASE_URL = "http://127.0.0.1:38440/v1";
 const DEPRECATED_ENV_MIGRATIONS: Record<string, string> = {
-  DEEPSEEK_API_KEY: 'KODEKS_CHAT_COMPLETIONS_API_KEY',
-  DEEPSEEK_BASE_URL: 'KODEKS_CHAT_COMPLETIONS_BASE_URL',
-  DEEPSEEK_MODEL: 'KODEKS_CHAT_COMPLETIONS_MODEL',
-  KODEKS_BRIDGE_DEEPSEEK_API_KEY: 'KODEKS_CHAT_COMPLETIONS_API_KEY',
-  KODEKS_BRIDGE_DEEPSEEK_BASE_URL: 'KODEKS_CHAT_COMPLETIONS_BASE_URL',
-  KODEKS_BRIDGE_DEEPSEEK_MODEL: 'KODEKS_CHAT_COMPLETIONS_MODEL',
-  MOONBRIDGE_API_KEY: 'KODEKS_BRIDGE_API_KEY',
-  MOONBRIDGE_BASE_URL: 'KODEKS_BRIDGE_BASE_URL',
-  MOONBRIDGE_MODEL: 'KODEKS_BRIDGE_MODEL',
-  MOONBRIDGE_DEEPSEEK_API_KEY: 'KODEKS_CHAT_COMPLETIONS_API_KEY',
-  MOONBRIDGE_DEEPSEEK_BASE_URL: 'KODEKS_CHAT_COMPLETIONS_BASE_URL',
-  MOONBRIDGE_DEEPSEEK_MODEL: 'KODEKS_CHAT_COMPLETIONS_MODEL'
+  DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
+  KODEKS_BRIDGE_DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  KODEKS_BRIDGE_DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  KODEKS_BRIDGE_DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
+  MOONBRIDGE_API_KEY: "KODEKS_BRIDGE_API_KEY",
+  MOONBRIDGE_BASE_URL: "KODEKS_BRIDGE_BASE_URL",
+  MOONBRIDGE_MODEL: "KODEKS_BRIDGE_MODEL",
+  MOONBRIDGE_DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  MOONBRIDGE_DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  MOONBRIDGE_DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
 };
 
 // Dispatches local bridge lifecycle commands for pnpm-first development.
 async function main(): Promise<void> {
   const command = readCommand(process.argv[2]);
-  const env = loadModelRuntimeEnv({ ...loadDotEnv('.env'), ...process.env });
+  const env = loadModelRuntimeEnv({ ...loadDotEnv(".env"), ...process.env });
   assertNoDeprecatedEnv(env);
 
-  if (command === 'start') {
+  if (command === "start") {
     startBridge(env);
     return;
   }
 
-  if (command === 'health') {
+  if (command === "health") {
     await healthCheck(env);
     return;
   }
@@ -44,10 +47,10 @@ async function main(): Promise<void> {
 
 // Validates the CLI subcommand and keeps package-script errors short.
 function readCommand(value: string | undefined): Command {
-  if (value === 'start' || value === 'health' || value === 'smoke') {
+  if (value === "start" || value === "health" || value === "smoke") {
     return value;
   }
-  throw new Error('Usage: pnpm run bridge:<start|health|smoke>');
+  throw new Error("Usage: pnpm run bridge:<start|health|smoke>");
 }
 
 // Starts the built-in Responses bridge on the configured local address.
@@ -58,11 +61,11 @@ function startBridge(env: Record<string, string | undefined>): void {
     chatCompletionsApiKey: readChatCompletionsApiKey(env),
     chatCompletionsBaseURL: readChatCompletionsBaseURL(env),
     chatCompletionsModel: readChatCompletionsModel(env),
-    modelAliases: [env.KODEKS_BRIDGE_MODEL ?? 'bridge', 'moonbridge'],
-    userAgent: 'kodeks-responses-bridge/0.1'
+    modelAliases: [env.KODEKS_BRIDGE_MODEL ?? "bridge", "moonbridge"],
+    userAgent: "kodeks-responses-bridge/0.1",
   });
-  const hostname = listenURL.hostname || '127.0.0.1';
-  const port = Number(listenURL.port || '38440');
+  const hostname = listenURL.hostname || "127.0.0.1";
+  const port = Number(listenURL.port || "38440");
   server.listen(port, hostname, () => {
     console.log(`Kodeks bridge listening on ${baseURL}`);
   });
@@ -70,13 +73,13 @@ function startBridge(env: Record<string, string | undefined>): void {
 
 // Checks the bridge health endpoint.
 async function healthCheck(
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
 ): Promise<void> {
   const baseURL = readBridgeBaseURL(env);
   const response = await fetch(`${new URL(baseURL).origin}/health`);
   if (!response.ok) {
     throw new Error(
-      `Bridge health failed: ${response.status} ${response.statusText}`
+      `Bridge health failed: ${response.status} ${response.statusText}`,
     );
   }
   console.log(`Kodeks bridge is healthy at ${baseURL}`);
@@ -84,68 +87,42 @@ async function healthCheck(
 
 // Sends a minimal Responses request through the local bridge.
 async function smokeTest(
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
 ): Promise<void> {
   const baseURL = readBridgeBaseURL(env);
   const response = await fetch(`${baseURL}/responses`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${env.KODEKS_BRIDGE_API_KEY ?? 'bridge'}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${env.KODEKS_BRIDGE_API_KEY ?? "bridge"}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: env.KODEKS_BRIDGE_MODEL ?? 'bridge',
-      input: 'Say hello from Kodeks bridge in one short sentence.',
-      stream: true
-    })
+      model: env.KODEKS_BRIDGE_MODEL ?? "bridge",
+      input: "Say hello from Kodeks bridge in one short sentence.",
+      stream: true,
+    }),
   });
   const text = await response.text();
   if (!response.ok) {
     throw new Error(
-      `Bridge smoke failed: ${response.status} ${response.statusText}\n${text}`
+      `Bridge smoke failed: ${response.status} ${response.statusText}\n${text}`,
     );
   }
-  if (!text.includes('event: response.completed')) {
+  if (!text.includes("event: response.completed")) {
     throw new Error(`Bridge smoke did not complete a Responses turn.\n${text}`);
   }
-  console.log(text.split('\n').slice(0, 8).join('\n'));
+  console.log(text.split("\n").slice(0, 8).join("\n"));
 }
 
 // Reads the standard Kodeks bridge base URL.
 function readBridgeBaseURL(env: Record<string, string | undefined>): string {
-  return trimTrailingSlash(
-    env.KODEKS_BRIDGE_BASE_URL ?? DEFAULT_BASE_URL
-  );
-}
-
-// Reads the Chat Completions key accepted by the built-in bridge.
-function readChatCompletionsApiKey(
-  env: Record<string, string | undefined>
-): string | undefined {
-  return (
-    env.KODEKS_CHAT_COMPLETIONS_API_KEY ??
-    (isLocalHttpURL(readChatCompletionsBaseURL(env)) ? 'not-needed' : undefined)
-  );
-}
-
-// Reads the DeepSeek-first upstream base URL for Chat Completions.
-function readChatCompletionsBaseURL(
-  env: Record<string, string | undefined>
-): string {
-  return env.KODEKS_CHAT_COMPLETIONS_BASE_URL ?? DEFAULT_CHAT_COMPLETIONS_BASE_URL;
-}
-
-// Reads the DeepSeek-first upstream model id.
-function readChatCompletionsModel(
-  env: Record<string, string | undefined>
-): string {
-  return env.KODEKS_CHAT_COMPLETIONS_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
+  return trimTrailingSlash(env.KODEKS_BRIDGE_BASE_URL ?? DEFAULT_BASE_URL);
 }
 
 // Rejects removed env names with a one-step migration target.
 function assertNoDeprecatedEnv(env: Record<string, string | undefined>): void {
   const deprecated = Object.entries(DEPRECATED_ENV_MIGRATIONS).find(
-    ([key]) => env[key] !== undefined
+    ([key]) => env[key] !== undefined,
   );
   if (deprecated === undefined) {
     return;
@@ -154,24 +131,9 @@ function assertNoDeprecatedEnv(env: Record<string, string | undefined>): void {
   throw new Error(`${from} has been removed. Rename it to ${to}.`);
 }
 
-// Allows local Chat Completions endpoints to run with a placeholder key.
-function isLocalHttpURL(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'http:' &&
-      (url.hostname === '127.0.0.1' ||
-        url.hostname === 'localhost' ||
-        url.hostname === '::1')
-    );
-  } catch {
-    return false;
-  }
-}
-
 // Removes a trailing slash so helper commands target /v1/responses exactly once.
 function trimTrailingSlash(value: string): string {
-  return value.endsWith('/') ? value.slice(0, -1) : value;
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 // Loads simple KEY=VALUE dotenv files without printing secrets.
@@ -181,12 +143,12 @@ function loadDotEnv(path: string): Record<string, string> {
   }
 
   const values: Record<string, string> = {};
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith('#')) {
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
       continue;
     }
-    const index = trimmed.indexOf('=');
+    const index = trimmed.indexOf("=");
     if (index <= 0) {
       continue;
     }
@@ -194,7 +156,7 @@ function loadDotEnv(path: string): Record<string, string> {
     const value = trimmed
       .slice(index + 1)
       .trim()
-      .replace(/^['"]|['"]$/g, '');
+      .replace(/^['"]|['"]$/g, "");
     values[key] = value;
   }
   return values;

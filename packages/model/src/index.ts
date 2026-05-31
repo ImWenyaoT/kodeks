@@ -28,6 +28,15 @@ export {
   type ConfiguredModelOption,
 } from "./config";
 export {
+  isLocalHttpURL,
+  readChatCompletionsApiKey,
+  readChatCompletionsBaseURL,
+  readChatCompletionsConfig,
+  readChatCompletionsModel,
+  readChatCompletionsSignature,
+  type ChatCompletionsConfig,
+} from "./chat-completions-config";
+export {
   OpenAIResponsesClient,
   toOpenAIResponsesInput,
   toOpenAIResponsesTools,

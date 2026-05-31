@@ -1,7 +1,7 @@
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import React from "react";
+import ReactMarkdown from "react-markdown";
 
-import type { TimelineMessageItem } from '@/lib/conversation-timeline';
+import type { TimelineMessageItem } from "@/lib/conversation-timeline";
 
 type MessageProps = {
   message: TimelineMessageItem;
@@ -11,7 +11,7 @@ type MessageProps = {
 const Message: React.FC<MessageProps> = ({ message }) => {
   return (
     <div className="kodeks-chat-text">
-      {message.role === 'user' ? (
+      {message.role === "user" ? (
         <div className="flex justify-end">
           <div>
             <div className="ml-4 rounded-[16px] bg-[#ededed] px-4 py-2 text-stone-900 dark:bg-zinc-800 dark:text-zinc-50 md:ml-24">

@@ -1,21 +1,21 @@
-import React from 'react';
+import React from "react";
 
-import { MaterialIcon } from '@/components/material-icon';
+import { MaterialIcon } from "@/components/material-icon";
 import {
   formatTimelinePayload,
-  type TimelineToolItem
-} from '@/lib/conversation-timeline';
-import type { UiCopy } from '@/lib/ui-copy';
+  type TimelineToolItem,
+} from "@/lib/conversation-timeline";
+import type { UiCopy } from "@/lib/ui-copy";
 
 type ToolCallProps = {
   toolCall: TimelineToolItem;
-  copy: UiCopy['toolCall'];
+  copy: UiCopy["toolCall"];
 };
 
 // 渲染工具调用卡片，展示调用状态和输入/输出 payload。
 export default function ToolCall({ toolCall, copy }: ToolCallProps) {
-  const isDone = toolCall.status === 'completed';
-  const isWaiting = toolCall.status === 'approval_required';
+  const isDone = toolCall.status === "completed";
+  const isWaiting = toolCall.status === "approval_required";
   const payload = formatTimelinePayload(toolCall.output ?? toolCall.input);
 
   return (
@@ -25,7 +25,7 @@ export default function ToolCall({ toolCall, copy }: ToolCallProps) {
           <div className="kodeks-ui-label flex gap-2 rounded-b-none p-3 pl-0 text-gray-700 dark:text-zinc-200">
             <div className="ml-[-8px] flex items-center gap-2 text-blue-500">
               <MaterialIcon
-                name={isWaiting ? 'shield' : 'terminal'}
+                name={isWaiting ? "shield" : "terminal"}
                 size={16}
               />
               <div>

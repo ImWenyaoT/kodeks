@@ -1,6 +1,6 @@
 // 解析模型返回的 tool arguments；解析失败时返回空对象，避免 runtime 被坏 JSON 打断。
 export function parseToolArguments(
-  argumentsText: string | undefined
+  argumentsText: string | undefined,
 ): Record<string, unknown> {
   if (argumentsText === undefined || argumentsText.trim().length === 0) {
     return {};
@@ -9,7 +9,7 @@ export function parseToolArguments(
   try {
     const parsed = JSON.parse(argumentsText) as unknown;
     return parsed !== null &&
-      typeof parsed === 'object' &&
+      typeof parsed === "object" &&
       !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : {};

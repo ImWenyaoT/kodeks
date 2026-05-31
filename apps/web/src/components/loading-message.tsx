@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 // 渲染助手流式响应时的小圆点占位。
 const LoadingMessage: React.FC = () => {

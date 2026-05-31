@@ -41,9 +41,6 @@ importers:
       '@kodeks/responses-bridge':
         specifier: workspace:*
         version: link:../../packages/responses-bridge
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@kodeks/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -108,9 +105,6 @@ importers:
       '@kodeks/model':
         specifier: workspace:*
         version: link:../model
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@kodeks/storage':
         specifier: workspace:*
         version: link:../storage
@@ -123,9 +117,6 @@ importers:
       '@openai/agents':
         specifier: 0.11.6
         version: 0.11.6(ws@8.21.0)(zod@4.4.3)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -136,9 +127,6 @@ importers:
 
   packages/model:
     dependencies:
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../shared
       openai:
         specifier: 6.39.1
         version: 6.39.1(ws@8.21.0)(zod@4.4.3)
@@ -159,23 +147,7 @@ importers:
         specifier: 4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@1.21.7))
 
-  packages/shared:
-    devDependencies:
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 4.1.7
-        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@1.21.7))
-
   packages/storage:
-    dependencies:
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../shared
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -186,18 +158,12 @@ importers:
 
   packages/tools:
     dependencies:
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@kodeks/storage':
         specifier: workspace:*
         version: link:../storage
       '@kodeks/workspace':
         specifier: workspace:*
         version: link:../workspace
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -207,10 +173,6 @@ importers:
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(jiti@1.21.7))
 
   packages/workspace:
-    dependencies:
-      '@kodeks/shared':
-        specifier: workspace:*
-        version: link:../shared
     devDependencies:
       typescript:
         specifier: 6.0.3

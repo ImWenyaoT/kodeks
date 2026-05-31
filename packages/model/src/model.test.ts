@@ -93,6 +93,7 @@ describe("toOpenAIResponsesInput", () => {
         {
           role: "assistant",
           content: "",
+          reasoningContent: "Need to inspect the README before answering.",
           toolCalls: [
             {
               id: "call_1",
@@ -121,6 +122,7 @@ describe("toOpenAIResponsesInput", () => {
           call_id: "call_1",
           name: "read_file",
           arguments: JSON.stringify({ path: "README.md" }),
+          reasoning_content: "Need to inspect the README before answering.",
         },
         {
           type: "function_call_output",
@@ -253,6 +255,7 @@ describe("OpenAIResponsesClient", () => {
                   call_id: "call_1",
                   name: "read_file",
                   arguments: JSON.stringify({ path: "README.md" }),
+                  reasoning_content: "Need the README before answering.",
                 },
               },
               { type: "response.completed", response: { id: "resp_tool" } },
@@ -274,6 +277,7 @@ describe("OpenAIResponsesClient", () => {
         id: "call_1",
         name: "read_file",
         args: { path: "README.md" },
+        reasoningContent: "Need the README before answering.",
       },
     ]);
   });
@@ -348,16 +352,16 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects legacy bridge provider selection", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "bridge",
       }),
     ).toThrow('KODEKS_MODEL_PROVIDER="bridge" has been removed');
   });
 
   it("rejects legacy MoonBridge environment names", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "moonbridge",
         MOONBRIDGE_API_KEY: "moonbridge-key",
         MOONBRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
@@ -367,8 +371,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects legacy DeepSeek provider selection", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "deepseek",
         KODEKS_BRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
       }),
@@ -395,8 +399,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects request-level bridge override", () => {
-    expect(
-      () => resolveModelClientOptions(
+    expect(() =>
+      resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
           KODEKS_BRIDGE_MODEL: "bridge-session",
@@ -427,8 +431,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects request-level DeepSeek override", () => {
-    expect(
-      () => resolveModelClientOptions(
+    expect(() =>
+      resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
         },
@@ -455,8 +459,8 @@ describe("resolveModelClientOptions", () => {
   });
 
   it("rejects legacy DeepSeek-only env", () => {
-    expect(
-      () => resolveModelClientOptions({
+    expect(() =>
+      resolveModelClientOptions({
         DEEPSEEK_API_KEY: "deepseek-key",
         DEEPSEEK_REASONING_EFFORT: "xhigh",
       }),
@@ -485,14 +489,14 @@ describe("loadModelRuntimeEnv", () => {
         KODEKS_CONFIG_PATH: join(tmpdir(), "kodeks-missing-config.json"),
       }),
     ).toEqual({
-      primary: "deepseek/deepseek-v4-flash",
+      primary: "deepseek/deepseek-v4-pro",
       models: [
         {
-          ref: "deepseek/deepseek-v4-flash",
+          ref: "deepseek/deepseek-v4-pro",
           providerId: "deepseek",
           providerName: "DeepSeek",
-          modelId: "deepseek-v4-flash",
-          modelName: "deepseek-v4-flash",
+          modelId: "deepseek-v4-pro",
+          modelName: "deepseek-v4-pro",
           api: "chat-completions",
           requiresBridge: true,
           baseURL: "https://api.deepseek.com",
@@ -671,14 +675,14 @@ describe("loadModelRuntimeEnv", () => {
       expect(
         loadConfiguredModelCatalog({ KODEKS_CONFIG_PATH: configPath }),
       ).toEqual({
-        primary: "deepseek/deepseek-v4-flash",
+        primary: "deepseek/deepseek-v4-pro",
         models: [
           {
-            ref: "deepseek/deepseek-v4-flash",
+            ref: "deepseek/deepseek-v4-pro",
             providerId: "deepseek",
             providerName: "DeepSeek",
-            modelId: "deepseek-v4-flash",
-            modelName: "deepseek-v4-flash",
+            modelId: "deepseek-v4-pro",
+            modelName: "deepseek-v4-pro",
             api: "chat-completions",
             requiresBridge: true,
             baseURL: "https://api.deepseek.com",
@@ -741,7 +745,7 @@ describe("loadModelRuntimeEnv", () => {
         loadConfiguredModelCatalog({ KODEKS_CONFIG_PATH: configPath }).models,
       ).toEqual([
         expect.objectContaining({
-          ref: "deepseek/deepseek-v4-flash",
+          ref: "deepseek/deepseek-v4-pro",
           configured: false,
         }),
         expect.objectContaining({

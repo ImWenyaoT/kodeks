@@ -9,12 +9,10 @@
   },
   "dependencies": {
     "@kodeks/model": "workspace:*",
-    "@kodeks/shared": "workspace:*",
     "@kodeks/storage": "workspace:*",
     "@kodeks/tools": "workspace:*",
     "@kodeks/workspace": "workspace:*",
-    "@openai/agents": "0.11.6",
-    "zod": "4.4.3"
+    "@openai/agents": "0.11.6"
   },
   "scripts": {
     "lint": "tsc --noEmit",

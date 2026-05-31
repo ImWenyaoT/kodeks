@@ -8,7 +8,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@kodeks/shared": "workspace:*",
     "openai": "6.39.1"
   },
   "scripts": {
