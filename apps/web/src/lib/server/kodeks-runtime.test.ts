@@ -355,6 +355,39 @@ describe("streamKodeksChat", () => {
     }
   });
 
+  it("surfaces MoonBridge upstream failures without Agents SDK final-response noise", async () => {
+    const deepSeekServer = await startFakeDeepSeekErrorServer(
+      "DeepSeek request failed: 401 Unauthorized",
+    );
+    const bridgePort = await getFreePort();
+    const tempDir = await mkdtemp(join(tmpdir(), "kodeks-moonbridge-error-"));
+    process.env.KODEKS_WORKSPACE_ROOT = tempDir;
+    process.env.KODEKS_DB_PATH = join(tempDir, "kodeks.sqlite3");
+    process.env.KODEKS_BRIDGE_BASE_URL = `http://127.0.0.1:${bridgePort}/v1`;
+    process.env.KODEKS_CHAT_COMPLETIONS_BASE_URL = `http://127.0.0.1:${readServerPort(deepSeekServer)}`;
+    process.env.KODEKS_CHAT_COMPLETIONS_API_KEY = "chat-key";
+    process.env.KODEKS_CHAT_COMPLETIONS_MODEL = "chat-test";
+
+    try {
+      const response = new Response(
+        streamKodeksChat({
+          input: "hello",
+          mode: "act",
+          provider: "moonbridge",
+          reasoning_effort: "low",
+        }),
+      );
+      const body = await response.text();
+
+      expect(body).toContain("event: error");
+      expect(body).toContain("DeepSeek request failed: 401 Unauthorized");
+      expect(body).not.toContain("Model did not produce a final response");
+    } finally {
+      await closeServer(deepSeekServer);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("restarts managed MoonBridge when the upstream model config changes", async () => {
     const firstServer = await startFakeDeepSeekServer("Hello from first model");
     const secondServer = await startFakeDeepSeekServer(
@@ -520,6 +553,26 @@ async function startFakeDeepSeekToolServer(): Promise<Server> {
       id: "chatcmpl_final",
       choices: [{ delta: {}, finish_reason: "stop" }],
     });
+    response.write("data: [DONE]\n\n");
+    response.end();
+  });
+  await listen(server, 0);
+  return server;
+}
+
+// Starts a fake DeepSeek endpoint that returns one terminal upstream error chunk.
+async function startFakeDeepSeekErrorServer(message: string): Promise<Server> {
+  const server = createServer((request, response) => {
+    if (request.method !== "POST" || request.url !== "/chat/completions") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    });
+    writeSse(response, { error: { message } });
     response.write("data: [DONE]\n\n");
     response.end();
   });

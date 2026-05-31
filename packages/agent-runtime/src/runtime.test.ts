@@ -1,4 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
+import type { AddressInfo, Server } from "node:net";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -650,6 +656,65 @@ describe("runChatTurn", () => {
       }),
     ]);
   });
+
+  it("keeps a Responses-compatible MoonBridge tool loop consumable by the actual Agents SDK", async () => {
+    await writeFile(join(tempDir, "notes.txt"), "alpha\nbeta\n", "utf8");
+    const responsesServer = await startFakeResponsesToolServer();
+
+    try {
+      const events = await collectEvents(
+        runIsolatedChatTurn({
+          input: "read notes",
+          sessionId: "s1",
+          mode: "act",
+          workspace,
+          database,
+          agents: {
+            provider: "moonbridge",
+            apiKey: "test-key",
+            baseURL: `http://127.0.0.1:${readServerPort(responsesServer)}/v1`,
+            model: "moonbridge",
+            reasoningEffort: "low",
+          },
+        }),
+      );
+
+      expect(events).toEqual([
+        {
+          type: "assistant_status",
+          message: "Using read_file",
+          sessionId: "s1",
+        },
+        {
+          type: "tool_call",
+          id: "call_read_notes",
+          name: "read_file",
+          args: { path: "notes.txt" },
+          sessionId: "s1",
+        },
+        expect.objectContaining({
+          type: "tool_result",
+          id: "call_read_notes",
+          name: "read_file",
+          output: expect.stringContaining("alpha"),
+          status: "ok",
+          sessionId: "s1",
+        }),
+        {
+          type: "text_delta",
+          text: "notes.txt contains alpha.",
+          sessionId: "s1",
+        },
+        {
+          type: "response_completed",
+          sessionId: "s1",
+          responseId: "resp_final",
+        },
+      ]);
+    } finally {
+      await closeServer(responsesServer);
+    }
+  });
 });
 
 describe("buildAgentsSdkBuildAgent", () => {
@@ -722,6 +787,160 @@ describe("buildAgentsSdkBuildAgent", () => {
     ]);
   });
 });
+
+// Starts a minimal Responses-compatible server that forces one SDK tool turn.
+async function startFakeResponsesToolServer(): Promise<Server> {
+  let requestCount = 0;
+  const server = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/v1/responses") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+
+    const payload = await readJsonRequest(request);
+    requestCount += 1;
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    });
+
+    if (requestCount === 1) {
+      writeResponseSse(response, {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: {
+          id: "fc_call_read_notes",
+          type: "function_call",
+          call_id: "call_read_notes",
+          name: "read_file",
+          arguments: '{"path":"notes.txt"}',
+          status: "completed",
+        },
+      });
+      writeResponseSse(response, {
+        type: "response.completed",
+        response: {
+          id: "resp_tool",
+          model: "moonbridge",
+          status: "completed",
+          output: [
+            {
+              id: "fc_call_read_notes",
+              type: "function_call",
+              call_id: "call_read_notes",
+              name: "read_file",
+              arguments: '{"path":"notes.txt"}',
+              status: "completed",
+            },
+          ],
+        },
+      });
+      response.write("data: [DONE]\n\n");
+      response.end();
+      return;
+    }
+
+    expect(JSON.stringify(payload)).toContain("function_call_output");
+    expect(JSON.stringify(payload)).toContain("call_read_notes");
+    expect(JSON.stringify(payload)).toContain("alpha");
+    writeResponseSse(response, {
+      type: "response.output_text.delta",
+      delta: "notes.txt contains alpha.",
+      output_index: 0,
+      content_index: 0,
+      item_id: "msg_resp_final",
+    });
+    writeResponseSse(response, {
+      type: "response.completed",
+      response: {
+        id: "resp_final",
+        model: "moonbridge",
+        status: "completed",
+        output: [
+          {
+            id: "msg_resp_final",
+            type: "message",
+            role: "assistant",
+            status: "completed",
+            content: [
+              {
+                type: "output_text",
+                text: "notes.txt contains alpha.",
+                annotations: [],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    response.write("data: [DONE]\n\n");
+    response.end();
+  });
+  await listen(server, 0);
+  return server;
+}
+
+// Reads JSON posted to a fake Responses endpoint.
+async function readJsonRequest(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
+// Writes one OpenAI-compatible Responses SSE event frame.
+function writeResponseSse(response: ServerResponse, payload: unknown): void {
+  const event = readEventType(payload);
+  response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+}
+
+// Reads the SSE event type from a fake Responses payload.
+function readEventType(payload: unknown): string {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "type" in payload &&
+    typeof payload.type === "string"
+  ) {
+    return payload.type;
+  }
+  return "message";
+}
+
+// Starts a local server and resolves when the listen socket is ready.
+async function listen(server: Server, port: number): Promise<void> {
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", rejectListen);
+      resolveListen();
+    });
+  });
+}
+
+// Closes a local server and resolves after pending handles are released.
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolveClose, rejectClose) => {
+    server.close((error) => {
+      if (error) {
+        rejectClose(error);
+        return;
+      }
+      resolveClose();
+    });
+  });
+}
+
+// Reads the allocated TCP port from a started local server.
+function readServerPort(server: Server): number {
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Server did not expose a TCP address.");
+  }
+  return (address as AddressInfo).port;
+}
 
 class FakeModelClient implements ModelClient {
   readonly requests: ModelTurnRequest[] = [];

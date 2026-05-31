@@ -136,6 +136,7 @@ export type ResponsesStreamEvent =
         error: {
           message: string;
         };
+        output: unknown[];
       };
     }
   | {

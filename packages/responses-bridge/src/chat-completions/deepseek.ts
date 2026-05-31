@@ -96,7 +96,7 @@ export async function* fromDeepSeekStream(
 
   for await (const chunk of stream) {
     if (chunk.error?.message !== undefined) {
-      yield { type: "error", message: chunk.error.message };
+      yield buildResponseFailedEvent(responseId, model, chunk.error.message);
       continue;
     }
 
@@ -254,6 +254,33 @@ function buildResponseCompletedEvent(
         messageText,
         completedOutputItems,
       ),
+    },
+  };
+}
+
+// 创建 SDK 可识别的终止失败事件，避免上游错误被误读成缺少 final response。
+function buildResponseFailedEvent(
+  responseId: string,
+  model: string,
+  message: string,
+): Extract<ResponsesStreamEvent, { type: "response.failed" }> {
+  const text = `MoonBridge upstream failed: ${message}`;
+  return {
+    type: "response.failed",
+    response: {
+      id: responseId,
+      model,
+      status: "failed",
+      error: { message },
+      output: [
+        {
+          id: `msg_${responseId}_failed`,
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{ type: "output_text", text, annotations: [] }],
+        },
+      ],
     },
   };
 }

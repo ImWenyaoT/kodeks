@@ -410,7 +410,63 @@ describe("fromDeepSeekStream", () => {
           ],
         }),
       }),
-      { type: "error", message: "upstream failed" },
+      expect.objectContaining({
+        type: "response.failed",
+        response: expect.objectContaining({
+          id: "chatcmpl_1",
+          model: "bridge",
+          status: "failed",
+          error: { message: "upstream failed" },
+          output: [
+            expect.objectContaining({
+              type: "message",
+              content: [
+                expect.objectContaining({
+                  type: "output_text",
+                  text: "MoonBridge upstream failed: upstream failed",
+                }),
+              ],
+            }),
+          ],
+        }),
+      }),
+    ]);
+  });
+
+  it("turns DeepSeek errors into SDK-terminal failed responses", async () => {
+    const events = [];
+    for await (const event of fromDeepSeekStream(
+      [{ error: { message: "missing upstream key" } }],
+      { responseId: "resp_bridge", model: "bridge" },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "response.failed",
+        response: {
+          id: "resp_bridge",
+          model: "bridge",
+          status: "failed",
+          error: { message: "missing upstream key" },
+          output: [
+            {
+              id: "msg_resp_bridge_failed",
+              type: "message",
+              role: "assistant",
+              status: "completed",
+              content: [
+                {
+                  type: "output_text",
+                  text: "MoonBridge upstream failed: missing upstream key",
+                  annotations: [],
+                },
+              ],
+            },
+          ],
+        },
+      },
     ]);
   });
 });
