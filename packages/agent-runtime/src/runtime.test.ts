@@ -63,9 +63,45 @@ describe("runChatTurn", () => {
       expect.objectContaining({ role: "user", content: { text: "hello" } }),
       expect.objectContaining({
         role: "assistant",
-        content: { text: "Hello world" },
+        content: { text: "Hello world", responseId: "resp_1" },
       }),
     ]);
+  });
+
+  it("passes the latest stored response id to model clients when stateful Responses is enabled", async () => {
+    const firstModel = new FakeModelClient([
+      [
+        { type: "text_delta", text: "Hello" },
+        { type: "response_completed", responseId: "resp_1" },
+      ],
+    ]);
+    await collectEvents(
+      runIsolatedChatTurn({
+        input: "hello",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model: firstModel,
+      }),
+    );
+
+    const secondModel = new FakeModelClient([
+      [{ type: "response_completed", responseId: "resp_2" }],
+    ]);
+    await collectEvents(
+      runIsolatedChatTurn({
+        input: "continue",
+        sessionId: "s1",
+        mode: "act",
+        workspace,
+        database,
+        model: secondModel,
+        environment: { KODEKS_RESPONSES_STATEFUL: "true" },
+      }),
+    );
+
+    expect(secondModel.requests[0]?.previousResponseId).toBe("resp_1");
   });
 
   it("executes tool calls and emits tool result events", async () => {
@@ -610,7 +646,7 @@ describe("runChatTurn", () => {
       expect.objectContaining({ role: "user", content: { text: "hello" } }),
       expect.objectContaining({
         role: "assistant",
-        content: { text: "Hello from SDK" },
+        content: { text: "Hello from SDK", responseId: "resp_agents" },
       }),
     ]);
   });
@@ -627,6 +663,25 @@ describe("buildAgentsSdkBuildAgent", () => {
 
     expect(agent.name).toBe("Kodeks Build Agent");
     expect(agent.tools.map((tool) => tool.name)).toContain("read_file");
+  });
+
+  it("can opt SDK function tools into strict mode without changing defaults", () => {
+    const defaultAgent = buildAgentsSdkBuildAgent({
+      workspace,
+      database,
+      mode: "act",
+      model: "gpt-5.4-mini",
+    }) as unknown as { tools: Array<{ strict?: boolean }> };
+    const strictAgent = buildAgentsSdkBuildAgent({
+      workspace,
+      database,
+      mode: "act",
+      model: "gpt-5.4-mini",
+      environment: { KODEKS_STRICT_TOOL_SCHEMAS: "true" },
+    }) as unknown as { tools: Array<{ strict?: boolean }> };
+
+    expect(defaultAgent.tools.every((tool) => tool.strict !== true)).toBe(true);
+    expect(strictAgent.tools.some((tool) => tool.strict === true)).toBe(true);
   });
 
   it("turns dangerous run_shell calls into SDK approval interruptions with durable records", async () => {

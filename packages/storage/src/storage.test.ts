@@ -82,6 +82,34 @@ describe("SessionRepository", () => {
         createdAt: expect.any(String),
       },
     ]);
+    await expect(sessions.getLatestAssistantResponseId("s1")).resolves.toBe(
+      undefined,
+    );
+  });
+
+  it("initializes schema metadata and reads latest assistant response ids", async () => {
+    const sessions = new SessionRepository(database);
+    await sessions.createSession({
+      id: "s1",
+      title: "Demo",
+      mode: "act",
+      workspaceRoot: tempDir,
+    });
+    await sessions.appendMessage({
+      sessionId: "s1",
+      role: "assistant",
+      content: { text: "first", responseId: "resp_1" },
+    });
+    await sessions.appendMessage({
+      sessionId: "s1",
+      role: "assistant",
+      content: { text: "second", responseId: "resp_2" },
+    });
+
+    await expect(database.getSchemaVersion()).resolves.toBe(1);
+    await expect(sessions.getLatestAssistantResponseId("s1")).resolves.toBe(
+      "resp_2",
+    );
   });
 
   it("updates session mode for plan mode transitions", async () => {
@@ -172,6 +200,40 @@ describe("MemoryRepository", () => {
     await expect(
       database.memories.getEmbedding("hash_1", "embeddinggemma"),
     ).resolves.toEqual([1, 0.5, 0]);
+  });
+
+  it("allows memory services to use an injected vector backend without changing recall", async () => {
+    await database.memories.rememberAtom({
+      scope: "project",
+      content: "Vector backend interfaces should preserve memory recall.",
+    });
+    const writes: string[] = [];
+    const service = new MemoryService({
+      database,
+      workspaceRoot: tempDir,
+      environment: {
+        KODEKS_EMBEDDINGS_ENABLED: "true",
+        KODEKS_EMBEDDINGS_PROVIDER: "local",
+      },
+      vectorBackend: {
+        read: async () => null,
+        write: async (record) => {
+          writes.push(record.contentHash);
+        },
+      },
+    });
+
+    const context = await service.buildContext({
+      sessionId: "s1",
+      query: "vector backend",
+    });
+
+    expect(context.recalledItems).toEqual([
+      expect.objectContaining({
+        content: "Vector backend interfaces should preserve memory recall.",
+      }),
+    ]);
+    expect(writes.length).toBeGreaterThan(0);
   });
 
   it("offloads large tool output into a memory artifact", async () => {

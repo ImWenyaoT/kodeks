@@ -12,6 +12,11 @@ import {
   summarizeArtifactOutput,
   trimTrailingSlash,
 } from "./memory-embeddings";
+import type { MemoryVectorBackend } from "./memory-vector-backend";
+export type {
+  MemoryVectorBackend,
+  MemoryVectorRecord,
+} from "./memory-vector-backend";
 
 export type SessionMode = "act" | "plan";
 
@@ -194,6 +199,12 @@ export type StoredAuditLogEntry = {
   createdAt: string;
 };
 
+export type StoredSchemaMetadata = {
+  key: string;
+  value: string;
+  updatedAt: string;
+};
+
 type SqliteDatabase = {
   exec(sql: string): void;
   prepare(sql: string): {
@@ -205,6 +216,8 @@ type SqliteDatabase = {
 };
 
 type SqliteDatabaseConstructor = new (path?: string) => SqliteDatabase;
+
+const CURRENT_SCHEMA_VERSION = 1;
 
 export class ApprovalNotFoundError extends Error {
   // Names approval lookup failures so API routes can map them to 404.
@@ -269,6 +282,12 @@ export class KodeksDatabase {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         archived_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS schema_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS messages (
@@ -414,6 +433,22 @@ export class KodeksDatabase {
         created_at TEXT NOT NULL
       );
     `);
+    this.database
+      .prepare(
+        `INSERT INTO schema_metadata (key, value, updated_at)
+         VALUES ('schema_version', ?, ?)
+         ON CONFLICT(key) DO NOTHING`,
+      )
+      .run(String(CURRENT_SCHEMA_VERSION), currentTimestamp());
+  }
+
+  // Reads the current schema version marker written during initialization.
+  async getSchemaVersion(): Promise<number> {
+    const row = this.database
+      .prepare("SELECT * FROM schema_metadata WHERE key = 'schema_version'")
+      .get() as SchemaMetadataRow | null | undefined;
+    const version = Number(row?.value);
+    return Number.isFinite(version) ? version : 0;
   }
 }
 
@@ -546,6 +581,34 @@ export class SessionRepository {
       .prepare("SELECT * FROM messages WHERE session_id = ? ORDER BY rowid ASC")
       .all(sessionId) as MessageRow[];
     return rows.map(mapMessage);
+  }
+
+  // Reads the latest persisted assistant response id for experimental stateful Responses.
+  async getLatestAssistantResponseId(
+    sessionId: string,
+  ): Promise<string | undefined> {
+    const rows = this.database
+      .connection()
+      .prepare(
+        "SELECT * FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY rowid DESC",
+      )
+      .all(sessionId) as MessageRow[];
+    for (const row of rows) {
+      const message = mapMessage(row);
+      const content =
+        message.content !== null &&
+        typeof message.content === "object" &&
+        !Array.isArray(message.content)
+          ? (message.content as Record<string, unknown>)
+          : {};
+      if (
+        typeof content.responseId === "string" &&
+        content.responseId.length > 0
+      ) {
+        return content.responseId;
+      }
+    }
+    return undefined;
   }
 }
 
@@ -1145,6 +1208,7 @@ export type MemoryServiceOptions = {
   environment?: Record<string, string | undefined>;
   fetch?: MemoryServiceFetch;
   embeddingProvider?: MemoryEmbeddingProvider;
+  vectorBackend?: MemoryVectorBackend;
   artifactThresholdBytes?: number;
 };
 
@@ -1153,6 +1217,7 @@ export class MemoryService {
   private readonly environment: Record<string, string | undefined>;
   private readonly fetchClient: MemoryServiceFetch | undefined;
   private readonly embeddingProvider: MemoryEmbeddingProvider | undefined;
+  private readonly vectorBackend: MemoryVectorBackend;
   private readonly artifactThresholdBytes: number;
 
   // Wires memory services to the workspace root without taking a dependency on workspace package types.
@@ -1160,6 +1225,8 @@ export class MemoryService {
     this.environment = options.environment ?? process.env;
     this.fetchClient = options.fetch ?? globalThis.fetch;
     this.embeddingProvider = options.embeddingProvider;
+    this.vectorBackend =
+      options.vectorBackend ?? new SqliteMemoryVectorBackend(options.database);
     this.artifactThresholdBytes = options.artifactThresholdBytes ?? 4096;
   }
 
@@ -1316,7 +1383,7 @@ export class MemoryService {
       return null;
     }
     const contentHash = hashText(`${config.cacheModel}\n${text}`);
-    const cached = await this.options.database.memories.getEmbedding(
+    const cached = await this.vectorBackend.read(
       contentHash,
       config.cacheModel,
     );
@@ -1327,7 +1394,7 @@ export class MemoryService {
     if (vector === null) {
       return null;
     }
-    await this.options.database.memories.rememberEmbedding({
+    await this.vectorBackend.write({
       contentHash,
       embeddingModel: config.cacheModel,
       vector,
@@ -1505,6 +1572,28 @@ export class MemoryService {
     } catch {
       return null;
     }
+  }
+}
+
+class SqliteMemoryVectorBackend implements MemoryVectorBackend {
+  // Keeps the default vector cache behavior backed by the existing repository methods.
+  constructor(private readonly database: KodeksDatabase) {}
+
+  // Reads a cached embedding vector from SQLite.
+  async read(
+    contentHash: string,
+    embeddingModel: string,
+  ): Promise<number[] | null> {
+    return this.database.memories.getEmbedding(contentHash, embeddingModel);
+  }
+
+  // Writes a generated embedding vector to SQLite.
+  async write(record: {
+    contentHash: string;
+    embeddingModel: string;
+    vector: number[];
+  }): Promise<void> {
+    await this.database.memories.rememberEmbedding(record);
   }
 }
 
@@ -1828,6 +1917,12 @@ type MessageRow = {
   content_json: string;
   agent_event_json: string | null;
   created_at: string;
+};
+
+type SchemaMetadataRow = {
+  key: string;
+  value: string;
+  updated_at: string;
 };
 
 type MemoryAtomRow = {

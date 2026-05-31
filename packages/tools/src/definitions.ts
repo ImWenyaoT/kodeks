@@ -10,6 +10,7 @@ export type ToolParametersSchema = {
   type: "object";
   properties: Record<string, JsonSchemaProperty>;
   required?: string[];
+  additionalProperties?: boolean;
 };
 
 export type ToolDefinition = {

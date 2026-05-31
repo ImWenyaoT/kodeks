@@ -8,6 +8,7 @@ export type {
   ModelProviderOverride,
   ModelTurnRequest,
   ModelTurnStreamEvent,
+  OpenAIHostedToolName,
   ReasoningEffort,
 } from "./types";
 export {

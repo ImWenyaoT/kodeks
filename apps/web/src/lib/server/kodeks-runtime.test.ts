@@ -12,6 +12,7 @@ import {
   resetKodeksRuntimeForTest,
   resolveModelClientOptions,
   streamKodeksChat,
+  toUiTransportPayload,
 } from "./kodeks-runtime";
 
 const originalOpenAIKey = process.env.OPENAI_API_KEY;
@@ -622,10 +623,57 @@ describe("resolveModelClientOptions", () => {
       model: "gpt-test",
       reasoningEffort: "medium",
       provider: "openai",
+      statefulResponses: false,
+      strictTools: false,
+      hostedTools: [],
     });
   });
 
   it("returns null when no supported provider key is configured", () => {
     expect(resolveModelClientOptions({})).toBeNull();
+  });
+});
+
+describe("toUiTransportPayload", () => {
+  it("maps runtime events without changing the existing SSE contract", () => {
+    expect(
+      toUiTransportPayload({
+        type: "text_delta",
+        text: "Hello",
+        sessionId: "s1",
+      }),
+    ).toEqual({
+      type: "text-delta",
+      delta: "Hello",
+      sessionId: "s1",
+    });
+    expect(
+      toUiTransportPayload({
+        type: "tool_result",
+        id: "call_1",
+        name: "read_file",
+        output: '{"ok":true}',
+        status: "ok",
+        sessionId: "s1",
+      }),
+    ).toEqual({
+      type: "tool-result",
+      toolCallId: "call_1",
+      toolName: "read_file",
+      result: '{"ok":true}',
+      status: "ok",
+      sessionId: "s1",
+    });
+    expect(
+      toUiTransportPayload({
+        type: "response_completed",
+        responseId: "resp_1",
+        sessionId: "s1",
+      }),
+    ).toEqual({
+      type: "finish",
+      responseId: "resp_1",
+      sessionId: "s1",
+    });
   });
 });

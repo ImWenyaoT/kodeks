@@ -126,6 +126,8 @@ export type AgentsSdkRuntimeConfig = {
   baseURL?: string;
   model: string;
   reasoningEffort: ReasoningEffort;
+  statefulResponses?: boolean;
+  strictTools?: boolean;
   runner?: AgentsSdkRunner;
   signal?: AbortSignal;
 };
@@ -205,6 +207,7 @@ async function* runModelClientChatTurn(
     activePlan,
     selectedFiles: input.selectedFiles,
     registry,
+    environment: input.environment,
   });
 
   let pendingRequest: ModelTurnRequest | null = request;
@@ -570,6 +573,7 @@ export function buildAgentsSdkBuildAgent(
           workspaceRoot: input.workspace.rootPath(),
           environment: input.environment,
           approvalState: input.approvalState ?? new Map(),
+          strict: input.environment?.KODEKS_STRICT_TOOL_SCHEMAS === "true",
         }),
       ),
   });
@@ -585,11 +589,20 @@ async function buildModelTurnRequest(input: {
   activePlan: StoredPlanArtifact | null;
   selectedFiles?: SelectedWorkspaceFileContext[];
   registry: ToolRegistry;
+  environment?: Record<string, string | undefined>;
 }): Promise<ModelTurnRequest> {
   const transcript = await input.database.sessions.getTranscript(
     input.sessionId,
   );
   return {
+    ...(input.environment?.KODEKS_RESPONSES_STATEFUL === "true"
+      ? {
+          previousResponseId:
+            await input.database.sessions.getLatestAssistantResponseId(
+              input.sessionId,
+            ),
+        }
+      : {}),
     messages: [
       {
         role: "system",
@@ -724,7 +737,7 @@ async function* persistCompletedAssistantTurn(input: {
     const assistantMessage = await input.database.sessions.appendMessage({
       sessionId: input.sessionId,
       role: "assistant",
-      content: { text: input.assistantText },
+      content: { text: input.assistantText, responseId: input.responseId },
     });
     if (input.mode === "plan") {
       const plan = await input.database.plans.upsertActive({
@@ -900,16 +913,21 @@ function toAgentsSdkTool(
     workspaceRoot: string;
     environment?: Record<string, string | undefined>;
     approvalState: Map<string, AgentsSdkApprovalMetadata>;
+    strict: boolean;
   },
 ): FunctionTool {
   return tool({
     name: definition.name,
     description: definition.description,
     parameters: definition.parameters as never,
-    strict: false,
+    strict: options.strict,
     needsApproval:
       definition.name === "run_shell"
-        ? async (_runContext, rawInput, callId) => {
+        ? async (
+            _runContext: unknown,
+            rawInput: unknown,
+            callId: string | undefined,
+          ) => {
             const args =
               typeof rawInput === "object" && rawInput !== null
                 ? (rawInput as Record<string, unknown>)
@@ -940,7 +958,11 @@ function toAgentsSdkTool(
             return true;
           }
         : false,
-    execute: async (rawInput, _runContext, details) => {
+    execute: async (
+      rawInput: unknown,
+      _runContext: unknown,
+      details: { toolCall?: { callId?: string | null } } | undefined,
+    ) => {
       const args =
         typeof rawInput === "object" && rawInput !== null
           ? (rawInput as Record<string, unknown>)

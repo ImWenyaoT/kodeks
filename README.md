@@ -184,6 +184,9 @@ Optional:
 - `OPENAI_BASE_URL`
 - `OPENAI_MODEL` defaults to `gpt-5.4-mini`
 - `OPENAI_REASONING_EFFORT` defaults to `medium`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
+- `KODEKS_RESPONSES_STATEFUL=true` opts direct OpenAI Responses calls into `previous_response_id`; the default remains local transcript replay
+- `KODEKS_STRICT_TOOL_SCHEMAS=true` opts Responses/Agents function tools into strict schemas after local schema normalization; the default remains `strict: false`
+- `KODEKS_OPENAI_HOSTED_TOOLS=web_search_preview` enables the OpenAI hosted web search tool only on direct OpenAI Responses paths; local workspace tools remain local
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
 
@@ -197,6 +200,8 @@ Removed migration aliases:
 - Provider overrides `bridge`, `deepseek`, and `chat-completions` -> `moonbridge`
 
 Runtime state is written under `.kodeks/` by default and is intentionally ignored by Git.
+
+`/api/chat/stream` remains the stable Kodeks SSE runtime path. `/api/chat/ui` is an experimental adapter route that maps the same runtime events into UI-transport-shaped SSE payloads without changing provider execution.
 
 ### MoonBridge for Chat Completions
 

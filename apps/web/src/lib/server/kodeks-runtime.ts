@@ -9,6 +9,7 @@ import {
   type SelectedWorkspaceFileContext,
 } from "@kodeks/agent-runtime";
 import {
+  createModelClientFromEnv,
   loadConfiguredModelCatalog,
   loadModelRuntimeEnv,
   ModelConfigurationError,
@@ -95,6 +96,35 @@ export type MoonBridgePreflightResult = {
   checkedAt: string;
 };
 
+export type UiTransportPayload =
+  | { type: "session"; sessionId: string }
+  | { type: "status"; message: string; sessionId: string }
+  | { type: "text-delta"; delta: string; sessionId: string }
+  | {
+      type: "tool-call";
+      toolCallId: string;
+      toolName: string;
+      args: unknown;
+      sessionId: string;
+    }
+  | {
+      type: "tool-result";
+      toolCallId: string;
+      toolName: string;
+      result: string;
+      status: string;
+      sessionId: string;
+    }
+  | {
+      type: "approval-required";
+      approvalId: string;
+      toolCallId: string;
+      message: string;
+      sessionId: string;
+    }
+  | { type: "finish"; responseId: string; sessionId: string }
+  | { type: "error"; errorText: string; code?: string; sessionId: string };
+
 let database: KodeksDatabase | null = null;
 let workspaceEnvLoaded = false;
 type ManagedBridgeServer = {
@@ -153,6 +183,49 @@ export function streamKodeksChat(
               message: error instanceof Error ? error.message : String(error),
               sessionId: fallbackSessionId,
             }),
+          ),
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
+// Streams the same AgentEvent source through an experimental UI transport adapter.
+export function streamKodeksChatUiTransport(
+  body: ChatStreamRequest,
+  options: StreamKodeksChatOptions = {},
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of abortableAgentEvents(
+          visibleRuntimeEvents(body, options.signal),
+          options.signal,
+        )) {
+          const payload = toUiTransportPayload(event);
+          if (payload !== null) {
+            controller.enqueue(
+              encoder.encode(
+                `event: ${payload.type}\ndata: ${JSON.stringify(payload)}\n\n`,
+              ),
+            );
+          }
+        }
+      } catch (error) {
+        if (options.signal?.aborted) {
+          return;
+        }
+        controller.enqueue(
+          encoder.encode(
+            `event: error\ndata: ${JSON.stringify({
+              type: "error",
+              errorText: error instanceof Error ? error.message : String(error),
+              sessionId: readSessionId(body) ?? "",
+            } satisfies UiTransportPayload)}\n\n`,
           ),
         );
       } finally {
@@ -420,6 +493,38 @@ async function* runKodeksChatEvents(
     };
   }
 
+  if (
+    resolvedModelOptions.provider === "openai" &&
+    (resolvedModelOptions.statefulResponses ||
+      resolvedModelOptions.hostedTools.length > 0)
+  ) {
+    const model = createModelClientFromEnv(
+      modelEnv,
+      body.reasoning_effort,
+      body.provider,
+    );
+    if (model === null) {
+      yield {
+        type: "error",
+        message: "No direct OpenAI Responses model runtime was configured.",
+        code: "model_provider_missing",
+        sessionId: sessionId ?? "",
+      };
+      return;
+    }
+    yield* runChatTurn({
+      input,
+      sessionId,
+      mode,
+      workspace,
+      database: getKodeksDatabase(),
+      selectedFiles,
+      environment: modelEnv,
+      model,
+    });
+    return;
+  }
+
   yield* runChatTurn({
     input,
     sessionId,
@@ -434,6 +539,14 @@ async function* runKodeksChatEvents(
       baseURL: resolvedModelOptions.baseURL,
       model: resolvedModelOptions.model,
       reasoningEffort: resolvedModelOptions.reasoningEffort,
+      statefulResponses:
+        resolvedModelOptions.provider === "openai"
+          ? resolvedModelOptions.statefulResponses
+          : false,
+      strictTools:
+        resolvedModelOptions.provider === "openai"
+          ? resolvedModelOptions.strictTools
+          : false,
       signal,
     },
   });
@@ -900,4 +1013,71 @@ function toWirePayload(event: AgentEvent): Record<string, unknown> {
     code: event.code,
     session_id: event.sessionId,
   };
+}
+
+// Maps Kodeks runtime events into an adapter payload for UI-message transports.
+export function toUiTransportPayload(
+  event: AgentEvent,
+): UiTransportPayload | null {
+  if (event.type === "session_created") {
+    return { type: "session", sessionId: event.sessionId };
+  }
+  if (event.type === "assistant_status") {
+    return {
+      type: "status",
+      message: event.message,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "text_delta") {
+    return {
+      type: "text-delta",
+      delta: event.text,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "tool_call") {
+    return {
+      type: "tool-call",
+      toolCallId: event.id,
+      toolName: event.name,
+      args: event.args,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "tool_result") {
+    return {
+      type: "tool-result",
+      toolCallId: event.id,
+      toolName: event.name,
+      result: event.output,
+      status: event.status,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "approval_required") {
+    return {
+      type: "approval-required",
+      approvalId: event.approvalId,
+      toolCallId: event.toolCallId,
+      message: event.reason,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "response_completed") {
+    return {
+      type: "finish",
+      responseId: event.responseId,
+      sessionId: event.sessionId,
+    };
+  }
+  if (event.type === "error") {
+    return {
+      type: "error",
+      errorText: event.message,
+      code: event.code,
+      sessionId: event.sessionId,
+    };
+  }
+  return null;
 }

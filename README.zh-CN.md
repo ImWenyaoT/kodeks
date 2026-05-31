@@ -182,6 +182,9 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 - `OPENAI_BASE_URL`
 - `OPENAI_MODEL`，默认是 `gpt-5.4-mini`
 - `OPENAI_REASONING_EFFORT`，默认是 `medium`；支持 `none`、`low`、`medium`、`high`、`xhigh`
+- `KODEKS_RESPONSES_STATEFUL=true` 让直连 OpenAI Responses 路径试验 `previous_response_id`；默认仍使用本地 transcript replay
+- `KODEKS_STRICT_TOOL_SCHEMAS=true` 让 Responses/Agents function tools 经过本地 schema 归一化后启用 strict；默认仍是 `strict: false`
+- `KODEKS_OPENAI_HOSTED_TOOLS=web_search_preview` 只在直连 OpenAI Responses 路径启用 OpenAI hosted web search；本地 workspace tools 仍在本地执行
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
 
@@ -195,6 +198,8 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 - provider override `bridge`、`deepseek`、`chat-completions` -> `moonbridge`
 
 运行时状态默认写入 `.kodeks/`，并且不会进入 Git。
+
+`/api/chat/stream` 仍是稳定的 Kodeks SSE runtime path。`/api/chat/ui` 是实验 adapter route，会把同一批 runtime events 映射成 UI transport 风格的 SSE payload，不改变 provider 执行路径。
 
 ### MoonBridge for Chat Completions
 

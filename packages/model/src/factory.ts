@@ -3,6 +3,7 @@ import type {
   ModelClient,
   ModelProvider,
   ModelProviderOverride,
+  OpenAIHostedToolName,
   ReasoningEffort,
 } from "./types";
 
@@ -22,6 +23,9 @@ export type ModelClientOptions =
       baseURL?: string;
       model: string;
       reasoningEffort: ReasoningEffort;
+      statefulResponses: boolean;
+      strictTools: boolean;
+      hostedTools: OpenAIHostedToolName[];
     };
 
 const DEFAULT_BRIDGE_API_KEY = "bridge";
@@ -89,7 +93,12 @@ export function createModelClientFromEnv(
     return null;
   }
 
-  return new OpenAIResponsesClient(options);
+  return new OpenAIResponsesClient({
+    ...options,
+    stateful: options.provider === "openai" ? options.statefulResponses : false,
+    strictTools: options.provider === "openai" ? options.strictTools : false,
+    hostedTools: options.provider === "openai" ? options.hostedTools : [],
+  });
 }
 
 // 解析模型配置；保持纯函数，方便 web runtime 和单元测试复用。
@@ -191,10 +200,31 @@ function resolveOpenAIOptions(
         env.KODEKS_RESPONSES_REASONING_EFFORT ?? env.OPENAI_REASONING_EFFORT,
         DEFAULT_OPENAI_REASONING_EFFORT,
       ),
+      statefulResponses: env.KODEKS_RESPONSES_STATEFUL === "true",
+      strictTools: env.KODEKS_STRICT_TOOL_SCHEMAS === "true",
+      hostedTools: resolveHostedTools(env.KODEKS_OPENAI_HOSTED_TOOLS),
     };
   }
 
   return null;
+}
+
+// Parses opt-in hosted tool capabilities without changing local deterministic tools.
+function resolveHostedTools(value: string | undefined): OpenAIHostedToolName[] {
+  if (value === undefined) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((toolName) => toolName.trim())
+        .filter(
+          (toolName): toolName is OpenAIHostedToolName =>
+            toolName === "web_search_preview",
+        ),
+    ),
+  ];
 }
 
 // 判断是否启用 Responses bridge；DeepSeek-first 只看标准 KODEKS_* 键。

@@ -24,6 +24,7 @@ export type ChatToolDefinition = {
 export type ModelTurnRequest = {
   messages: ChatMessage[];
   tools: ChatToolDefinition[];
+  previousResponseId?: string;
 };
 
 export type ModelTurnStreamEvent =
@@ -43,6 +44,8 @@ export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
 export type ModelProvider = "openai" | "moonbridge";
 
 export type ModelProviderOverride = ModelProvider;
+
+export type OpenAIHostedToolName = "web_search_preview";
 
 export interface ModelClient {
   streamTurn(request: ModelTurnRequest): AsyncIterable<ModelTurnStreamEvent>;

@@ -13,6 +13,7 @@ import type {
   ModelClient,
   ModelTurnRequest,
   ModelTurnStreamEvent,
+  OpenAIHostedToolName,
   ReasoningEffort,
 } from "../types";
 import { parseToolArguments, stringifyToolArguments } from "./common";
@@ -22,15 +23,21 @@ export type OpenAIResponsesClientOptions = {
   baseURL?: string;
   model: string;
   reasoningEffort?: ReasoningEffort;
+  stateful?: boolean;
+  strictTools?: boolean;
+  hostedTools?: OpenAIHostedToolName[];
   client?: OpenAIResponsesApiClient;
 };
+
+type ResponsesTool = FunctionTool | { type: OpenAIHostedToolName };
 
 type ResponsesCreatePayload = {
   model: string;
   instructions?: string;
   input: ResponseInput;
-  tools: FunctionTool[];
-  store: false;
+  tools: ResponsesTool[];
+  store: boolean;
+  previous_response_id?: string;
   reasoning?: {
     effort: ReasoningEffort;
   };
@@ -56,13 +63,17 @@ type ResponsesFunctionCallItem = {
 // 把内部工具定义转换为 OpenAI Responses API 的 function tool。
 export function toOpenAIResponsesTools(
   tools: ChatToolDefinition[],
+  options: { strict?: boolean } = {},
 ): FunctionTool[] {
   return tools.map((definition) => ({
     type: "function",
     name: definition.name,
     description: definition.description,
-    parameters: definition.parameters,
-    strict: false,
+    parameters:
+      options.strict === true
+        ? toStrictToolParameters(definition.parameters)
+        : definition.parameters,
+    strict: options.strict === true,
   }));
 }
 
@@ -70,6 +81,9 @@ export class OpenAIResponsesClient implements ModelClient {
   private readonly client: OpenAIResponsesApiClient;
   private readonly model: string;
   private readonly reasoningEffort?: ReasoningEffort;
+  private readonly stateful: boolean;
+  private readonly strictTools: boolean;
+  private readonly hostedTools: OpenAIHostedToolName[];
 
   // 创建一个 Responses API 流式客户端，保留 OpenAI 作为可选 fallback。
   constructor(options: OpenAIResponsesClientOptions) {
@@ -82,6 +96,9 @@ export class OpenAIResponsesClient implements ModelClient {
       }) as unknown as OpenAIResponsesApiClient);
     this.model = options.model;
     this.reasoningEffort = options.reasoningEffort;
+    this.stateful = options.stateful === true;
+    this.strictTools = options.strictTools === true;
+    this.hostedTools = options.hostedTools ?? [];
   }
 
   // 执行一轮 Responses API 调用，并映射为 runtime 稳定事件。
@@ -92,8 +109,14 @@ export class OpenAIResponsesClient implements ModelClient {
     const payload: ResponsesCreatePayload = {
       model: this.model,
       ...mappedInput,
-      tools: toOpenAIResponsesTools(request.tools),
-      store: false,
+      tools: [
+        ...toOpenAIResponsesTools(request.tools, { strict: this.strictTools }),
+        ...toOpenAIHostedTools(this.hostedTools),
+      ],
+      store: this.stateful,
+      ...(this.stateful && request.previousResponseId !== undefined
+        ? { previous_response_id: request.previousResponseId }
+        : {}),
       ...(this.reasoningEffort === undefined
         ? {}
         : { reasoning: { effort: this.reasoningEffort } }),
@@ -148,6 +171,11 @@ export class OpenAIResponsesClient implements ModelClient {
       }
     }
   }
+}
+
+// Converts explicitly enabled OpenAI hosted tool capabilities into Responses tool entries.
+function toOpenAIHostedTools(tools: OpenAIHostedToolName[]): ResponsesTool[] {
+  return tools.map((type) => ({ type }));
 }
 
 // 把内部 transcript 转换为 Responses API 的 instructions 和 input items。
@@ -226,4 +254,56 @@ function toResponsesMessage(message: ChatMessage): EasyInputMessage {
     role: "user",
     content: [{ type: "input_text", text: message.content }],
   };
+}
+
+// Converts local JSON Schemas into the strict subset expected by Responses function tools.
+function toStrictToolParameters(
+  parameters: Record<string, unknown>,
+): Record<string, unknown> {
+  const objectSchema = isPlainObject(parameters) ? parameters : {};
+  const properties = readSchemaProperties(objectSchema.properties);
+  const required = Object.keys(properties);
+  return {
+    ...objectSchema,
+    type: "object",
+    properties,
+    required,
+    additionalProperties: false,
+  };
+}
+
+// Reads object-shaped schema properties while preserving nested schema metadata.
+function readSchemaProperties(value: unknown): Record<string, unknown> {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([name, schema]) => [
+      name,
+      toStrictPropertySchema(schema),
+    ]),
+  );
+}
+
+// Normalizes nested object schemas so strict tools reject undeclared arguments.
+function toStrictPropertySchema(schema: unknown): Record<string, unknown> {
+  if (!isPlainObject(schema)) {
+    return {};
+  }
+  const next: Record<string, unknown> = { ...schema };
+  if (isPlainObject(next.properties)) {
+    const properties = readSchemaProperties(next.properties);
+    next.properties = properties;
+    next.required = Object.keys(properties);
+    next.additionalProperties = false;
+  }
+  if (isPlainObject(next.items)) {
+    next.items = toStrictPropertySchema(next.items);
+  }
+  return next;
+}
+
+// Narrows loose JSON values to record-like objects.
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

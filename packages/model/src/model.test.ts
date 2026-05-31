@@ -48,6 +48,41 @@ describe("toOpenAIResponsesTools", () => {
       },
     ]);
   });
+
+  it("can emit strict-compatible Responses tool schemas behind a feature flag", () => {
+    const tools: ChatToolDefinition[] = [
+      {
+        name: "grep",
+        description: "Search files",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+            limit: { type: "integer" },
+          },
+          required: ["query"],
+        },
+      },
+    ];
+
+    expect(toOpenAIResponsesTools(tools, { strict: true })).toEqual([
+      {
+        type: "function",
+        name: "grep",
+        description: "Search files",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+            limit: { type: "integer" },
+          },
+          required: ["query", "limit"],
+          additionalProperties: false,
+        },
+        strict: true,
+      },
+    ]);
+  });
 });
 
 describe("toOpenAIResponsesInput", () => {
@@ -240,6 +275,38 @@ describe("OpenAIResponsesClient", () => {
     });
   });
 
+  it("opts into stateful Responses only when configured", async () => {
+    const calls: unknown[] = [];
+    const client = new OpenAIResponsesClient({
+      apiKey: "test-key",
+      model: "gpt-test",
+      stateful: true,
+      client: {
+        responses: {
+          create: async (payload: unknown) => {
+            calls.push(payload);
+            return streamEvents([
+              { type: "response.completed", response: { id: "resp_next" } },
+            ]);
+          },
+        },
+      },
+    });
+
+    await collectEvents(
+      client.streamTurn({
+        previousResponseId: "resp_prev",
+        messages: [{ role: "user", content: "continue" }],
+        tools: [],
+      }),
+    );
+
+    expect(calls[0]).toMatchObject({
+      store: true,
+      previous_response_id: "resp_prev",
+    });
+  });
+
   it("does not mark a function-call response as final before tool outputs are sent", async () => {
     const client = new OpenAIResponsesClient({
       apiKey: "test-key",
@@ -299,6 +366,9 @@ describe("resolveModelClientOptions", () => {
       baseURL: "https://responses-compatible.test/v1",
       model: "responses-model",
       reasoningEffort: "low",
+      statefulResponses: false,
+      strictTools: false,
+      hostedTools: [],
     });
   });
 
@@ -315,7 +385,44 @@ describe("resolveModelClientOptions", () => {
       baseURL: "http://127.0.0.1:9999/v1",
       model: "local-responses",
       reasoningEffort: "medium",
+      statefulResponses: false,
+      strictTools: false,
+      hostedTools: [],
     });
+  });
+
+  it("reads Responses stateful and strict tool feature flags for direct OpenAI paths", () => {
+    expect(
+      resolveModelClientOptions({
+        KODEKS_MODEL_PROVIDER: "openai",
+        KODEKS_RESPONSES_API_KEY: "responses-key",
+        KODEKS_RESPONSES_STATEFUL: "true",
+        KODEKS_STRICT_TOOL_SCHEMAS: "true",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        provider: "openai",
+        statefulResponses: true,
+        strictTools: true,
+        hostedTools: [],
+      }),
+    );
+  });
+
+  it("reads explicitly enabled hosted tool capabilities for direct OpenAI paths", () => {
+    expect(
+      resolveModelClientOptions({
+        KODEKS_MODEL_PROVIDER: "openai",
+        KODEKS_RESPONSES_API_KEY: "responses-key",
+        KODEKS_OPENAI_HOSTED_TOOLS:
+          "web_search_preview,unknown,web_search_preview",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        provider: "openai",
+        hostedTools: ["web_search_preview"],
+      }),
+    );
   });
 
   it("routes generic Chat Completions endpoint configuration through MoonBridge", () => {
@@ -427,6 +534,9 @@ describe("resolveModelClientOptions", () => {
       baseURL: undefined,
       model: "gpt-5.4-mini",
       reasoningEffort: "medium",
+      statefulResponses: false,
+      strictTools: false,
+      hostedTools: [],
     });
   });
 
@@ -478,6 +588,9 @@ describe("resolveModelClientOptions", () => {
       baseURL: undefined,
       model: "gpt-5.4-mini",
       reasoningEffort: "medium",
+      statefulResponses: false,
+      strictTools: false,
+      hostedTools: [],
     });
   });
 });
