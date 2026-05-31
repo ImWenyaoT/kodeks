@@ -128,7 +128,7 @@ describe('createBridgeServer', () => {
     });
   });
 
-  it('keeps DeepSeek bridge option names as compatibility aliases', async () => {
+  it('does not accept removed DeepSeek bridge option aliases', async () => {
     const fetchCalls: Array<{ url: string; payload: Record<string, unknown> }> =
       [];
     const fetchImpl: typeof fetch = async (url, init) => {
@@ -146,23 +146,17 @@ describe('createBridgeServer', () => {
       );
     };
 
-    await requestBridge('/v1/responses', {
+    const response = await requestBridge('/v1/responses', {
       method: 'POST',
       body: { model: 'bridge', input: 'hello', stream: true },
       bridgeOptions: {
-        deepSeekApiKey: 'deepseek-key',
-        deepSeekBaseURL: 'https://deepseek.test',
-        deepSeekModel: 'deepseek-local',
         fetch: fetchImpl
       }
     });
 
-    expect(fetchCalls).toEqual([
-      {
-        url: 'https://deepseek.test/chat/completions',
-        payload: expect.objectContaining({ model: 'deepseek-local' })
-      }
-    ]);
+    expect(response.status).toBe(500);
+    expect(response.body).toContain('KODEKS_CHAT_COMPLETIONS_API_KEY');
+    expect(fetchCalls).toEqual([]);
   });
 });
 

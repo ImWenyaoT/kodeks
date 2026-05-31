@@ -9,8 +9,11 @@ import {
   type SelectedWorkspaceFileContext,
 } from "@kodeks/agent-runtime";
 import {
+  DEFAULT_CHAT_COMPLETIONS_BASE_URL,
+  DEFAULT_DEEPSEEK_MODEL,
   loadConfiguredModelCatalog,
   loadModelRuntimeEnv,
+  ModelConfigurationError,
   resolveModelClientOptions,
   type ConfiguredModelCatalog,
   type ModelClientOptions,
@@ -162,25 +165,48 @@ export async function inspectMoonBridgePreflight(
 ): Promise<MoonBridgePreflightResult> {
   loadWorkspaceEnv();
 
-  const requestedProvider = readProviderOverride(body) ?? "auto";
+  const checkedAt = new Date().toISOString();
+  let requestedProvider: ModelProviderOverride | "auto";
+  try {
+    requestedProvider = readProviderOverride(body) ?? "auto";
+  } catch (error) {
+    return {
+      status: "unavailable",
+      provider: "auto",
+      code: readRuntimeErrorCode(
+        error,
+        error instanceof Error ? error.message : String(error),
+      ),
+      reason: error instanceof Error ? error.message : String(error),
+      checkedAt,
+    };
+  }
   const modelEnv = loadModelRuntimeEnv(
     process.env,
     readRequestedModelRef(body),
   );
-  const modelOptions = resolveModelClientOptions(
-    modelEnv,
-    undefined,
-    body.provider,
-  );
-  const checkedAt = new Date().toISOString();
-
+  let modelOptions: ModelClientOptions | null;
+  try {
+    modelOptions = resolveModelClientOptions(modelEnv, undefined, body.provider);
+  } catch (error) {
+    return {
+      status: "unavailable",
+      provider: requestedProvider,
+      code: readRuntimeErrorCode(
+        error,
+        error instanceof Error ? error.message : String(error),
+      ),
+      reason: error instanceof Error ? error.message : String(error),
+      checkedAt,
+    };
+  }
   if (modelOptions === null) {
     return {
       status: "unavailable",
       provider: requestedProvider,
       code: "model_provider_missing",
       reason:
-        "No model provider is configured. Set KODEKS_RESPONSES_* for Responses or KODEKS_CHAT_COMPLETIONS_* for MoonBridge.",
+        "No model provider is configured. Set KODEKS_CHAT_COMPLETIONS_* for DeepSeek-first MoonBridge or KODEKS_RESPONSES_* / OPENAI_* for OpenAI fallback.",
       checkedAt,
     };
   }
@@ -359,7 +385,7 @@ async function* runKodeksChatEvents(
     const providerLabel = readProviderOverride(body) ?? "auto";
     yield {
       type: "error",
-      message: `A model provider is required for ${providerLabel}. Configure KODEKS_RESPONSES_* for a direct Responses-compatible endpoint, choose moonbridge with KODEKS_CHAT_COMPLETIONS_* for a Chat Completions endpoint, or set OPENAI_API_KEY for official OpenAI.`,
+      message: `A model provider is required for ${providerLabel}. Configure KODEKS_CHAT_COMPLETIONS_* for DeepSeek-first MoonBridge, or configure KODEKS_RESPONSES_* / OPENAI_* for OpenAI fallback.`,
       code: "model_provider_missing",
       sessionId: sessionId ?? "",
     };
@@ -468,6 +494,9 @@ function toRuntimeErrorEvent(error: unknown, sessionId: string): AgentEvent {
 
 // 根据错误形态给 UI 提供可分组的诊断 code。
 function readRuntimeErrorCode(error: unknown, message: string): string {
+  if (error instanceof ModelConfigurationError) {
+    return error.code;
+  }
   if (isAddressInUseError(error) || message.includes("MoonBridge")) {
     return "moonbridge_start_failed";
   }
@@ -546,20 +575,9 @@ async function startManagedBridgeServer(
   const upstreamSignature = readManagedBridgeUpstreamSignature(env);
   const bridgeOptions = {
     chatCompletionsApiKey: readChatCompletionsApiKey(env),
-    chatCompletionsBaseURL:
-      env.KODEKS_CHAT_COMPLETIONS_BASE_URL ??
-      env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ??
-      env.MOONBRIDGE_DEEPSEEK_BASE_URL ??
-      env.DEEPSEEK_BASE_URL,
-    chatCompletionsModel:
-      env.KODEKS_CHAT_COMPLETIONS_MODEL ??
-      env.KODEKS_BRIDGE_DEEPSEEK_MODEL ??
-      env.MOONBRIDGE_DEEPSEEK_MODEL ??
-      env.DEEPSEEK_MODEL,
-    modelAliases: [
-      env.KODEKS_BRIDGE_MODEL ?? env.MOONBRIDGE_MODEL ?? "bridge",
-      "moonbridge",
-    ],
+    chatCompletionsBaseURL: readChatCompletionsBaseURL(env),
+    chatCompletionsModel: readChatCompletionsModel(env),
+    modelAliases: [env.KODEKS_BRIDGE_MODEL ?? "bridge", "moonbridge"],
     userAgent: "kodeks-web-moonbridge/0.1",
   };
   const hostname = baseURL.hostname || "127.0.0.1";
@@ -643,31 +661,28 @@ function createManagedBridgeBaseURL(baseURL: URL, port: number): string {
 function readManagedBridgeUpstreamSignature(env: RuntimeEnv): string {
   return JSON.stringify({
     apiKey: readChatCompletionsApiKey(env) ?? "",
-    baseURL:
-      env.KODEKS_CHAT_COMPLETIONS_BASE_URL ??
-      env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ??
-      env.MOONBRIDGE_DEEPSEEK_BASE_URL ??
-      env.DEEPSEEK_BASE_URL ??
-      "",
-    model:
-      env.KODEKS_CHAT_COMPLETIONS_MODEL ??
-      env.KODEKS_BRIDGE_DEEPSEEK_MODEL ??
-      env.MOONBRIDGE_DEEPSEEK_MODEL ??
-      env.DEEPSEEK_MODEL ??
-      "",
+    baseURL: readChatCompletionsBaseURL(env),
+    model: readChatCompletionsModel(env),
   });
 }
 
 // 读取 MoonBridge 上游 Chat Completions key；本地 endpoint 可使用占位 key。
 function readChatCompletionsApiKey(env: RuntimeEnv): string | undefined {
-  const localBaseURL = isLocalHttpURL(env.KODEKS_CHAT_COMPLETIONS_BASE_URL);
+  const localBaseURL = isLocalHttpURL(readChatCompletionsBaseURL(env));
   return (
     env.KODEKS_CHAT_COMPLETIONS_API_KEY ??
-    env.KODEKS_BRIDGE_DEEPSEEK_API_KEY ??
-    env.MOONBRIDGE_DEEPSEEK_API_KEY ??
-    env.DEEPSEEK_API_KEY ??
     (localBaseURL ? "not-needed" : undefined)
   );
+}
+
+// 读取标准 Chat Completions base URL，DeepSeek-first 场景默认走官方 OpenAI-format 地址。
+function readChatCompletionsBaseURL(env: RuntimeEnv): string {
+  return env.KODEKS_CHAT_COMPLETIONS_BASE_URL ?? DEFAULT_CHAT_COMPLETIONS_BASE_URL;
+}
+
+// 读取标准 Chat Completions 模型，默认使用当前 DeepSeek 官方 V4 Flash ID。
+function readChatCompletionsModel(env: RuntimeEnv): string {
+  return env.KODEKS_CHAT_COMPLETIONS_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
 }
 
 // 判断 endpoint 是否是本机无鉴权开发服务；只有这种场景才自动补占位 key。
@@ -696,16 +711,8 @@ function readChatCompletionsPreflightConfig(env: RuntimeEnv): {
   missing: string[];
 } {
   const apiKey = readChatCompletionsApiKey(env);
-  const baseURL =
-    env.KODEKS_CHAT_COMPLETIONS_BASE_URL ??
-    env.KODEKS_BRIDGE_DEEPSEEK_BASE_URL ??
-    env.MOONBRIDGE_DEEPSEEK_BASE_URL ??
-    env.DEEPSEEK_BASE_URL;
-  const model =
-    env.KODEKS_CHAT_COMPLETIONS_MODEL ??
-    env.KODEKS_BRIDGE_DEEPSEEK_MODEL ??
-    env.MOONBRIDGE_DEEPSEEK_MODEL ??
-    env.DEEPSEEK_MODEL;
+  const baseURL = readChatCompletionsBaseURL(env);
+  const model = readChatCompletionsModel(env);
   const missing: string[] = [];
 
   if (apiKey === undefined || apiKey.trim().length === 0) {
@@ -801,21 +808,18 @@ function readRequestedModelRef(
 function readProviderOverride(
   body: ChatStreamRequest,
 ): ModelProviderOverride | null {
+  if (body.provider === "openai" || body.provider === "moonbridge") {
+    return body.provider;
+  }
   if (
     body.provider === "responses" ||
     body.provider === "bridge" ||
-    body.provider === "openai" ||
-    body.provider === "moonbridge" ||
     body.provider === "deepseek" ||
     body.provider === "chat-completions"
   ) {
-    return body.provider === "responses"
-      ? "openai"
-      : body.provider === "bridge" ||
-          body.provider === "deepseek" ||
-          body.provider === "chat-completions"
-        ? "moonbridge"
-        : body.provider;
+    throw new ModelConfigurationError(
+      `Provider override "${body.provider}" has been removed. Use "openai" or "moonbridge".`,
+    );
   }
 
   return null;

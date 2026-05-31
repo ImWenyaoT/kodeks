@@ -15,12 +15,6 @@ import {
   toOpenAIResponsesTools,
   type ChatToolDefinition,
 } from "./index";
-import {
-  DeepSeekChatCompletionsClient,
-  toDeepSeekChatMessages,
-  toDeepSeekChatTools,
-  toDeepSeekThinkingOptions,
-} from "./providers/deepseek-chat";
 
 describe("toOpenAIResponsesTools", () => {
   it("maps internal tool definitions to Responses API function tools", () => {
@@ -200,6 +194,7 @@ describe("OpenAIResponsesClient", () => {
             strict: false,
           },
         ],
+        store: false,
         stream: true,
       },
     ]);
@@ -284,292 +279,11 @@ describe("OpenAIResponsesClient", () => {
   });
 });
 
-describe("toDeepSeekChatTools", () => {
-  it("maps internal tool definitions to Chat Completions function tools", () => {
-    const tools: ChatToolDefinition[] = [
-      {
-        name: "read_file",
-        description: "Read a file",
-        parameters: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-          },
-          required: ["path"],
-        },
-      },
-    ];
-
-    expect(toDeepSeekChatTools(tools)).toEqual([
-      {
-        type: "function",
-        function: {
-          name: "read_file",
-          description: "Read a file",
-          parameters: {
-            type: "object",
-            properties: {
-              path: { type: "string" },
-            },
-            required: ["path"],
-          },
-        },
-      },
-    ]);
-  });
-});
-
-describe("toDeepSeekChatMessages", () => {
-  it("maps assistant tool calls and tool outputs to Chat Completions messages", () => {
-    expect(
-      toDeepSeekChatMessages([
-        { role: "system", content: "You are Kodeks." },
-        { role: "user", content: "read README" },
-        {
-          role: "assistant",
-          content: "",
-          reasoningContent: "Need to inspect the README first.",
-          toolCalls: [
-            {
-              id: "call_1",
-              name: "read_file",
-              args: { path: "README.md" },
-            },
-          ],
-        },
-        {
-          role: "tool",
-          content: "project docs",
-          toolCallId: "call_1",
-          name: "read_file",
-        },
-      ]),
-    ).toEqual([
-      { role: "system", content: "You are Kodeks." },
-      { role: "user", content: "read README" },
-      {
-        role: "assistant",
-        content: null,
-        reasoning_content: "Need to inspect the README first.",
-        tool_calls: [
-          {
-            id: "call_1",
-            type: "function",
-            function: {
-              name: "read_file",
-              arguments: JSON.stringify({ path: "README.md" }),
-            },
-          },
-        ],
-      },
-      {
-        role: "tool",
-        content: "project docs",
-        tool_call_id: "call_1",
-        name: "read_file",
-      },
-    ]);
-  });
-});
-
-describe("toDeepSeekThinkingOptions", () => {
-  it("disables thinking when reasoning effort is none", () => {
-    expect(toDeepSeekThinkingOptions("none")).toEqual({
-      thinking: { type: "disabled" },
-    });
-  });
-
-  it("maps xhigh to DeepSeek max thinking", () => {
-    expect(toDeepSeekThinkingOptions("xhigh")).toEqual({
-      thinking: { type: "enabled" },
-      reasoning_effort: "max",
-    });
-  });
-});
-
-describe("DeepSeekChatCompletionsClient", () => {
-  it("streams Chat Completions text without exposing reasoning content", async () => {
-    const calls: unknown[] = [];
-    const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      baseURL: "https://api.deepseek.test",
-      model: "deepseek-v4-pro",
-      client: {
-        chat: {
-          completions: {
-            create: async (payload: unknown) => {
-              calls.push(payload);
-              return streamEvents([
-                {
-                  id: "chatcmpl_1",
-                  choices: [
-                    {
-                      delta: { reasoning_content: "private chain" },
-                      finish_reason: null,
-                    },
-                  ],
-                },
-                {
-                  id: "chatcmpl_1",
-                  choices: [
-                    { delta: { content: "你好" }, finish_reason: null },
-                  ],
-                },
-                {
-                  id: "chatcmpl_1",
-                  choices: [{ delta: {}, finish_reason: "stop" }],
-                },
-              ]);
-            },
-          },
-        },
-      },
-    });
-
-    const events = await collectEvents(
-      client.streamTurn({
-        messages: [{ role: "user", content: "hello" }],
-        tools: [],
-      }),
-    );
-
-    expect(calls[0]).toMatchObject({
-      model: "deepseek-v4-pro",
-      messages: [{ role: "user", content: "hello" }],
-      thinking: { type: "enabled" },
-      reasoning_effort: "high",
-      stream: true,
-    });
-    expect(events).toEqual([
-      { type: "text_delta", text: "你好" },
-      { type: "response_completed", responseId: "chatcmpl_1" },
-    ]);
-  });
-
-  it("merges streamed tool call chunks and preserves reasoning for continuation", async () => {
-    const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      model: "deepseek-v4-pro",
-      client: {
-        chat: {
-          completions: {
-            create: async () =>
-              streamEvents([
-                {
-                  id: "chatcmpl_tool",
-                  choices: [
-                    {
-                      delta: {
-                        reasoning_content: "Need the file.",
-                        tool_calls: [
-                          {
-                            index: 0,
-                            id: "call_1",
-                            type: "function",
-                            function: {
-                              name: "read_file",
-                              arguments: '{"path"',
-                            },
-                          },
-                        ],
-                      },
-                      finish_reason: null,
-                    },
-                  ],
-                },
-                {
-                  id: "chatcmpl_tool",
-                  choices: [
-                    {
-                      delta: {
-                        reasoning_content: " Then summarize.",
-                        tool_calls: [
-                          {
-                            index: 0,
-                            function: { arguments: ':"README.md"}' },
-                          },
-                        ],
-                      },
-                      finish_reason: "tool_calls",
-                    },
-                  ],
-                },
-              ]),
-          },
-        },
-      },
-    });
-
-    await expect(
-      collectEvents(
-        client.streamTurn({
-          messages: [{ role: "user", content: "read README" }],
-          tools: [],
-        }),
-      ),
-    ).resolves.toEqual([
-      {
-        type: "tool_call",
-        id: "call_1",
-        name: "read_file",
-        args: { path: "README.md" },
-        reasoningContent: "Need the file. Then summarize.",
-      },
-    ]);
-  });
-
-  it("returns empty tool args when streamed arguments are malformed", async () => {
-    const client = new DeepSeekChatCompletionsClient({
-      apiKey: "test-key",
-      model: "deepseek-v4-pro",
-      client: {
-        chat: {
-          completions: {
-            create: async () =>
-              streamEvents([
-                {
-                  choices: [
-                    {
-                      delta: {
-                        tool_calls: [
-                          {
-                            index: 0,
-                            id: "call_bad",
-                            function: {
-                              name: "read_file",
-                              arguments: "not-json",
-                            },
-                          },
-                        ],
-                      },
-                      finish_reason: "tool_calls",
-                    },
-                  ],
-                },
-              ]),
-          },
-        },
-      },
-    });
-
-    await expect(
-      collectEvents(
-        client.streamTurn({
-          messages: [{ role: "user", content: "read README" }],
-          tools: [],
-        }),
-      ),
-    ).resolves.toEqual([
-      { type: "tool_call", id: "call_bad", name: "read_file", args: {} },
-    ]);
-  });
-});
-
 describe("resolveModelClientOptions", () => {
   it("resolves direct Responses-compatible endpoint configuration", () => {
     expect(
       resolveModelClientOptions({
-        KODEKS_MODEL_PROVIDER: "responses",
+        KODEKS_MODEL_PROVIDER: "openai",
         KODEKS_RESPONSES_API_KEY: "responses-key",
         KODEKS_RESPONSES_BASE_URL: "https://responses-compatible.test/v1",
         KODEKS_RESPONSES_MODEL: "responses-model",
@@ -587,7 +301,7 @@ describe("resolveModelClientOptions", () => {
   it("uses a placeholder key for local Responses-compatible endpoints", () => {
     expect(
       resolveModelClientOptions({
-        KODEKS_MODEL_PROVIDER: "responses",
+        KODEKS_MODEL_PROVIDER: "openai",
         KODEKS_RESPONSES_BASE_URL: "http://127.0.0.1:9999/v1",
         KODEKS_RESPONSES_MODEL: "local-responses",
       }),
@@ -622,7 +336,6 @@ describe("resolveModelClientOptions", () => {
         KODEKS_BRIDGE_ENABLED: "true",
         KODEKS_BRIDGE_BASE_URL: "http://127.0.0.1:38440/v1/",
         KODEKS_BRIDGE_MODEL: "bridge",
-        DEEPSEEK_API_KEY: "deepseek-key",
         OPENAI_API_KEY: "openai-key",
       }),
     ).toEqual({
@@ -634,51 +347,32 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("maps legacy bridge selection to MoonBridge defaults", () => {
+  it("rejects legacy bridge provider selection", () => {
     expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "bridge",
       }),
-    ).toEqual({
-      provider: "moonbridge",
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge",
-      reasoningEffort: "high",
-    });
+    ).toThrow('KODEKS_MODEL_PROVIDER="bridge" has been removed');
   });
 
-  it("keeps Moon Bridge environment names as compatibility aliases", () => {
+  it("rejects legacy MoonBridge environment names", () => {
     expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "moonbridge",
         MOONBRIDGE_API_KEY: "moonbridge-key",
         MOONBRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
         MOONBRIDGE_MODEL: "moonbridge",
       }),
-    ).toEqual({
-      provider: "moonbridge",
-      apiKey: "moonbridge-key",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "moonbridge",
-      reasoningEffort: "high",
-    });
+    ).toThrow("MOONBRIDGE_API_KEY has been removed");
   });
 
-  it("maps legacy DeepSeek provider selection to MoonBridge", () => {
+  it("rejects legacy DeepSeek provider selection", () => {
     expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "deepseek",
         KODEKS_BRIDGE_BASE_URL: "http://127.0.0.1:38440/v1",
-        DEEPSEEK_API_KEY: "deepseek-key",
       }),
-    ).toEqual({
-      provider: "moonbridge",
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge",
-      reasoningEffort: "high",
-    });
+    ).toThrow('KODEKS_MODEL_PROVIDER="deepseek" has been removed');
   });
 
   it("uses request-level MoonBridge override before configured OpenAI", () => {
@@ -686,7 +380,7 @@ describe("resolveModelClientOptions", () => {
       resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
-          MOONBRIDGE_MODEL: "moonbridge-session",
+          KODEKS_BRIDGE_MODEL: "moonbridge-session",
         },
         undefined,
         "moonbridge",
@@ -700,9 +394,9 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("maps request-level bridge override to MoonBridge before configured OpenAI", () => {
+  it("rejects request-level bridge override", () => {
     expect(
-      resolveModelClientOptions(
+      () => resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
           KODEKS_BRIDGE_MODEL: "bridge-session",
@@ -710,13 +404,7 @@ describe("resolveModelClientOptions", () => {
         undefined,
         "bridge",
       ),
-    ).toEqual({
-      provider: "moonbridge",
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge-session",
-      reasoningEffort: "high",
-    });
+    ).toThrow('Model provider "bridge" has been removed');
   });
 
   it("uses request-level OpenAI override before configured bridge", () => {
@@ -738,16 +426,25 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("maps request-level DeepSeek override to MoonBridge", () => {
+  it("rejects request-level DeepSeek override", () => {
     expect(
-      resolveModelClientOptions(
+      () => resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
-          DEEPSEEK_API_KEY: "deepseek-key",
         },
         undefined,
         "deepseek",
       ),
+    ).toThrow('Model provider "deepseek" has been removed');
+  });
+
+  it("prefers DeepSeek-first MoonBridge over OpenAI when both standard configs exist", () => {
+    expect(
+      resolveModelClientOptions({
+        KODEKS_CHAT_COMPLETIONS_API_KEY: "deepseek-key",
+        KODEKS_CHAT_COMPLETIONS_BASE_URL: "https://api.deepseek.com",
+        OPENAI_API_KEY: "openai-key",
+      }),
     ).toEqual({
       provider: "moonbridge",
       apiKey: "bridge",
@@ -757,36 +454,13 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("prefers OpenAI Responses over DeepSeek fallback when both keys are configured", () => {
+  it("rejects legacy DeepSeek-only env", () => {
     expect(
-      resolveModelClientOptions({
-        DEEPSEEK_API_KEY: "deepseek-key",
-        DEEPSEEK_BASE_URL: "https://api.deepseek.test",
-        DEEPSEEK_MODEL: "deepseek-test",
-        OPENAI_API_KEY: "openai-key",
-      }),
-    ).toEqual({
-      provider: "openai",
-      apiKey: "openai-key",
-      baseURL: undefined,
-      model: "gpt-5.4-mini",
-      reasoningEffort: "medium",
-    });
-  });
-
-  it("maps legacy DeepSeek-only env to MoonBridge as Chat Completions upstream", () => {
-    expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         DEEPSEEK_API_KEY: "deepseek-key",
         DEEPSEEK_REASONING_EFFORT: "xhigh",
       }),
-    ).toEqual({
-      provider: "moonbridge",
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge",
-      reasoningEffort: "xhigh",
-    });
+    ).toThrow("DEEPSEEK_API_KEY has been removed");
   });
 
   it("falls back to OpenAI Responses when DeepSeek is not configured", () => {
@@ -805,6 +479,29 @@ describe("resolveModelClientOptions", () => {
 });
 
 describe("loadModelRuntimeEnv", () => {
+  it("returns DeepSeek as the default frontend model when no config exists", () => {
+    expect(
+      loadConfiguredModelCatalog({
+        KODEKS_CONFIG_PATH: join(tmpdir(), "kodeks-missing-config.json"),
+      }),
+    ).toEqual({
+      primary: "deepseek/deepseek-v4-flash",
+      models: [
+        {
+          ref: "deepseek/deepseek-v4-flash",
+          providerId: "deepseek",
+          providerName: "DeepSeek",
+          modelId: "deepseek-v4-flash",
+          modelName: "deepseek-v4-flash",
+          api: "chat-completions",
+          requiresBridge: true,
+          baseURL: "https://api.deepseek.com",
+          configured: false,
+        },
+      ],
+    });
+  });
+
   it("loads user config from a repo-external JSON file", () => {
     const dir = mkdtempSync(join(tmpdir(), "kodeks-model-config-"));
     const configPath = join(dir, "config.json");
@@ -974,8 +671,19 @@ describe("loadModelRuntimeEnv", () => {
       expect(
         loadConfiguredModelCatalog({ KODEKS_CONFIG_PATH: configPath }),
       ).toEqual({
-        primary: "qwen/qwen3.6",
+        primary: "deepseek/deepseek-v4-flash",
         models: [
+          {
+            ref: "deepseek/deepseek-v4-flash",
+            providerId: "deepseek",
+            providerName: "DeepSeek",
+            modelId: "deepseek-v4-flash",
+            modelName: "deepseek-v4-flash",
+            api: "chat-completions",
+            requiresBridge: true,
+            baseURL: "https://api.deepseek.com",
+            configured: false,
+          },
           {
             ref: "qwen/qwen3.6",
             providerId: "qwen",
@@ -1032,6 +740,10 @@ describe("loadModelRuntimeEnv", () => {
       expect(
         loadConfiguredModelCatalog({ KODEKS_CONFIG_PATH: configPath }).models,
       ).toEqual([
+        expect.objectContaining({
+          ref: "deepseek/deepseek-v4-flash",
+          configured: false,
+        }),
         expect.objectContaining({
           ref: "qwen/qwen3.6",
           configured: false,

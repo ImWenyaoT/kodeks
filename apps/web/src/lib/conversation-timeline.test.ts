@@ -1,147 +1,205 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   appendAssistantDelta,
+  dedupeTimelineItems,
   formatTimelinePayload,
   updateApprovalState,
   upsertRuntimeTimelineItem,
-  type TimelineItem
-} from './conversation-timeline';
+  type TimelineItem,
+} from "./conversation-timeline";
 
-describe('conversation timeline', () => {
-  it('appends assistant deltas into the active assistant item', () => {
+describe("conversation timeline", () => {
+  it("appends assistant deltas into the active assistant item", () => {
     const items: TimelineItem[] = [
-      { type: 'message', id: 'a1', role: 'assistant', content: 'Hel' }
+      { type: "message", id: "a1", role: "assistant", content: "Hel" },
     ];
 
-    expect(appendAssistantDelta(items, 'a1', 'lo')).toEqual([
-      { type: 'message', id: 'a1', role: 'assistant', content: 'Hello' }
+    expect(appendAssistantDelta(items, "a1", "lo")).toEqual([
+      { type: "message", id: "a1", role: "assistant", content: "Hello" },
     ]);
   });
 
-  it('merges tool results into the matching tool call row', () => {
+  it("merges tool results into the matching tool call row", () => {
     const withCall = upsertRuntimeTimelineItem(
       [],
       {
-        type: 'tool_call',
-        toolCallId: 'tc1',
-        toolName: 'read_file',
-        toolArguments: { path: 'README.md' }
+        type: "tool_call",
+        toolCallId: "tc1",
+        toolName: "read_file",
+        toolArguments: { path: "README.md" },
       },
-      () => 'id1'
+      () => "id1",
     );
     const withResult = upsertRuntimeTimelineItem(
       withCall,
       {
-        type: 'tool_result',
-        toolCallId: 'tc1',
-        toolName: 'read_file',
-        toolStatus: 'ok',
-        toolOutput: 'done'
+        type: "tool_result",
+        toolCallId: "tc1",
+        toolName: "read_file",
+        toolStatus: "ok",
+        toolOutput: "done",
       },
-      () => 'id2'
+      () => "id2",
     );
 
     expect(withResult).toEqual([
       {
-        type: 'tool',
-        id: 'tool-tc1',
-        toolCallId: 'tc1',
-        name: 'read_file',
-        status: 'completed',
-        input: { path: 'README.md' },
-        output: 'done'
-      }
+        type: "tool",
+        id: "tool-tc1",
+        toolCallId: "tc1",
+        name: "read_file",
+        status: "completed",
+        input: { path: "README.md" },
+        output: "done",
+      },
     ]);
   });
 
-  it('tracks approval decisions in the visible conversation', () => {
+  it("tracks approval decisions in the visible conversation", () => {
     const items = upsertRuntimeTimelineItem(
       [],
       {
-        type: 'approval_required',
-        approvalId: 'ap1',
-        toolCallId: 'tc1',
-        message: 'run command'
+        type: "approval_required",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        message: "run command",
       },
-      () => 'id1'
+      () => "id1",
     );
 
-    expect(updateApprovalState(items, 'ap1', 'approved')).toEqual([
+    expect(updateApprovalState(items, "ap1", "approved")).toEqual([
       {
-        type: 'approval',
-        id: 'approval-ap1',
-        approvalId: 'ap1',
-        toolCallId: 'tc1',
-        reason: 'run command',
-        state: 'approved'
-      }
+        type: "approval",
+        id: "approval-ap1",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        reason: "run command",
+        state: "approved",
+      },
     ]);
   });
 
-  it('adds saved plan artifacts to the visible timeline', () => {
+  it("keeps repeated approval events idempotent by approval id", () => {
+    const first = upsertRuntimeTimelineItem(
+      [],
+      {
+        type: "approval_required",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        message: "run command",
+      },
+      () => "id1",
+    );
+    const second = upsertRuntimeTimelineItem(
+      first,
+      {
+        type: "approval_required",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        message: "run command",
+      },
+      () => "id2",
+    );
+
+    expect(second).toEqual([
+      {
+        type: "approval",
+        id: "approval-ap1",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        reason: "run command",
+        state: "waiting",
+      },
+    ]);
+  });
+
+  it("deduplicates repeated approval items left in local UI state", () => {
+    const items: TimelineItem[] = [
+      {
+        type: "approval",
+        id: "approval-ap1",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        reason: "run command",
+        state: "waiting",
+      },
+      {
+        type: "approval",
+        id: "approval-ap1",
+        approvalId: "ap1",
+        toolCallId: "tc1",
+        reason: "run command",
+        state: "waiting",
+      },
+    ];
+
+    expect(dedupeTimelineItems(items)).toEqual([items[0]]);
+  });
+
+  it("adds saved plan artifacts to the visible timeline", () => {
     const items = upsertRuntimeTimelineItem(
       [],
       {
-        type: 'plan_artifact',
-        action: 'created',
-        sessionId: 's1',
+        type: "plan_artifact",
+        action: "created",
+        sessionId: "s1",
         plan: {
-          id: 'plan_1',
-          sessionId: 's1',
-          title: 'Storage plan',
-          summary: 'Persist it',
+          id: "plan_1",
+          sessionId: "s1",
+          title: "Storage plan",
+          summary: "Persist it",
           steps: [
             {
-              id: 'step_1',
-              title: 'Add table',
-              status: 'pending',
-              details: null
-            }
+              id: "step_1",
+              title: "Add table",
+              status: "pending",
+              details: null,
+            },
           ],
-          status: 'active',
-          sourceMessageId: 'msg_1',
-          createdAt: '2026-05-27T00:00:00.000Z',
-          updatedAt: '2026-05-27T00:00:00.000Z'
-        }
+          status: "active",
+          sourceMessageId: "msg_1",
+          createdAt: "2026-05-27T00:00:00.000Z",
+          updatedAt: "2026-05-27T00:00:00.000Z",
+        },
       },
-      () => 'id1'
+      () => "id1",
     );
 
     expect(items).toEqual([
       {
-        type: 'plan',
-        id: 'plan-plan_1',
-        action: 'created',
-        title: 'Storage plan',
-        summary: 'Persist it',
-        stepCount: 1
-      }
+        type: "plan",
+        id: "plan-plan_1",
+        action: "created",
+        title: "Storage plan",
+        summary: "Persist it",
+        stepCount: 1,
+      },
     ]);
   });
 
-  it('adds backend errors to the visible runtime timeline', () => {
+  it("adds backend errors to the visible runtime timeline", () => {
     const items = upsertRuntimeTimelineItem(
       [],
       {
-        type: 'error',
-        message: 'MoonBridge could not start',
-        sessionId: 's1'
+        type: "error",
+        message: "MoonBridge could not start",
+        sessionId: "s1",
       },
-      () => 'id1'
+      () => "id1",
     );
 
     expect(items).toEqual([
       {
-        type: 'error',
-        id: 'error-id1',
-        message: 'MoonBridge could not start'
-      }
+        type: "error",
+        id: "error-id1",
+        message: "MoonBridge could not start",
+      },
     ]);
   });
 
-  it('formats structured payloads for compact timeline cards', () => {
+  it("formats structured payloads for compact timeline cards", () => {
     expect(formatTimelinePayload({ ok: true })).toBe('{\n  "ok": true\n}');
-    expect(formatTimelinePayload('plain')).toBe('plain');
+    expect(formatTimelinePayload("plain")).toBe("plain");
   });
 });

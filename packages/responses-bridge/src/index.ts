@@ -10,9 +10,6 @@ export type ResponsesBridgeOptions = {
   chatCompletionsApiKey?: string;
   chatCompletionsBaseURL?: string;
   chatCompletionsModel?: string;
-  deepSeekApiKey?: string;
-  deepSeekBaseURL?: string;
-  deepSeekModel?: string;
   modelAliases?: string[];
   userAgent?: string;
   fetch?: typeof fetch;
@@ -23,6 +20,7 @@ export type ResponsesRequest = {
   input: unknown;
   instructions?: string;
   tools?: ResponsesTool[];
+  store?: boolean;
   reasoning?: {
     effort?: ReasoningEffort;
   };
@@ -296,37 +294,49 @@ export async function* fromDeepSeekStream(
         outputIndex += 1;
       }
       pendingToolCalls.clear();
-      yield {
-        type: 'response.completed',
-        response: {
-          id: responseId,
-          model,
-          status: 'completed',
-          output: buildCompletedOutput(responseId, messageText, completedOutputItems)
-        }
-      };
+      yield buildResponseCompletedEvent(
+        responseId,
+        model,
+        messageText,
+        completedOutputItems
+      );
       messageText = '';
       completedOutputItems.length = 0;
       continue;
     }
 
     if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
-      yield {
-        type: 'response.completed',
-        response: {
-          id: responseId,
-          model,
-          status: 'completed',
-          output: buildCompletedOutput(responseId, messageText, completedOutputItems)
-        }
-      };
+      yield buildResponseCompletedEvent(
+        responseId,
+        model,
+        messageText,
+        completedOutputItems
+      );
       messageText = '';
       completedOutputItems.length = 0;
     }
   }
 }
 
-// Builds the terminal Responses output items consumed by the OpenAI Agents SDK.
+// 创建 Responses completion event，保持文本和 function_call output 形态一致。
+function buildResponseCompletedEvent(
+  responseId: string,
+  model: string,
+  messageText: string,
+  completedOutputItems: unknown[]
+): Extract<ResponsesStreamEvent, { type: 'response.completed' }> {
+  return {
+    type: 'response.completed',
+    response: {
+      id: responseId,
+      model,
+      status: 'completed',
+      output: buildCompletedOutput(responseId, messageText, completedOutputItems)
+    }
+  };
+}
+
+// 构造 OpenAI Agents SDK 消费的 Responses output items。
 function buildCompletedOutput(
   responseId: string,
   messageText: string,
@@ -386,12 +396,12 @@ async function handleResponses(
   response: ServerResponse,
   options: ResponsesBridgeOptions
 ): Promise<void> {
-  const apiKey = options.chatCompletionsApiKey ?? options.deepSeekApiKey;
+  const apiKey = options.chatCompletionsApiKey;
   if (apiKey === undefined || apiKey.trim().length === 0) {
     writeJson(response, 500, {
       error: {
         message:
-          'KODEKS_CHAT_COMPLETIONS_API_KEY, KODEKS_BRIDGE_DEEPSEEK_API_KEY, or DEEPSEEK_API_KEY is required.'
+          'KODEKS_CHAT_COMPLETIONS_API_KEY is required. Legacy DEEPSEEK_* and KODEKS_BRIDGE_DEEPSEEK_* keys have been removed.'
       }
     });
     return;
@@ -399,12 +409,12 @@ async function handleResponses(
 
   const body = (await readJsonBody(request)) as ResponsesRequest;
   const coreRequest = toCoreRequest(body);
-  const upstreamModel = options.chatCompletionsModel ?? options.deepSeekModel;
+  const upstreamModel = options.chatCompletionsModel;
   if (upstreamModel === undefined || upstreamModel.trim().length === 0) {
     writeJson(response, 500, {
       error: {
         message:
-          'KODEKS_CHAT_COMPLETIONS_MODEL, KODEKS_BRIDGE_DEEPSEEK_MODEL, or DEEPSEEK_MODEL is required.'
+          'KODEKS_CHAT_COMPLETIONS_MODEL is required. Legacy DEEPSEEK_* and KODEKS_BRIDGE_DEEPSEEK_* keys have been removed.'
       }
     });
     return;
@@ -436,13 +446,12 @@ async function* fetchDeepSeekStream(
   options: ResponsesBridgeOptions
 ): AsyncIterable<DeepSeekStreamChunk> {
   const fetchImpl = options.fetch ?? fetch;
-  const configuredBaseURL =
-    options.chatCompletionsBaseURL ?? options.deepSeekBaseURL;
+  const configuredBaseURL = options.chatCompletionsBaseURL;
   if (configuredBaseURL === undefined || configuredBaseURL.trim().length === 0) {
     yield {
       error: {
         message:
-          'KODEKS_CHAT_COMPLETIONS_BASE_URL, KODEKS_BRIDGE_DEEPSEEK_BASE_URL, or DEEPSEEK_BASE_URL is required.'
+          'KODEKS_CHAT_COMPLETIONS_BASE_URL is required. Legacy DEEPSEEK_* and KODEKS_BRIDGE_DEEPSEEK_* keys have been removed.'
       }
     };
     return;

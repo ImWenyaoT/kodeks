@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, resolve } from "node:path";
 
-import type { RuntimeEnv } from "./factory";
+import {
+  DEFAULT_CHAT_COMPLETIONS_BASE_URL,
+  DEFAULT_DEEPSEEK_MODEL,
+  type RuntimeEnv,
+} from "./factory";
 
 type EndpointConfig = {
   apiKey?: unknown;
@@ -32,8 +36,6 @@ type ModelConfigFile = {
     openai?: EndpointConfig;
     chatCompletions?: EndpointConfig;
     bridge?: BridgeConfig;
-    moonbridge?: BridgeConfig;
-    deepseek?: EndpointConfig;
     providers?: Record<string, ProviderConfig>;
   };
   models?: {
@@ -66,6 +68,7 @@ export type ConfiguredModelCatalog = {
 
 const CONFIG_FILE_NAME = "config.json";
 const CONFIG_DIR_NAME = ".kodeks";
+const DEFAULT_DEEPSEEK_MODEL_REF = `deepseek/${DEFAULT_DEEPSEEK_MODEL}`;
 
 // 加载 repo 外的 Kodeks 模型配置，并让显式环境变量拥有最终覆盖权。
 export function loadModelRuntimeEnv(
@@ -157,8 +160,7 @@ function modelConfigToEnv(
     );
     writeEndpoint(values, "KODEKS_RESPONSES", model.responses ?? model.openai);
     writeEndpoint(values, "KODEKS_CHAT_COMPLETIONS", model.chatCompletions);
-    writeBridge(values, model.bridge ?? model.moonbridge);
-    writeEndpoint(values, "DEEPSEEK", model.deepseek);
+    writeBridge(values, model.bridge);
     writeSelectedProvider(
       values,
       model,
@@ -183,7 +185,7 @@ export function loadConfiguredModelCatalog(
 ): ConfiguredModelCatalog {
   const path = resolveKodeksConfigPath(env);
   if (!existsSync(path)) {
-    return { models: [] };
+    return withDefaultModelCatalog({ models: [] }, env);
   }
   const config = resolveConfigEnvVars(
     JSON.parse(readFileSync(path, "utf8")) as ModelConfigFile,
@@ -193,22 +195,60 @@ export function loadConfiguredModelCatalog(
   const models = Object.entries(providers).flatMap(([providerId, provider]) =>
     configuredModelsFromProvider(providerId, provider),
   );
+  return withDefaultModelCatalog(
+    {
+      primary: stringValue(config.model?.primary),
+      models,
+    },
+    env,
+  );
+}
+
+// 给所有前端消费者提供 DeepSeek-first 默认项，而不是让旧用户 primary 决定新体验。
+function withDefaultModelCatalog(
+  catalog: ConfiguredModelCatalog,
+  env: RuntimeEnv,
+): ConfiguredModelCatalog {
+  const defaultOption = createDefaultDeepSeekModelOption(env);
   return {
-    primary: stringValue(config.model?.primary),
-    models,
+    primary: DEFAULT_DEEPSEEK_MODEL_REF,
+    models: [
+      defaultOption,
+      ...catalog.models.filter(
+        (model) => model.ref !== DEFAULT_DEEPSEEK_MODEL_REF,
+      ),
+    ],
   };
 }
 
-// 规范化用户配置里的 provider 命名；对外只暴露 Responses 和 Chat Completions 两条协议路径。
+// 创建不会暴露 secret 的默认 DeepSeek/MoonBridge 模型展示项。
+function createDefaultDeepSeekModelOption(
+  env: RuntimeEnv,
+): ConfiguredModelOption {
+  const configuredBaseURL =
+    env.KODEKS_CHAT_COMPLETIONS_BASE_URL ?? DEFAULT_CHAT_COMPLETIONS_BASE_URL;
+  return {
+    ref: DEFAULT_DEEPSEEK_MODEL_REF,
+    providerId: "deepseek",
+    providerName: "DeepSeek",
+    modelId: DEFAULT_DEEPSEEK_MODEL,
+    modelName: DEFAULT_DEEPSEEK_MODEL,
+    api: "chat-completions",
+    requiresBridge: true,
+    baseURL: configuredBaseURL,
+    configured:
+      stringValue(env.KODEKS_CHAT_COMPLETIONS_API_KEY) !== undefined ||
+      isLocalHttpURL(configuredBaseURL),
+  };
+}
+
+// 规范化用户配置里的 provider 命名；provider alias 已下线，只保留明确运行时值。
 function normalizeProvider(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
   if (value === "responses") {
     return "openai";
-  }
-  if (value === "chat-completions" || value === "deepseek") {
-    return "moonbridge";
   }
   return value;
 }

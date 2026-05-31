@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@kodeks/shared": "workspace:*",
-    "openai": "6.34.0"
+    "openai": "6.39.1"
   },
   "scripts": {
     "lint": "tsc --noEmit",

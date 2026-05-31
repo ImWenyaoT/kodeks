@@ -11,7 +11,10 @@ export type {
   ReasoningEffort,
 } from "./types";
 export {
+  DEFAULT_CHAT_COMPLETIONS_BASE_URL,
+  DEFAULT_DEEPSEEK_MODEL,
   createModelClientFromEnv,
+  ModelConfigurationError,
   resolveModelClientOptions,
   type ModelClientOptions,
   type RuntimeEnv,

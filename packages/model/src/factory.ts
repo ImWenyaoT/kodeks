@@ -28,6 +28,8 @@ const DEFAULT_BRIDGE_API_KEY = "bridge";
 const DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:38440/v1";
 const DEFAULT_BRIDGE_MODEL = "bridge";
 const DEFAULT_BRIDGE_REASONING_EFFORT: ReasoningEffort = "high";
+export const DEFAULT_CHAT_COMPLETIONS_BASE_URL = "https://api.deepseek.com";
+export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 const DEFAULT_OPENAI_REASONING_EFFORT: ReasoningEffort = "medium";
 const LOCAL_ENDPOINT_API_KEY = "not-needed";
@@ -38,6 +40,39 @@ const SUPPORTED_REASONING_EFFORTS = new Set<ReasoningEffort>([
   "high",
   "xhigh",
 ]);
+const DEPRECATED_ENV_MIGRATIONS: Record<string, string> = {
+  DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
+  DEEPSEEK_REASONING_EFFORT: "KODEKS_BRIDGE_REASONING_EFFORT",
+  KODEKS_BRIDGE_DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  KODEKS_BRIDGE_DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  KODEKS_BRIDGE_DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
+  MOONBRIDGE_API_KEY: "KODEKS_BRIDGE_API_KEY",
+  MOONBRIDGE_BASE_URL: "KODEKS_BRIDGE_BASE_URL",
+  MOONBRIDGE_ENABLED: "KODEKS_BRIDGE_ENABLED",
+  MOONBRIDGE_MODEL: "KODEKS_BRIDGE_MODEL",
+  MOONBRIDGE_REASONING_EFFORT: "KODEKS_BRIDGE_REASONING_EFFORT",
+  MOONBRIDGE_DEEPSEEK_API_KEY: "KODEKS_CHAT_COMPLETIONS_API_KEY",
+  MOONBRIDGE_DEEPSEEK_BASE_URL: "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+  MOONBRIDGE_DEEPSEEK_MODEL: "KODEKS_CHAT_COMPLETIONS_MODEL",
+};
+const DEPRECATED_PROVIDER_VALUES: Record<string, string> = {
+  bridge: "moonbridge",
+  deepseek: "moonbridge",
+  "chat-completions": "moonbridge",
+};
+const PROVIDER_DECISION_ORDER: ModelProvider[] = ["moonbridge", "openai"];
+
+export class ModelConfigurationError extends Error {
+  readonly code = "model_configuration_error";
+
+  // 创建带稳定错误码的配置错误，供 runtime 显示迁移指引。
+  constructor(message: string) {
+    super(message);
+    this.name = "ModelConfigurationError";
+  }
+}
 
 // 从环境变量创建 Responses 客户端；Chat Completions endpoint 统一经 MoonBridge 暴露为 Responses。
 export function createModelClientFromEnv(
@@ -63,6 +98,7 @@ export function resolveModelClientOptions(
   requestedReasoningEffort?: unknown,
   requestedProvider?: unknown,
 ): ModelClientOptions | null {
+  assertNoDeprecatedModelEnv(env);
   const providerOverride = resolveProviderOverride(requestedProvider);
   if (providerOverride === "openai") {
     return resolveOpenAIOptions(env, requestedReasoningEffort);
@@ -75,35 +111,26 @@ export function resolveModelClientOptions(
     );
   }
 
-  if (
-    env.KODEKS_MODEL_PROVIDER === "openai" ||
-    env.KODEKS_MODEL_PROVIDER === "responses"
-  ) {
+  const configuredProvider = resolveConfiguredProvider(env.KODEKS_MODEL_PROVIDER);
+  if (configuredProvider === "openai") {
     return resolveOpenAIOptions(env, requestedReasoningEffort);
   }
 
-  if (env.KODEKS_MODEL_PROVIDER === "deepseek") {
-    return resolveBridgeOptions(
-      { ...env, KODEKS_MODEL_PROVIDER: "moonbridge" },
-      requestedReasoningEffort,
-    );
-  }
-
-  if (env.KODEKS_MODEL_PROVIDER === "chat-completions") {
-    return resolveBridgeOptions(
-      { ...env, KODEKS_MODEL_PROVIDER: "moonbridge" },
-      requestedReasoningEffort,
-    );
-  }
-
-  if (shouldUseBridge(env)) {
+  if (configuredProvider === "moonbridge") {
     return resolveBridgeOptions(env, requestedReasoningEffort);
   }
 
-  return (
-    resolveOpenAIOptions(env, requestedReasoningEffort) ??
-    resolveLegacyChatCompletionsOptions(env, requestedReasoningEffort)
-  );
+  for (const provider of PROVIDER_DECISION_ORDER) {
+    const options =
+      provider === "moonbridge"
+        ? resolveBridgeOptionsIfConfigured(env, requestedReasoningEffort)
+        : resolveOpenAIOptions(env, requestedReasoningEffort);
+    if (options !== null) {
+      return options;
+    }
+  }
+
+  return null;
 }
 
 // 解析内置 Responses bridge 配置；本地 bridge 通常不需要真实客户端 API key。
@@ -113,45 +140,29 @@ function resolveBridgeOptions(
 ): ModelClientOptions {
   return {
     provider: "moonbridge",
-    apiKey:
-      env.KODEKS_BRIDGE_API_KEY ??
-      env.MOONBRIDGE_API_KEY ??
-      DEFAULT_BRIDGE_API_KEY,
+    apiKey: env.KODEKS_BRIDGE_API_KEY ?? DEFAULT_BRIDGE_API_KEY,
     baseURL: trimTrailingSlash(
-      env.KODEKS_BRIDGE_BASE_URL ??
-        env.MOONBRIDGE_BASE_URL ??
-        DEFAULT_BRIDGE_BASE_URL,
+      env.KODEKS_BRIDGE_BASE_URL ?? DEFAULT_BRIDGE_BASE_URL,
     ),
-    model:
-      env.KODEKS_BRIDGE_MODEL ?? env.MOONBRIDGE_MODEL ?? DEFAULT_BRIDGE_MODEL,
+    model: env.KODEKS_BRIDGE_MODEL ?? DEFAULT_BRIDGE_MODEL,
     reasoningEffort: resolveReasoningEffort(
       requestedReasoningEffort,
-      env.KODEKS_BRIDGE_REASONING_EFFORT ?? env.MOONBRIDGE_REASONING_EFFORT,
+      env.KODEKS_BRIDGE_REASONING_EFFORT,
       DEFAULT_BRIDGE_REASONING_EFFORT,
     ),
   };
 }
 
-// 解析历史 DeepSeek env，并把它当作 Chat Completions endpoint 交给 MoonBridge。
-function resolveLegacyChatCompletionsOptions(
+// 只在 DeepSeek/MoonBridge 标准键存在时启用 Chat Completions 通道。
+function resolveBridgeOptionsIfConfigured(
   env: RuntimeEnv,
   requestedReasoningEffort: unknown,
 ): ModelClientOptions | null {
-  if (env.DEEPSEEK_API_KEY) {
-    return resolveBridgeOptions(
-      {
-        ...env,
-        KODEKS_MODEL_PROVIDER: "moonbridge",
-        KODEKS_BRIDGE_REASONING_EFFORT:
-          env.KODEKS_BRIDGE_REASONING_EFFORT ??
-          env.MOONBRIDGE_REASONING_EFFORT ??
-          env.DEEPSEEK_REASONING_EFFORT,
-      },
-      requestedReasoningEffort,
-    );
+  if (!shouldUseBridge(env)) {
+    return null;
   }
 
-  return null;
+  return resolveBridgeOptions(env, requestedReasoningEffort);
 }
 
 // 解析直连 Responses-compatible 配置；OpenAI 是默认官方实现。
@@ -184,18 +195,17 @@ function resolveOpenAIOptions(
   return null;
 }
 
-// 判断是否启用 Responses bridge；保留 MOONBRIDGE_* 作为旧配置兼容。
+// 判断是否启用 Responses bridge；DeepSeek-first 只看标准 KODEKS_* 键。
 function shouldUseBridge(env: RuntimeEnv): boolean {
   return (
-    env.KODEKS_MODEL_PROVIDER === "bridge" ||
     env.KODEKS_MODEL_PROVIDER === "moonbridge" ||
     env.KODEKS_BRIDGE_ENABLED === "true" ||
-    env.MOONBRIDGE_ENABLED === "true" ||
+    env.KODEKS_BRIDGE_API_KEY !== undefined ||
     env.KODEKS_CHAT_COMPLETIONS_API_KEY !== undefined ||
     env.KODEKS_CHAT_COMPLETIONS_BASE_URL !== undefined ||
     env.KODEKS_CHAT_COMPLETIONS_MODEL !== undefined ||
     env.KODEKS_BRIDGE_BASE_URL !== undefined ||
-    env.MOONBRIDGE_BASE_URL !== undefined
+    env.KODEKS_BRIDGE_MODEL !== undefined
   );
 }
 
@@ -225,26 +235,56 @@ function isReasoningEffort(value: string): value is ReasoningEffort {
 function resolveProviderOverride(
   requestedProvider: unknown,
 ): ModelProviderOverride | null {
-  if (requestedProvider === "responses") {
-    return "openai";
+  if (typeof requestedProvider !== "string") {
+    return null;
   }
 
   if (requestedProvider === "openai" || requestedProvider === "moonbridge") {
     return requestedProvider;
   }
 
-  if (requestedProvider === "bridge") {
-    return "moonbridge";
-  }
-
-  if (
-    requestedProvider === "deepseek" ||
-    requestedProvider === "chat-completions"
-  ) {
-    return "moonbridge";
+  if (requestedProvider in DEPRECATED_PROVIDER_VALUES) {
+    throw new ModelConfigurationError(
+      `Model provider "${requestedProvider}" has been removed. Use "${DEPRECATED_PROVIDER_VALUES[requestedProvider]}" instead.`,
+    );
   }
 
   return null;
+}
+
+// 读取环境级 provider，并拒绝已下线 alias，避免静默切换模型通道。
+function resolveConfiguredProvider(value: string | undefined): ModelProvider | null {
+  if (value === undefined || value.length === 0) {
+    return null;
+  }
+  if (value === "responses") {
+    return "openai";
+  }
+  if (value === "openai" || value === "moonbridge") {
+    return value;
+  }
+  if (value in DEPRECATED_PROVIDER_VALUES) {
+    throw new ModelConfigurationError(
+      `KODEKS_MODEL_PROVIDER="${value}" has been removed. Use "${DEPRECATED_PROVIDER_VALUES[value]}" instead.`,
+    );
+  }
+  throw new ModelConfigurationError(
+    `Unsupported KODEKS_MODEL_PROVIDER="${value}". Use "openai", "responses", or "moonbridge".`,
+  );
+}
+
+// 拒绝旧入口名，并给出一对一迁移目标，避免旧 secret 继续改变运行时行为。
+function assertNoDeprecatedModelEnv(env: RuntimeEnv): void {
+  const deprecated = Object.entries(DEPRECATED_ENV_MIGRATIONS).find(
+    ([key]) => env[key] !== undefined,
+  );
+  if (deprecated === undefined) {
+    return;
+  }
+  const [from, to] = deprecated;
+  throw new ModelConfigurationError(
+    `${from} has been removed. Rename it to ${to}; Kodeks now only accepts KODEKS_* model configuration keys plus official OPENAI_* fallback keys.`,
+  );
 }
 
 // 移除 URL 末尾斜杠，避免 SDK 或脚本拼接出双斜杠路径。

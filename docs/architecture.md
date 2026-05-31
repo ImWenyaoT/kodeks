@@ -40,7 +40,7 @@ The public provider surface is only:
 - `openai`: direct Responses-compatible provider configuration.
 - `moonbridge`: local Responses-compatible bridge for Chat Completions providers.
 
-MoonBridge stays because it lets Kodeks keep one Responses-shaped agent runtime while still using DeepSeek, local Qwen, or another Chat Completions endpoint. The old `bridge`, `deepseek`, and `chat-completions` names are accepted only as compatibility aliases and are normalized to `moonbridge` before runtime execution.
+MoonBridge stays because it lets Kodeks keep one Responses-shaped agent runtime while still using DeepSeek, local Qwen, or another Chat Completions endpoint. Removed aliases such as `bridge`, `deepseek`, and `chat-completions` now fail with migration guidance instead of silently changing provider behavior.
 
 `packages/model` should stay small. Its job is resolving model options and creating a Responses-shaped client, not owning a second agent loop.
 

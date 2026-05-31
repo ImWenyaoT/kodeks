@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   inspectMoonBridgePreflight,
+  listConfiguredModelCatalog,
   resetKodeksRuntimeForTest,
   resolveModelClientOptions,
   streamKodeksChat,
@@ -151,6 +152,25 @@ function clearModelProviderEnv(): void {
 }
 
 describe("inspectMoonBridgePreflight", () => {
+  it("lists DeepSeek as the frontend default model before configured models", () => {
+    clearModelProviderEnv();
+
+    expect(listConfiguredModelCatalog()).toMatchObject({
+      primary: "deepseek/deepseek-v4-flash",
+      models: [
+        {
+          ref: "deepseek/deepseek-v4-flash",
+          providerId: "deepseek",
+          providerName: "DeepSeek",
+          modelId: "deepseek-v4-flash",
+          api: "chat-completions",
+          requiresBridge: true,
+          baseURL: "https://api.deepseek.com",
+        },
+      ],
+    });
+  });
+
   it("marks direct Responses providers as not requiring MoonBridge", async () => {
     clearModelProviderEnv();
     process.env.KODEKS_RESPONSES_API_KEY = "responses-key";
@@ -176,7 +196,7 @@ describe("inspectMoonBridgePreflight", () => {
       provider: "moonbridge",
       resolvedProvider: "moonbridge",
       code: "moonbridge_upstream_missing",
-      reason: expect.stringContaining("KODEKS_CHAT_COMPLETIONS_BASE_URL"),
+      reason: expect.stringContaining("KODEKS_CHAT_COMPLETIONS_API_KEY"),
     });
   });
 
@@ -478,7 +498,6 @@ describe("resolveModelClientOptions", () => {
         KODEKS_BRIDGE_ENABLED: "true",
         KODEKS_BRIDGE_BASE_URL: "http://127.0.0.1:38440/v1/",
         KODEKS_BRIDGE_MODEL: "bridge",
-        DEEPSEEK_API_KEY: "deepseek-key",
         OPENAI_API_KEY: "openai-key",
       }),
     ).toEqual({
@@ -490,33 +509,21 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("maps legacy bridge selection to MoonBridge defaults", () => {
+  it("rejects legacy bridge provider selection", () => {
     expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "bridge",
       }),
-    ).toEqual({
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge",
-      reasoningEffort: "high",
-      provider: "moonbridge",
-    });
+    ).toThrow('KODEKS_MODEL_PROVIDER="bridge" has been removed');
   });
 
-  it("keeps Moon Bridge names as compatibility aliases", () => {
+  it("rejects MoonBridge environment compatibility aliases", () => {
     expect(
-      resolveModelClientOptions({
+      () => resolveModelClientOptions({
         KODEKS_MODEL_PROVIDER: "moonbridge",
         MOONBRIDGE_MODEL: "moonbridge",
       }),
-    ).toEqual({
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "moonbridge",
-      reasoningEffort: "high",
-      provider: "moonbridge",
-    });
+    ).toThrow("MOONBRIDGE_MODEL has been removed");
   });
 
   it("lets a request-level provider override force MoonBridge", () => {
@@ -524,7 +531,7 @@ describe("resolveModelClientOptions", () => {
       resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
-          MOONBRIDGE_MODEL: "moonbridge-session",
+          KODEKS_BRIDGE_MODEL: "moonbridge-session",
         },
         undefined,
         "moonbridge",
@@ -538,9 +545,9 @@ describe("resolveModelClientOptions", () => {
     });
   });
 
-  it("maps request-level bridge override to MoonBridge", () => {
+  it("rejects request-level bridge override", () => {
     expect(
-      resolveModelClientOptions(
+      () => resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
           KODEKS_BRIDGE_MODEL: "bridge-session",
@@ -548,72 +555,52 @@ describe("resolveModelClientOptions", () => {
         undefined,
         "bridge",
       ),
-    ).toEqual({
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge-session",
-      reasoningEffort: "high",
-      provider: "moonbridge",
-    });
+    ).toThrow('Model provider "bridge" has been removed');
   });
 
-  it("maps a legacy request-level DeepSeek override to MoonBridge", () => {
+  it("rejects a legacy request-level DeepSeek override", () => {
     expect(
-      resolveModelClientOptions(
+      () => resolveModelClientOptions(
         {
           OPENAI_API_KEY: "openai-key",
-          DEEPSEEK_API_KEY: "deepseek-key",
         },
         undefined,
         "deepseek",
       ),
-    ).toEqual({
-      apiKey: "bridge",
-      baseURL: "http://127.0.0.1:38440/v1",
-      model: "bridge",
-      reasoningEffort: "high",
-      provider: "moonbridge",
-    });
+    ).toThrow('Model provider "deepseek" has been removed');
   });
 
-  it("prefers OpenAI Agents SDK configuration over DeepSeek fallback", () => {
+  it("prefers DeepSeek-first MoonBridge over OpenAI when both standard configs exist", () => {
     expect(
       resolveModelClientOptions({
-        DEEPSEEK_API_KEY: "deepseek-key",
-        DEEPSEEK_BASE_URL: "https://api.deepseek.test",
-        DEEPSEEK_MODEL: "deepseek-test",
+        KODEKS_CHAT_COMPLETIONS_API_KEY: "deepseek-key",
+        KODEKS_CHAT_COMPLETIONS_BASE_URL: "https://api.deepseek.com",
         OPENAI_API_KEY: "openai-key",
         OPENAI_BASE_URL: "https://example.test/v1",
         OPENAI_MODEL: "gpt-test",
       }),
     ).toEqual({
-      apiKey: "openai-key",
-      baseURL: "https://example.test/v1",
-      model: "gpt-test",
-      reasoningEffort: "medium",
-      provider: "openai",
-    });
-  });
-
-  it("maps legacy DeepSeek-only env to MoonBridge", () => {
-    expect(
-      resolveModelClientOptions({
-        DEEPSEEK_API_KEY: "deepseek-key",
-      }),
-    ).toEqual({
       apiKey: "bridge",
       baseURL: "http://127.0.0.1:38440/v1",
       model: "bridge",
       reasoningEffort: "high",
       provider: "moonbridge",
     });
+  });
+
+  it("rejects legacy DeepSeek-only env", () => {
+    expect(
+      () => resolveModelClientOptions({
+        DEEPSEEK_API_KEY: "deepseek-key",
+      }),
+    ).toThrow("DEEPSEEK_API_KEY has been removed");
   });
 
   it("accepts a valid request-level reasoning effort", () => {
     expect(
       resolveModelClientOptions(
         {
-          DEEPSEEK_API_KEY: "deepseek-key",
+          KODEKS_CHAT_COMPLETIONS_API_KEY: "deepseek-key",
         },
         "xhigh",
       ),

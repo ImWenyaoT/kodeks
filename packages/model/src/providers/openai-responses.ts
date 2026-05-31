@@ -30,6 +30,7 @@ type ResponsesCreatePayload = {
   instructions?: string;
   input: ResponseInput;
   tools: FunctionTool[];
+  store: false;
   reasoning?: {
     effort: ReasoningEffort;
   };
@@ -84,6 +85,7 @@ export class OpenAIResponsesClient implements ModelClient {
       model: this.model,
       ...mappedInput,
       tools: toOpenAIResponsesTools(request.tools),
+      store: false,
       ...(this.reasoningEffort === undefined
         ? {}
         : { reasoning: { effort: this.reasoningEffort } }),

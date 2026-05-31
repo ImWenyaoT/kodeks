@@ -8,6 +8,7 @@ import ToolsPanel from "@/components/tools-panel";
 import WorkspacePanel from "@/components/workspace-panel";
 import {
   appendAssistantDelta,
+  dedupeTimelineItems,
   updateApprovalState,
   upsertRuntimeTimelineItem,
   type TimelineItem,
@@ -214,15 +215,17 @@ export default function Assistant() {
 
   const visibleItems = useMemo(
     () =>
-      items.map((item) => {
-        if (item.type === "message" && item.role === "assistant") {
-          return {
-            ...item,
-            content: localizeAssistantMessageContent(item.content, copy),
-          };
-        }
-        return item;
-      }),
+      dedupeTimelineItems(
+        items.map((item) => {
+          if (item.type === "message" && item.role === "assistant") {
+            return {
+              ...item,
+              content: localizeAssistantMessageContent(item.content, copy),
+            };
+          }
+          return item;
+        }),
+      ),
     [copy, items],
   );
 

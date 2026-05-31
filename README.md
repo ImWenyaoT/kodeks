@@ -2,7 +2,7 @@
 
 **kodeks** is a local-first TypeScript coding agent runtime for experimenting with the core loops behind modern software engineering agents: streaming chat, workspace tools, shell approvals, memory, sessions, plan mode, and subagent exploration.
 
-[中文 README](./README.zh-CN.md) · [Product requirements](./docs/PRD.md) · [Migration design](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
+[中文 README](./README.zh-CN.md) · [Product requirements](./docs/PRD.md) · [Modernization plan](./docs/MODERNIZATION.md) · [Migration design](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
 
 ## Status
 
@@ -14,7 +14,7 @@ The legacy Python implementation has been removed from the active repository; th
 
 - Next.js App Router web app and API routes.
 - Streaming chat over Server-Sent Events.
-- OpenAI Agents SDK as the primary agent runtime, pinned to the Responses API for OpenAI-compatible providers.
+- OpenAI Agents SDK as the primary agent runtime, with DeepSeek-first model routing through MoonBridge and OpenAI Responses as fallback.
 - Direct Responses-compatible endpoint support.
 - Built-in MoonBridge adapter for exposing Chat Completions-compatible endpoints through a local Responses API.
 - Workspace-scoped file tools with internal path blocking.
@@ -77,20 +77,22 @@ Kodeks no longer requires secrets to live in the repo `.env`. For local product-
 
 Kodeks still reads the earlier platform-specific config path as a compatibility fallback when the new `~/.kodeks/config.json` file does not exist.
 
+DeepSeek-first is the default routing strategy. Configure the standard Chat Completions keys and Kodeks will prefer the local MoonBridge path; if that path is not configured, it falls back to direct Responses/OpenAI configuration.
+
 ```json
 {
   "model": {
-    "provider": "responses",
-    "responses": {
+    "provider": "moonbridge",
+    "chatCompletions": {
       "apiKey": "sk-...",
-      "baseURL": "https://api.openai.com/v1",
-      "model": "gpt-5.4-mini"
+      "baseURL": "https://api.deepseek.com",
+      "model": "deepseek-v4-flash"
     }
   }
 }
 ```
 
-For an OpenAI-compatible service that already implements the Responses API, choose `provider: "responses"` and Kodeks will call it directly. For a service that only implements Chat Completions, such as many DeepSeek or Qwen deployments, choose MoonBridge and configure the upstream Chat Completions endpoint:
+For an OpenAI-compatible service that already implements the Responses API, choose `provider: "responses"` in `config.json` and Kodeks will call it directly through the OpenAI provider path. For a service that only implements Chat Completions, such as DeepSeek or Qwen deployments, choose MoonBridge and configure the upstream Chat Completions endpoint:
 
 ```json
 {
@@ -104,6 +106,13 @@ For an OpenAI-compatible service that already implements the Responses API, choo
   }
 }
 ```
+
+DeepSeek defaults:
+
+- `KODEKS_CHAT_COMPLETIONS_BASE_URL` defaults to `https://api.deepseek.com`
+- `KODEKS_CHAT_COMPLETIONS_MODEL` defaults to `deepseek-v4-flash`
+- `KODEKS_MODEL_PROVIDER=moonbridge` forces the DeepSeek/MoonBridge path
+- `KODEKS_MODEL_PROVIDER=openai` forces the Responses/OpenAI path
 
 Environment variables still work for development and deployment secrets. Explicit environment variables override the user config file.
 
@@ -159,19 +168,27 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 
 Optional:
 
-- `KODEKS_MODEL_PROVIDER` can be `responses`, `openai`, `bridge`, or `moonbridge`; legacy `deepseek` is treated as a MoonBridge alias
+- `KODEKS_MODEL_PROVIDER` can be `openai`, `responses`, or `moonbridge`; removed aliases now fail with migration guidance
 - `KODEKS_RESPONSES_API_KEY`, `KODEKS_RESPONSES_BASE_URL`, and `KODEKS_RESPONSES_MODEL` configure a direct Responses-compatible endpoint; `OPENAI_*` names remain official OpenAI aliases
 - `KODEKS_CHAT_COMPLETIONS_API_KEY`, `KODEKS_CHAT_COMPLETIONS_BASE_URL`, and `KODEKS_CHAT_COMPLETIONS_MODEL` configure the upstream Chat Completions endpoint used by MoonBridge
 - `KODEKS_BRIDGE_ENABLED=true` enables the built-in bridge Responses path
 - `KODEKS_BRIDGE_BASE_URL` is the local MoonBridge Responses URL and defaults to `http://127.0.0.1:38440/v1`
 - `KODEKS_BRIDGE_MODEL` is the local MoonBridge model alias and defaults to `bridge`
 - `KODEKS_BRIDGE_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
-- `MOONBRIDGE_*`, `KODEKS_BRIDGE_DEEPSEEK_*`, and `DEEPSEEK_*` environment names are still accepted as compatibility aliases for Chat Completions upstreams
 - `OPENAI_BASE_URL`
 - `OPENAI_MODEL` defaults to `gpt-5.4-mini`
 - `OPENAI_REASONING_EFFORT` defaults to `medium`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
+
+Removed migration aliases:
+
+- `DEEPSEEK_API_KEY` -> `KODEKS_CHAT_COMPLETIONS_API_KEY`
+- `DEEPSEEK_BASE_URL` -> `KODEKS_CHAT_COMPLETIONS_BASE_URL`
+- `DEEPSEEK_MODEL` -> `KODEKS_CHAT_COMPLETIONS_MODEL`
+- `KODEKS_BRIDGE_DEEPSEEK_*` -> `KODEKS_CHAT_COMPLETIONS_*`
+- `MOONBRIDGE_API_KEY`, `MOONBRIDGE_BASE_URL`, `MOONBRIDGE_MODEL`, `MOONBRIDGE_ENABLED`, `MOONBRIDGE_REASONING_EFFORT` -> matching `KODEKS_BRIDGE_*` names
+- Provider overrides `bridge`, `deepseek`, and `chat-completions` -> `moonbridge`
 
 Runtime state is written under `.kodeks/` by default and is intentionally ignored by Git.
 
@@ -182,9 +199,9 @@ MoonBridge exists for OpenAI-compatible services that expose Chat Completions bu
 Start the built-in TypeScript bridge, then run Kodeks with:
 
 ```bash
-KODEKS_CHAT_COMPLETIONS_API_KEY=$DEEPSEEK_API_KEY \
+KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
 KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
-KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
+KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-flash \
 pnpm run bridge:start
 
 KODEKS_MODEL_PROVIDER=moonbridge pnpm run dev
@@ -200,7 +217,7 @@ pnpm run bridge:health
 pnpm run bridge:smoke
 ```
 
-The old `moonbridge:start`, `moonbridge:health`, and `moonbridge:smoke` scripts remain compatibility aliases for the built-in bridge.
+The old `moonbridge:start`, `moonbridge:health`, and `moonbridge:smoke` script aliases have been removed. Use the `bridge:*` scripts above.
 
 ## Development
 
@@ -237,6 +254,7 @@ This is a local development project. Review the policy and storage code before u
 ## Documentation
 
 - [`docs/PRD.md`](./docs/PRD.md): product goals, capability roadmap, and acceptance criteria.
+- [`docs/MODERNIZATION.md`](./docs/MODERNIZATION.md): model-provider migration, dependency status, validation, and rollback plan.
 - [`docs/superpowers/`](./docs/superpowers/): design specs that should stay synchronized across machines.
 - [`AGENTS.md`](./AGENTS.md): local agent collaboration instructions.
 
