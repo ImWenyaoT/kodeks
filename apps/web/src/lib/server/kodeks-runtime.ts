@@ -493,20 +493,25 @@ async function* runKodeksChatEvents(
     };
   }
 
-  if (
-    resolvedModelOptions.provider === "openai" &&
-    (resolvedModelOptions.statefulResponses ||
-      resolvedModelOptions.hostedTools.length > 0)
-  ) {
+  const shouldUseModelClientLoop =
+    resolvedModelOptions.provider === "moonbridge" ||
+    (resolvedModelOptions.provider === "openai" &&
+      (resolvedModelOptions.statefulResponses ||
+        resolvedModelOptions.hostedTools.length > 0));
+  if (shouldUseModelClientLoop) {
+    const runtimeModelEnv =
+      resolvedModelOptions.provider === "moonbridge"
+        ? { ...modelEnv, KODEKS_BRIDGE_BASE_URL: resolvedModelOptions.baseURL }
+        : modelEnv;
     const model = createModelClientFromEnv(
-      modelEnv,
+      runtimeModelEnv,
       body.reasoning_effort,
       body.provider,
     );
     if (model === null) {
       yield {
         type: "error",
-        message: "No direct OpenAI Responses model runtime was configured.",
+        message: "No Responses model runtime was configured.",
         code: "model_provider_missing",
         sessionId: sessionId ?? "",
       };
@@ -519,7 +524,7 @@ async function* runKodeksChatEvents(
       workspace,
       database: getKodeksDatabase(),
       selectedFiles,
-      environment: modelEnv,
+      environment: runtimeModelEnv,
       model,
     });
     return;

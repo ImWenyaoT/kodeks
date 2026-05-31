@@ -1,6 +1,10 @@
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo, Server } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -318,6 +322,39 @@ describe("streamKodeksChat", () => {
     }
   });
 
+  it("continues MoonBridge tool calls through the local model-client loop", async () => {
+    const deepSeekServer = await startFakeDeepSeekToolServer();
+    const bridgePort = await getFreePort();
+    const tempDir = await mkdtemp(join(tmpdir(), "kodeks-moonbridge-tools-"));
+    await writeFile(join(tempDir, "notes.txt"), "alpha\nbeta\n", "utf8");
+    process.env.KODEKS_WORKSPACE_ROOT = tempDir;
+    process.env.KODEKS_DB_PATH = join(tempDir, "kodeks.sqlite3");
+    process.env.KODEKS_BRIDGE_BASE_URL = `http://127.0.0.1:${bridgePort}/v1`;
+    process.env.KODEKS_CHAT_COMPLETIONS_BASE_URL = `http://127.0.0.1:${readServerPort(deepSeekServer)}`;
+    process.env.KODEKS_CHAT_COMPLETIONS_API_KEY = "chat-key";
+    process.env.KODEKS_CHAT_COMPLETIONS_MODEL = "chat-test";
+
+    try {
+      const response = new Response(
+        streamKodeksChat({
+          input: "show the notes file",
+          mode: "act",
+          provider: "moonbridge",
+          reasoning_effort: "low",
+        }),
+      );
+      const body = await response.text();
+
+      expect(body).toContain("event: tool_call");
+      expect(body).toContain("event: tool_result");
+      expect(body).toContain("notes.txt contains alpha and beta");
+      expect(body).not.toContain("Model did not produce a final response");
+    } finally {
+      await closeServer(deepSeekServer);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("restarts managed MoonBridge when the upstream model config changes", async () => {
     const firstServer = await startFakeDeepSeekServer("Hello from first model");
     const secondServer = await startFakeDeepSeekServer(
@@ -432,6 +469,64 @@ async function startFakeDeepSeekServer(
   return server;
 }
 
+// Starts a fake DeepSeek endpoint that requires one tool-result continuation.
+async function startFakeDeepSeekToolServer(): Promise<Server> {
+  let requestCount = 0;
+  const server = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/chat/completions") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    const payload = await readJsonRequest(request);
+    requestCount += 1;
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    });
+    if (requestCount === 1) {
+      writeSse(response, {
+        id: "chatcmpl_tool",
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_read_notes",
+                  function: {
+                    name: "read_file",
+                    arguments: '{"path":"notes.txt"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+          },
+        ],
+      });
+      response.write("data: [DONE]\n\n");
+      response.end();
+      return;
+    }
+
+    expect(JSON.stringify(payload)).toContain("call_read_notes");
+    expect(JSON.stringify(payload)).toContain("alpha");
+    writeSse(response, {
+      id: "chatcmpl_final",
+      choices: [{ delta: { content: "notes.txt contains alpha and beta." } }],
+    });
+    writeSse(response, {
+      id: "chatcmpl_final",
+      choices: [{ delta: {}, finish_reason: "stop" }],
+    });
+    response.write("data: [DONE]\n\n");
+    response.end();
+  });
+  await listen(server, 0);
+  return server;
+}
+
 // Starts a non-bridge loopback server so MoonBridge health checks fail before bind retry.
 async function startUnhealthyServer(): Promise<Server> {
   const server = createServer((_request, response) => {
@@ -440,6 +535,20 @@ async function startUnhealthyServer(): Promise<Server> {
   });
   await listen(server, 0);
   return server;
+}
+
+// Reads a JSON request body from a mock DeepSeek endpoint.
+async function readJsonRequest(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
+// Writes one Chat Completions SSE data frame.
+function writeSse(response: ServerResponse, payload: unknown): void {
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 // Starts a healthy bridge-shaped server so preflight can verify /health cheaply.
