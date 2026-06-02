@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .storage import KodeksDatabase
-from .tool_schemas import ToolDefinition, default_tool_definitions
-from .workspace import (
+from ..storage import KodeksDatabase
+from ..workspace import (
     ShellCommandTimeoutError,
     WorkspaceService,
     run_command,
 )
+from .schemas import ToolDefinition, default_tool_definitions
 
 ToolArguments = Mapping[str, Any]
 ToolExecutionStatus = str
