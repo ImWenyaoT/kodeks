@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
+from kodeks.conversation_state import build_responses_input_from_transcript
 from kodeks.plans import build_plan_artifact_content
 from kodeks.responses_adapter import (
     build_openai_responses_payload,
@@ -28,7 +29,6 @@ from kodeks.runtime import (
     to_ui_transport_payload as runtime_to_ui_transport_payload,
 )
 from kodeks.storage import KodeksDatabase
-from kodeks.transcript_replay import build_responses_input_from_transcript
 from kodeks.ui_transport import to_ui_transport_payload
 
 
