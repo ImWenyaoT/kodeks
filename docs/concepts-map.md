@@ -8,7 +8,7 @@ eval coverage.
 
 | OpenAI concept | Kodeks asset | Eval coverage |
 | --- | --- | --- |
-| Responses-shaped runtime contract | `src/kodeks/providers/bridge.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/runtime.py` | `read_file_tool_loop`, `unknown_tool_halts_locally`, `live_basic_completion` |
+| Responses-shaped runtime contract | `src/kodeks/providers/bridge.py`, `src/kodeks/responses_runtime.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/runtime.py` | `read_file_tool_loop`, `unknown_tool_halts_locally`, `live_basic_completion` |
 | Function calling / tools | `src/kodeks/tools/schemas.py`, `src/kodeks/tools/registry.py`, `src/kodeks/agents_runtime.py` | `read_file_tool_loop`, `large_tool_output_becomes_artifact`, `agents_sdk_act_tool_surface`, `live_read_file_tool_loop` |
 | Conversation state | `src/kodeks/conversation_state.py`, `src/kodeks/storage/session.py` session/message repositories | `memory_recall_injected`, `live_memory_recall` |
 | Context management | `src/kodeks/runtime_context.py`, memory artifact offload in `src/kodeks/storage/memory.py` | `large_tool_output_becomes_artifact`, `memory_recall_injected` |

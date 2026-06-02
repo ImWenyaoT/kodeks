@@ -30,7 +30,7 @@ user / web UI
 | Area | Files | Why it exists |
 | --- | --- | --- |
 | API and UI transport | `src/kodeks/app.py`, `src/kodeks/api/`, `src/kodeks/static/index.html` | Accept browser requests and stream agent events back to the GUI. |
-| Runtime | `src/kodeks/runtime.py`, `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/conversation_state.py`, `src/kodeks/runtime_context.py` | Turn session state plus user input into model calls, tool continuations, and persisted events. |
+| Runtime | `src/kodeks/runtime.py`, `src/kodeks/responses_runtime.py`, `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/conversation_state.py`, `src/kodeks/runtime_context.py` | Turn session state plus user input into model calls, tool continuations, and persisted events. |
 | Tools | `src/kodeks/tools/`, `src/kodeks/workspace.py` | Define what the model may call and enforce local workspace/shell boundaries. |
 | Storage | `src/kodeks/storage/` | Keep durable sessions, approvals, plans, memory, subagent runs, schema, and row mapping in one package. |
 | Providers | `src/kodeks/config.py`, `src/kodeks/model_config.py`, `src/kodeks/embedding_config.py`, `src/kodeks/providers/` | Load user config, resolve model and embeddings options, and keep MoonBridge as an implicit protocol adapter. |
@@ -41,5 +41,5 @@ user / web UI
 1. Start with `src/kodeks/runtime_context.py` to see the agent contract.
 2. Read `src/kodeks/tools/schemas.py`, then skim handlers in `src/kodeks/tools/registry.py`.
 3. Read `src/kodeks/storage/session.py` and `src/kodeks/storage/memory.py` to see what survives between turns.
-4. Read `src/kodeks/runtime.py` only after the smaller pieces above; it is the conductor.
+4. Read `src/kodeks/runtime.py` only after the smaller pieces above; it is the conductor. Then read `src/kodeks/responses_runtime.py` for the Responses-shaped tool loop.
 5. Run `uv run python evals/run_local.py` and connect each passing case back to this map.

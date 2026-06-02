@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from collections.abc import AsyncIterator, Callable, Iterable, Mapping
-from typing import Any, cast
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 from .agents_events import (
     AgentsSdkApprovalMetadata,
@@ -26,22 +26,12 @@ from .agents_runtime import (
 from .config import (
     ModelConfigurationError,
     load_model_runtime_env,
-    read_chat_completions_api_key,
-    read_chat_completions_config,
     resolve_model_client_options,
 )
 from .contracts import StoredPlanArtifact
-from .conversation_state import build_responses_input_from_transcript
 from .plans import build_plan_artifact_content
-from .providers.bridge import (
-    fetch_chat_completions_stream,
-    from_deepseek_stream,
-    to_deepseek_chat_request,
-)
+from .responses_runtime import ResponsesEventFactory, run_responses_tool_loop
 from .responses_tool_loop import (
-    ToolRoundState,
-    append_tool_continuation_messages,
-    handle_output_item,
     parse_json_object,
 )
 from .runtime_context import (
@@ -56,14 +46,9 @@ from .storage import KodeksDatabase
 from .tools.registry import (
     build_default_tool_registry,
 )
-from .tools.schemas import default_tool_definitions
 from .tools.types import ToolRegistryServices
 from .workspace import WorkspaceService
 
-ResponsesEventStream = AsyncIterator[dict[str, Any]] | Iterable[dict[str, Any]]
-ResponsesEventFactory = Callable[
-    [Mapping[str, Any], Mapping[str, str | None]], ResponsesEventStream
-]
 MAX_TOOL_LOOP_TURNS = 12
 
 
@@ -137,101 +122,34 @@ async def run_python_chat_turn(
                 yield agents_event
             return
 
-        for _turn_index in range(MAX_TOOL_LOOP_TURNS):
-            runtime_body["input"] = build_responses_input_from_transcript(
-                database, session_id
-            )
-            responses_events = (
-                responses_event_factory(runtime_body, runtime_env)
-                if responses_event_factory is not None
-                else _live_responses_events(runtime_body, runtime_env)
-            )
-            assistant_text = ""
-            completed = False
-            tool_state = ToolRoundState()
-            async for event in _aiter(responses_events):
-                event_type = event.get("type")
-                if event_type == "response.output_text.delta":
-                    delta = str(event.get("delta") or "")
-                    if delta:
-                        assistant_text += delta
-                        yield {
-                            "type": "text_delta",
-                            "delta": delta,
-                            "session_id": session_id,
-                        }
-                    continue
+        async def complete_assistant_turn(
+            assistant_text: str, response_id: str
+        ) -> AsyncIterator[dict[str, Any]]:
+            """Persist the final assistant turn for this runtime session."""
 
-                if event_type == "response.output_item.done":
-                    async for tool_event in handle_output_item(
-                        event.get("item"),
-                        registry,
-                        database,
-                        workspace_root,
-                        runtime_env,
-                        session_id,
-                        tool_state,
-                    ):
-                        yield tool_event
-                    continue
+            async for completion_event in _persist_completed_assistant_turn(
+                database=database,
+                session_id=session_id,
+                mode=mode,
+                user_input=user_input,
+                assistant_text=assistant_text,
+                response_id=response_id,
+            ):
+                yield completion_event
 
-                if event_type == "response.failed":
-                    yield _error_event(
-                        _response_error_message(event),
-                        session_id,
-                        "moonbridge_upstream_failed",
-                    )
-                    return
-
-                if event_type == "error":
-                    yield _error_event(_stream_error_message(event), session_id)
-                    return
-
-                if event_type == "response.completed":
-                    completed = True
-                    if (
-                        tool_state.tool_messages
-                        or tool_state.waiting_for_approval
-                        or tool_state.halt_tool_loop
-                    ):
-                        break
-                    response = event.get("response")
-                    response_id = (
-                        str(response.get("id"))
-                        if isinstance(response, dict) and response.get("id") is not None
-                        else "resp_python"
-                    )
-                    async for completion_event in _persist_completed_assistant_turn(
-                        database=database,
-                        session_id=session_id,
-                        mode=mode,
-                        user_input=user_input,
-                        assistant_text=assistant_text,
-                        response_id=response_id,
-                    ):
-                        yield completion_event
-                    return
-
-            if tool_state.halt_tool_loop:
-                return
-            if tool_state.waiting_for_approval:
-                return
-            if tool_state.tool_messages:
-                append_tool_continuation_messages(
-                    database=database,
-                    session_id=session_id,
-                    assistant_text=assistant_text,
-                    reasoning_content=tool_state.reasoning_content,
-                    tool_calls=tool_state.tool_calls,
-                    tool_messages=tool_state.tool_messages,
-                )
-                continue
-            if not completed:
-                yield _error_event("Model stream ended before completion.", session_id)
-                return
-            return
-
-        yield _error_event("Model tool loop exceeded the maximum turn limit.", session_id)
+        async for responses_event in run_responses_tool_loop(
+            body=body,
+            runtime_body=runtime_body,
+            database=database,
+            workspace_root=workspace_root,
+            runtime_env=runtime_env,
+            session_id=session_id,
+            registry=registry,
+            complete_assistant_turn=complete_assistant_turn,
+            responses_event_factory=responses_event_factory,
+            max_tool_loop_turns=MAX_TOOL_LOOP_TURNS,
+        ):
+            yield responses_event
         return
     except ModelConfigurationError as exc:
         code = (
@@ -389,48 +307,6 @@ async def _run_agents_sdk_chat_turn(
         yield completion_event
 
 
-async def _live_responses_events(
-    body: Mapping[str, Any], runtime_env: Mapping[str, str | None]
-) -> AsyncIterator[dict[str, Any]]:
-    """Create live Responses-shaped events from configured model routing."""
-
-    model_env = load_model_runtime_env(runtime_env, body.get("model"))
-    model_options = resolve_model_client_options(
-        model_env, body.get("reasoning_effort"), body.get("provider")
-    )
-    if model_options is None:
-        raise ModelConfigurationError(
-            "A DeepSeek provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek MoonBridge route."
-        )
-    if model_options["provider"] != "moonbridge":
-        raise ModelConfigurationError("Unsupported model provider.")
-
-    upstream = read_chat_completions_config(model_env)
-    if upstream["missing"]:
-        missing = cast(list[str], upstream["missing"])
-        raise ModelConfigurationError(
-            f"Missing upstream Chat Completions configuration: {', '.join(missing)}."
-        )
-    api_key = read_chat_completions_api_key(model_env)
-    if api_key is None:
-        raise ModelConfigurationError("KODEKS_CHAT_COMPLETIONS_API_KEY is required.")
-
-    request = {
-        "model": body.get("model") or model_options["model"],
-        "input": body.get("input") or "",
-        "instructions": body.get("instructions") or "",
-        "tools": default_tool_definitions(body.get("mode") == "plan"),
-        "reasoning": {"effort": body.get("reasoning_effort") or "high"},
-        "stream": True,
-    }
-    payload = to_deepseek_chat_request(request, str(upstream["model"]))
-    async for event in from_deepseek_stream(
-        fetch_chat_completions_stream(payload, api_key, model_env),
-        model=str(request["model"]),
-    ):
-        yield event
-
-
 async def _persist_completed_assistant_turn(
     database: KodeksDatabase,
     session_id: str,
@@ -486,22 +362,6 @@ def _ensure_session(
     )
 
 
-def _response_error_message(event: Mapping[str, Any]) -> str:
-    response = event.get("response")
-    if isinstance(response, dict):
-        error = response.get("error")
-        if isinstance(error, dict) and isinstance(error.get("message"), str):
-            return str(error["message"])
-    return "Model stream failed."
-
-
-def _stream_error_message(event: Mapping[str, Any]) -> str:
-    """Read the user-visible message from a Responses error stream event."""
-
-    message = event.get("message")
-    return str(message) if isinstance(message, str) and message else "Model stream failed."
-
-
 def _use_agents_sdk_runtime(
     env: Mapping[str, str | None], body: Mapping[str, Any]
 ) -> bool:
@@ -549,12 +409,3 @@ def _error_event(
 
 def _string(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
-
-
-async def _aiter(stream: ResponsesEventStream) -> AsyncIterator[dict[str, Any]]:
-    if isinstance(stream, Iterable):
-        for item in stream:
-            yield item
-        return
-    async for item in stream:
-        yield item

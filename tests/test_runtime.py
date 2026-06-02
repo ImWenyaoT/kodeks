@@ -371,7 +371,7 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
         }
 
     monkeypatch.setattr(
-        "kodeks.runtime.fetch_chat_completions_stream",
+        "kodeks.responses_runtime.fetch_chat_completions_stream",
         fake_fetch_chat_completions_stream,
     )
     runner = FakeAgentsSdkRunner([])
