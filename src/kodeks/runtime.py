@@ -6,7 +6,6 @@ import json
 import os
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping
-from pathlib import Path
 from typing import Any, cast
 
 from .agents_events import (
@@ -559,9 +558,3 @@ async def _aiter(stream: ResponsesEventStream) -> AsyncIterator[dict[str, Any]]:
         return
     async for item in stream:
         yield item
-
-
-def default_workspace_root() -> str:
-    """Return the default workspace root for runtime tests and routes."""
-
-    return str(Path.cwd().resolve())
