@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import httpx
+import httpx2
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -462,9 +462,9 @@ async def _check_chat_completions_upstream(base_url: str) -> dict[str, str] | No
     """Check that the configured Chat Completions upstream is reachable."""
 
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx2.AsyncClient(timeout=2.0) as client:
             response = await client.get(f"{base_url.rstrip('/')}/models")
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         return {
             "code": "moonbridge_upstream_unreachable",
             "reason": (

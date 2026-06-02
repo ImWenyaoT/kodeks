@@ -53,16 +53,10 @@ def test_python_package_includes_static_ui_assets():
     assert (REPO_ROOT / "src/kodeks/static/index.html").exists()
 
 
-def test_agents_instructions_are_python_runtime_aligned():
-    """Repository agent instructions no longer point contributors at pnpm."""
+def test_root_agents_instructions_are_removed_from_repository():
+    """Repository-local agent instructions are no longer part of the runtime tree."""
 
-    instructions = (REPO_ROOT / "AGENTS.md").read_text()
-
-    assert "Use `uv run`" in instructions
-    assert "full Python gate" in instructions
-    assert "do not reintroduce TypeScript SDK packages" in instructions
-    assert "pnpm" not in instructions
-    assert "Next.js routes" in instructions
+    assert not (REPO_ROOT / "AGENTS.md").exists()
 
 
 def test_python_package_build_backend_is_declared():
@@ -135,7 +129,6 @@ def test_uv_lock_tracks_python_only_dependency_graph():
     assert packages["kodeks"]["source"] == {"editable": "."}
     assert {dependency["name"] for dependency in packages["kodeks"]["dependencies"]} >= {
         "fastapi",
-        "httpx",
         "httpx2",
         "openai",
         "openai-agents",

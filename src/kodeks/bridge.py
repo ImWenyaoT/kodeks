@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import Any
 
-import httpx
+import httpx2
 
 from .config import read_chat_completions_base_url
 
@@ -78,7 +78,7 @@ async def fetch_chat_completions_stream(
     """Call an upstream Chat Completions endpoint and yield parsed SSE chunks."""
 
     base_url = read_chat_completions_base_url(env).rstrip("/")
-    async with httpx.AsyncClient(timeout=None) as client:
+    async with httpx2.AsyncClient(timeout=None) as client:
         async with client.stream(
             "POST",
             f"{base_url}/chat/completions",

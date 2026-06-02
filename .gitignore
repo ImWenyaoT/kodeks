@@ -3,6 +3,7 @@ dist/
 build/
 coverage/
 .cache/
+.pnpm-store/
 
 # Runtime state and local databases
 .kodeks/
@@ -37,8 +38,7 @@ __pycache__/
 ._*
 Thumbs.db
 .idea/
-.vscode/*
-!.vscode/settings.json
+.vscode/
 *.swp
 *.swo
 *.tmp
