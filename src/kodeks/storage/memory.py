@@ -7,7 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from .storage_utils import HasConnection, current_timestamp, prefixed_id
+from .utils import HasConnection, current_timestamp, prefixed_id
 
 
 class MemoryRepository:

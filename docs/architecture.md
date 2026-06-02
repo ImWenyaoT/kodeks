@@ -35,7 +35,7 @@ Harness 负责把用户输入接进来，组织上下文，决定模型能调用
 3. `src/kodeks/app.py` 的 FastAPI route 接收请求并打开同一 SSE stream contract。
 4. `src/kodeks/runtime.py` 创建 runtime context，包括 workspace、model options、storage repositories、memory、plan artifact 和 tool services。
 5. `src/kodeks/agents_runtime.py` 通过 Python `openai-agents` 把本地 tools 包装成 SDK function tools。
-6. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage.py` 执行工具、workspace policy、approval 和 transcript 写入。
+6. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage/` 执行工具、workspace policy、approval 和 transcript 写入。
 7. UI 直接渲染 Kodeks SSE events。
 
 可以把链路记成：
@@ -73,7 +73,7 @@ UI
 5. `src/kodeks/runtime.py`：看一轮 chat turn 如何准备 session、memory、tools 和 SSE events。
 6. `src/kodeks/agents_runtime.py`：看 Python OpenAI Agents SDK adapter。
 7. `src/kodeks/contracts.py`：看 Python Pydantic 模型如何冻结旧 TypeScript wire shape。
-8. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage.py`：看工具、安全边界和持久化。
+8. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage/`：看工具、安全边界和持久化。
 
 ## 模型边界
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .contracts import StoredApproval, StoredMessage, StoredPlanArtifact, StoredSession
-from .storage_utils import (
+from ..contracts import StoredApproval, StoredMessage, StoredPlanArtifact, StoredSession
+from .utils import (
     HasConnection,
     current_timestamp,
     map_approval,

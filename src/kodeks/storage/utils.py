@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
 
-from .contracts import StoredApproval, StoredMessage, StoredPlanArtifact, StoredSession
+from ..contracts import StoredApproval, StoredMessage, StoredPlanArtifact, StoredSession
 
 
 class HasConnection(Protocol):
