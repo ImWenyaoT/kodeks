@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .storage import KodeksDatabase
-from .tools import ToolExecutionContext
+from .tools.registry import ToolExecutionContext
 
 
 @dataclass

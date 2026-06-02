@@ -5,9 +5,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
-from kodeks.bridge import to_deepseek_chat_request
 from kodeks.config import DEFAULT_DEEPSEEK_MODEL
-from kodeks.tools import default_tool_definitions
+from kodeks.providers.bridge import to_deepseek_chat_request
+from kodeks.tools.schemas import default_tool_definitions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -254,7 +254,7 @@ def test_modernization_plan_covers_required_migration_surfaces():
     assert "## Milestones" in modernization
     assert "Rollback is the last TS-backed branch/release" in modernization
     assert "Cut the Python agent loop over by default" in modernization
-    assert "KODEKS_DIRECT_RESPONSES_RUNTIME=true" in modernization
+    assert "KODEKS_FORCE_AGENTS_SDK_RUNTIME=true" in modernization
     assert "behind a feature flag" not in modernization
     assert "no-side-effect chat route validation" in modernization
     assert "no-side-effect `/api/chat/stream` validation" in modernization
@@ -280,8 +280,8 @@ def test_prd_marks_reference_paths_as_non_active_surface():
     assert "不要把参考项目里的 TypeScript 路径当成" in prd
 
 
-def test_models_route_keeps_secret_free_provider_model_contract(tmp_path, monkeypatch):
-    """The Python `/api/models` route returns selector metadata without secrets."""
+def test_models_route_keeps_secret_free_deepseek_contract(tmp_path, monkeypatch):
+    """The Python `/api/models` route returns only DeepSeek metadata without secrets."""
 
     config_path = tmp_path / "config.json"
     config_path.write_text(
@@ -296,10 +296,11 @@ def test_models_route_keeps_secret_free_provider_model_contract(tmp_path, monkey
                             "apiKey": "local-secret",
                             "models": [{"id": "qwen3.6", "name": "Qwen 3.6"}],
                         },
-                        "openai": {
-                            "api": "responses",
-                            "apiKey": "sk-secret",
-                            "models": [{"id": "gpt-5.4-mini"}],
+                        "deepseek": {
+                            "api": "chat-completions",
+                            "baseURL": "https://api.deepseek.com",
+                            "apiKey": "deepseek-secret",
+                            "models": [{"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro"}],
                         },
                     },
                 }
@@ -317,19 +318,16 @@ def test_models_route_keeps_secret_free_provider_model_contract(tmp_path, monkey
     refs = [model["ref"] for model in body["models"]]
     assert refs == [
         f"deepseek/{DEFAULT_DEEPSEEK_MODEL}",
-        "qwen/qwen3.6",
-        "openai/gpt-5.4-mini",
     ]
     assert "local-secret" not in response.text
-    assert "sk-secret" not in response.text
-    assert body["models"][1]["requiresBridge"] is True
-    assert body["models"][2]["requiresBridge"] is False
+    assert "deepseek-secret" not in response.text
+    assert body["models"][0]["requiresBridge"] is True
 
 
-def test_bridge_preflight_keeps_moonbridge_implicit_for_chat_completions(
+def test_bridge_preflight_keeps_moonbridge_implicit_for_deepseek(
     tmp_path, monkeypatch
 ):
-    """Chat-Completions providers resolve to MoonBridge without UI provider leakage."""
+    """DeepSeek resolves to MoonBridge without exposing adapter controls."""
 
     async def fake_reachable(_base_url):
         """Return a deterministic successful upstream probe for contract tests."""
@@ -341,13 +339,13 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_chat_completions(
         json.dumps(
             {
                 "model": {
-                    "primary": "qwen/qwen3.6",
+                    "primary": "deepseek/deepseek-v4-pro",
                     "providers": {
-                        "qwen": {
+                        "deepseek": {
                             "api": "chat-completions",
-                            "baseURL": "http://127.0.0.1:8010/v1",
-                            "apiKey": "local-placeholder",
-                            "models": [{"id": "qwen3.6"}],
+                            "baseURL": "https://api.deepseek.com",
+                            "apiKey": "deepseek-placeholder",
+                            "models": [{"id": "deepseek-v4-pro"}],
                         }
                     },
                 }
@@ -358,15 +356,17 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_chat_completions(
     monkeypatch.setattr("kodeks.app._check_chat_completions_upstream", fake_reachable)
     client = TestClient(create_app())
 
-    response = client.post("/api/bridge/preflight", json={"model": "qwen/qwen3.6"})
+    response = client.post(
+        "/api/bridge/preflight", json={"model": "deepseek/deepseek-v4-pro"}
+    )
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ready"
     assert body["provider"] == "auto"
     assert body["resolvedProvider"] == "moonbridge"
-    assert body["upstreamBaseURL"] == "http://127.0.0.1:8010/v1"
-    assert body["upstreamModel"] == "qwen3.6"
+    assert body["upstreamBaseURL"] == "https://api.deepseek.com"
+    assert body["upstreamModel"] == "deepseek-v4-pro"
 
 
 def test_python_chat_routes_keep_feature_flag_error_path(tmp_path, monkeypatch):

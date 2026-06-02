@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from kodeks.sse import sse_frame
+from kodeks.api.sse import sse_frame
 from kodeks.storage import ApprovalAlreadyResolvedError, KodeksDatabase
 from kodeks.workspace import (
     WorkspacePathError,

@@ -17,13 +17,13 @@ from .agents_events import (
 )
 from .contracts import StoredMessage
 from .storage import KodeksDatabase
-from .tool_schemas import ToolDefinition
-from .tools import (
+from .tools.registry import (
     ToolExecutionContext,
     ToolRegistry,
     ToolRegistryServices,
     build_default_tool_registry,
 )
+from .tools.schemas import ToolDefinition
 from .workspace import WorkspaceService, is_dangerous_command
 
 MAX_AGENTS_SDK_TURNS = 12

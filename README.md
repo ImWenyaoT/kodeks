@@ -14,9 +14,8 @@ Chat now requires the Python/FastAPI runtime. The old TypeScript OpenAI/Agents S
 
 - Python-hosted browser UI served by FastAPI.
 - Streaming chat over Server-Sent Events.
-- Python OpenAI Agents SDK as the primary agent runtime, with DeepSeek-first model routing through MoonBridge and OpenAI Responses as fallback.
-- Direct Responses-compatible endpoint support.
-- Built-in MoonBridge adapter for exposing Chat Completions-compatible endpoints through a local Responses API.
+- DeepSeek-only chat model routing through MoonBridge.
+- Built-in MoonBridge adapter for exposing DeepSeek Chat Completions through a local Responses API.
 - Workspace-scoped file tools with internal path blocking.
 - Shell execution harness with timeout and dangerous command detection.
 - SQLite-backed sessions, transcripts, memories, approvals, subagent runs, and audit logs.
@@ -51,7 +50,7 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
 
 Required:
 
-- A Responses-compatible endpoint, or a Chat Completions-compatible endpoint routed through MoonBridge.
+- A DeepSeek Chat Completions API key, routed through MoonBridge.
 
 Kodeks no longer requires secrets to live in the repo `.env`. For local product-style use, put model configuration in the user config file outside the workspace:
 
@@ -61,7 +60,8 @@ Kodeks no longer requires secrets to live in the repo `.env`. For local product-
 
 Kodeks still reads the earlier platform-specific config path as a compatibility fallback when the new `~/.kodeks/config.json` file does not exist.
 
-DeepSeek-first is the default routing strategy. Configure the standard Chat Completions keys and Kodeks will prefer the local MoonBridge path; if that path is not configured, it falls back to direct Responses/OpenAI configuration.
+DeepSeek is the only supported chat provider. Configure the standard Chat
+Completions keys and Kodeks will route through the local MoonBridge adapter.
 
 ```json
 {
@@ -76,27 +76,11 @@ DeepSeek-first is the default routing strategy. Configure the standard Chat Comp
 }
 ```
 
-For an OpenAI-compatible service that already implements the Responses API, choose `provider: "responses"` in `config.json` and Kodeks will call it directly through the OpenAI provider path. For a service that only implements Chat Completions, such as DeepSeek or Qwen deployments, choose MoonBridge and configure the upstream Chat Completions endpoint:
-
-```json
-{
-  "model": {
-    "provider": "moonbridge",
-    "chatCompletions": {
-      "apiKey": "sk-or-local-placeholder",
-      "baseURL": "https://chat-compatible.example/v1",
-      "model": "qwen-coder"
-    }
-  }
-}
-```
-
 DeepSeek defaults:
 
 - `KODEKS_CHAT_COMPLETIONS_BASE_URL` defaults to `https://api.deepseek.com`
 - `KODEKS_CHAT_COMPLETIONS_MODEL` defaults to `deepseek-v4-pro`
 - `KODEKS_MODEL_PROVIDER=moonbridge` forces the DeepSeek/MoonBridge path
-- `KODEKS_MODEL_PROVIDER=openai` forces the Responses/OpenAI path
 
 DeepSeek V4 thinking mode is enabled through MoonBridge unless
 `KODEKS_BRIDGE_REASONING_EFFORT=none` is set. When the model calls tools,
@@ -106,27 +90,25 @@ DeepSeek API requires.
 
 Environment variables still work for development and deployment secrets. Explicit environment variables override the user config file.
 
-OpenClaw-style provider registries are also supported. Use `api: "responses"` for direct Responses-compatible endpoints and `api: "chat-completions"` for endpoints that should go through MoonBridge:
+Provider registries are accepted for compatibility, but only the `deepseek`
+entry is used for chat routing:
 
 ```json
 {
   "model": {
-    "primary": "qwen/qwen3.6",
+    "primary": "deepseek/deepseek-v4-pro",
     "providers": {
-      "qwen": {
+      "deepseek": {
         "api": "chat-completions",
-        "baseURL": "http://172.18.45.70:8010/v1",
-        "apiKey": "local-placeholder",
-        "models": [{ "id": "qwen3.6", "name": "Qwen 3.6" }]
+        "baseURL": "https://api.deepseek.com",
+        "apiKey": "sk-...",
+        "models": [{ "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" }]
       }
     }
   },
   "embeddings": {
     "enabled": true,
-    "provider": "openai-compatible",
-    "baseURL": "http://172.18.45.70:8011/v1",
-    "apiKey": "local-placeholder",
-    "model": "qwen3-embedding-4b"
+    "provider": "local"
   }
 }
 ```
@@ -148,7 +130,7 @@ KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
 # Optional: LM Studio / OpenAI-compatible embeddings endpoint
 KODEKS_EMBEDDINGS_PROVIDER=lmstudio
 KODEKS_OPENAI_COMPAT_BASE_URL=http://127.0.0.1:1234/v1
-KODEKS_OPENAI_COMPAT_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
+KODEKS_OPENAI_COMPAT_EMBED_MODEL=embedding-model
 
 # Optional: Hugging Face-compatible endpoint
 KODEKS_EMBEDDINGS_PROVIDER=huggingface
@@ -158,19 +140,13 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 
 Optional:
 
-- `KODEKS_MODEL_PROVIDER` can be `openai`, `responses`, or `moonbridge`; removed aliases now fail with migration guidance
-- `KODEKS_RESPONSES_API_KEY`, `KODEKS_RESPONSES_BASE_URL`, and `KODEKS_RESPONSES_MODEL` configure a direct Responses-compatible endpoint; `OPENAI_*` names remain official OpenAI aliases
+- `KODEKS_MODEL_PROVIDER=moonbridge` selects the DeepSeek/MoonBridge route; direct `openai` / `responses` chat providers have been removed
 - `KODEKS_CHAT_COMPLETIONS_API_KEY`, `KODEKS_CHAT_COMPLETIONS_BASE_URL`, and `KODEKS_CHAT_COMPLETIONS_MODEL` configure the upstream Chat Completions endpoint used by MoonBridge
 - `KODEKS_BRIDGE_ENABLED=true` enables the built-in bridge Responses path
 - `KODEKS_BRIDGE_BASE_URL` is the local MoonBridge Responses URL and defaults to `http://127.0.0.1:38440/v1`
 - `KODEKS_BRIDGE_MODEL` is the local MoonBridge model alias and defaults to `bridge`
 - `KODEKS_BRIDGE_REASONING_EFFORT` defaults to `high`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
-- `OPENAI_BASE_URL`
-- `OPENAI_MODEL` defaults to `gpt-5.4-mini`
-- `OPENAI_REASONING_EFFORT` defaults to `medium`; supported values are `none`, `low`, `medium`, `high`, and `xhigh`
-- `KODEKS_RESPONSES_STATEFUL=true` opts direct OpenAI Responses calls into `previous_response_id`; the default remains local transcript replay
 - `KODEKS_STRICT_TOOL_SCHEMAS=true` opts Responses/Agents function tools into strict schemas after local schema normalization; the default remains `strict: false`
-- `KODEKS_OPENAI_HOSTED_TOOLS=web_search_preview` enables the OpenAI hosted web search tool only on direct OpenAI Responses paths; local workspace tools remain local
 - `KODEKS_WORKSPACE_ROOT`
 - `KODEKS_DB_PATH`
 
@@ -251,7 +227,7 @@ transport. The optional `--live-provider` lane adds real provider cases using
 the configured model credentials and reports latency in the result JSON. It
 writes `evals/results/latest.json`, which is ignored by Git.
 
-The TypeScript OpenAI/Agents SDK backend packages, Next.js shell, and pnpm workspace have been removed. The Python runtime currently covers health, model catalog, sessions, workspace file listing, approvals, MoonBridge protocol adapters, deterministic chat-loop tests, same-turn tool continuations, local tool execution, approval-required events, UI transport mapping, static UI serving, and route-level chat streaming through `openai-agents`.
+The TypeScript OpenAI/Agents SDK backend packages, Next.js shell, and pnpm workspace have been removed. The Python runtime currently covers health, model catalog, sessions, workspace file listing, approvals, MoonBridge protocol adapters, deterministic chat-loop tests, same-turn tool continuations, local tool execution, approval-required events, UI transport mapping, static UI serving, and route-level chat streaming through DeepSeek/MoonBridge.
 
 - `src/kodeks`: Python compatibility runtime, FastAPI routes, Pydantic contracts, SQLite repositories, model config, MoonBridge adapter, tools, workspace policy, and SSE helpers.
 

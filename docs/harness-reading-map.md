@@ -29,7 +29,7 @@ user / web UI
 
 | Area | Files | Why it exists |
 | --- | --- | --- |
-| API and UI transport | `src/kodeks/app.py`, `src/kodeks/sse.py`, `src/kodeks/ui_transport.py`, `src/kodeks/static/index.html` | Accept browser requests and stream agent events back to the GUI. |
+| API and UI transport | `src/kodeks/app.py`, `src/kodeks/api/`, `src/kodeks/static/index.html` | Accept browser requests and stream agent events back to the GUI. |
 | Runtime | `src/kodeks/runtime.py`, `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/conversation_state.py`, `src/kodeks/runtime_context.py` | Turn session state plus user input into model calls, tool continuations, and persisted events. |
 | Tools | `src/kodeks/tools/`, `src/kodeks/workspace.py` | Define what the model may call and enforce local workspace/shell boundaries. |
 | Storage | `src/kodeks/storage/` | Keep durable sessions, approvals, plans, memory, subagent runs, schema, and row mapping in one package. |

@@ -26,11 +26,7 @@ from .agents_runtime import (
     default_agents_sdk_runner,
     to_agents_sdk_input_items,
 )
-from .bridge import (
-    fetch_chat_completions_stream,
-    from_deepseek_stream,
-    to_deepseek_chat_request,
-)
+from .api.ui_transport import to_ui_transport_payload as _to_ui_transport_payload
 from .config import (
     ModelConfigurationError,
     load_model_runtime_env,
@@ -43,10 +39,15 @@ from .conversation_state import (
     build_responses_input_from_transcript as _build_responses_input_from_transcript,
 )
 from .plans import build_plan_artifact_content
-from .responses_adapter import (
+from .providers.bridge import (
+    fetch_chat_completions_stream,
+    from_deepseek_stream,
+    to_deepseek_chat_request,
+)
+from .providers.responses_adapter import (
     build_openai_responses_payload as _build_openai_responses_payload,
 )
-from .responses_adapter import (
+from .providers.responses_adapter import (
     normalize_responses_event_stream as _normalize_responses_event_stream,
 )
 from .responses_tool_loop import (
@@ -64,12 +65,11 @@ from .runtime_context import (
     selected_files_from_body,
 )
 from .storage import KodeksDatabase
-from .tool_schemas import default_tool_definitions
-from .tools import (
+from .tools.registry import (
     ToolRegistryServices,
     build_default_tool_registry,
 )
-from .ui_transport import to_ui_transport_payload as _to_ui_transport_payload
+from .tools.schemas import default_tool_definitions
 from .workspace import WorkspaceService
 
 to_ui_transport_payload = _to_ui_transport_payload
@@ -260,7 +260,7 @@ async def run_python_chat_turn(
     except ModelConfigurationError as exc:
         code = (
             "model_provider_missing"
-            if str(exc).startswith("A model provider is required.")
+            if str(exc).startswith(("A model provider is required.", "A DeepSeek provider is required."))
             else exc.code
         )
         yield _error_event(str(exc), session_id, code)
@@ -293,7 +293,7 @@ async def _run_agents_sdk_chat_turn(
     )
     if model_options is None:
         raise ModelConfigurationError(
-            "A model provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for DeepSeek-first MoonBridge, or configure KODEKS_RESPONSES_* / OPENAI_* for OpenAI fallback."
+            "A DeepSeek provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek MoonBridge route."
         )
     approval_state: dict[str, AgentsSdkApprovalMetadata] = {}
     instructions = build_runtime_instructions(
@@ -430,12 +430,8 @@ async def _live_responses_events(
     )
     if model_options is None:
         raise ModelConfigurationError(
-            "A model provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for DeepSeek-first MoonBridge, or configure KODEKS_RESPONSES_* / OPENAI_* for OpenAI fallback."
+            "A DeepSeek provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek MoonBridge route."
         )
-    if model_options["provider"] == "openai":
-        async for event in _openai_responses_events(body, model_options):
-            yield event
-        return
     if model_options["provider"] != "moonbridge":
         raise ModelConfigurationError("Unsupported model provider.")
 
@@ -560,11 +556,9 @@ def _use_agents_sdk_runtime(
 
     if env.get("KODEKS_DIRECT_RESPONSES_RUNTIME") in {"1", "true", "TRUE"}:
         return False
-    model_env = load_model_runtime_env(env, body.get("model"))
-    model_options = resolve_model_client_options(
-        model_env, body.get("reasoning_effort"), body.get("provider")
-    )
-    return model_options is not None and model_options["provider"] == "openai"
+    if env.get("KODEKS_FORCE_AGENTS_SDK_RUNTIME") in {"1", "true", "TRUE"}:
+        return True
+    return False
 
 
 def _agents_sdk_approval_event(

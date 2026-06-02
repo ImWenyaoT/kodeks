@@ -3,10 +3,11 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from kodeks.api.ui_transport import to_ui_transport_payload
 from kodeks.app import create_app
 from kodeks.conversation_state import build_responses_input_from_transcript
 from kodeks.plans import build_plan_artifact_content
-from kodeks.responses_adapter import (
+from kodeks.providers.responses_adapter import (
     build_openai_responses_payload,
     normalize_responses_event_stream,
 )
@@ -29,7 +30,6 @@ from kodeks.runtime import (
     to_ui_transport_payload as runtime_to_ui_transport_payload,
 )
 from kodeks.storage import KodeksDatabase
-from kodeks.ui_transport import to_ui_transport_payload
 
 
 def _responses_events(body, env):
@@ -282,8 +282,8 @@ async def test_python_chat_loop_streams_text_tools_and_persists_session(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_python_chat_loop_uses_agents_sdk_by_default(tmp_path):
-    """The default Python runtime routes through the Agents SDK adapter."""
+async def test_python_chat_loop_can_use_agents_sdk_diagnostics(tmp_path):
+    """The diagnostics flag routes through the Agents SDK adapter."""
 
     runner = FakeAgentsSdkRunner(
         [
@@ -306,9 +306,10 @@ async def test_python_chat_loop_uses_agents_sdk_by_default(tmp_path):
                 database,
                 str(tmp_path),
                 {
-                    "KODEKS_MODEL_PROVIDER": "openai",
-                    "KODEKS_RESPONSES_API_KEY": "sk-test",
-                    "KODEKS_RESPONSES_MODEL": "gpt-test",
+                    "KODEKS_FORCE_AGENTS_SDK_RUNTIME": "true",
+                    "KODEKS_MODEL_PROVIDER": "moonbridge",
+                    "KODEKS_CHAT_COMPLETIONS_API_KEY": "sk-test",
+                    "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
                 },
                 None,
                 runner,
@@ -343,10 +344,10 @@ async def test_python_chat_loop_uses_agents_sdk_by_default(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_python_chat_loop_can_opt_into_direct_responses_adapter(
+async def test_python_chat_loop_rejects_direct_responses_provider(
     tmp_path, monkeypatch
 ):
-    """Direct Responses runtime remains available for adapter diagnostics."""
+    """Direct OpenAI/Responses runtime is no longer a configured provider path."""
 
     async def fake_openai_responses_events(_body, _model_options):
         """Yield deterministic direct Responses events without opening a network call."""
@@ -379,11 +380,10 @@ async def test_python_chat_loop_can_opt_into_direct_responses_adapter(
 
         assert [event["type"] for event in events] == [
             "session_created",
-            "text_delta",
-            "response_completed",
+            "error",
         ]
-        assert events[1]["delta"] == "Direct"
-        assert events[2]["response_id"] == "resp_direct"
+        assert events[1]["code"] == "model_configuration_error"
+        assert "Direct OpenAI/Responses model providers have been removed" in events[1]["message"]
     finally:
         database.close()
 
@@ -392,24 +392,24 @@ async def test_python_chat_loop_can_opt_into_direct_responses_adapter(
 async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
     tmp_path, monkeypatch
 ):
-    """Chat-Completions models use the Python bridge adapter, not Agents SDK."""
+    """DeepSeek Chat Completions models use the Python bridge adapter."""
 
     async def fake_fetch_chat_completions_stream(payload, api_key, env):
         """Yield a minimal upstream Chat Completions stream for bridge routing."""
 
-        assert payload["model"] == "qwen3.6"
+        assert payload["model"] == "deepseek-v4-pro"
         assert api_key == "local-placeholder"
-        assert env["KODEKS_CHAT_COMPLETIONS_BASE_URL"] == "http://local.test/v1"
+        assert env["KODEKS_CHAT_COMPLETIONS_BASE_URL"] == "https://api.deepseek.com"
         yield {
             "id": "chatcmpl_test",
-            "model": "qwen3.6",
+            "model": "deepseek-v4-pro",
             "choices": [
                 {"index": 0, "delta": {"content": "Bridge"}, "finish_reason": None}
             ],
         }
         yield {
             "id": "chatcmpl_test",
-            "model": "qwen3.6",
+            "model": "deepseek-v4-pro",
             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
         }
 
@@ -426,15 +426,15 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
                 {
                     "input": "hello",
                     "session_id": "sess_bridge",
-                    "model": "qwen/qwen3.6",
+                    "model": "deepseek/deepseek-v4-pro",
                 },
                 database,
                 str(tmp_path),
                 {
                     "KODEKS_MODEL_PROVIDER": "moonbridge",
                     "KODEKS_CHAT_COMPLETIONS_API_KEY": "local-placeholder",
-                    "KODEKS_CHAT_COMPLETIONS_BASE_URL": "http://local.test/v1",
-                    "KODEKS_CHAT_COMPLETIONS_MODEL": "qwen3.6",
+                    "KODEKS_CHAT_COMPLETIONS_BASE_URL": "https://api.deepseek.com",
+                    "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
                 },
                 None,
                 runner,

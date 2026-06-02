@@ -11,8 +11,8 @@ from kodeks.config import (
 )
 
 
-def test_model_catalog_preserves_default_and_provider_refs(tmp_path):
-    """Model catalog keeps DeepSeek first and hides half-configured providers."""
+def test_model_catalog_only_exposes_deepseek(tmp_path):
+    """Model catalog keeps only the configured DeepSeek model."""
 
     config_path = tmp_path / "config.json"
     config_path.write_text(
@@ -27,10 +27,11 @@ def test_model_catalog_preserves_default_and_provider_refs(tmp_path):
                             "apiKey": "local-placeholder",
                             "models": [{"id": "qwen3.6", "name": "Qwen 3.6"}],
                         },
-                        "openai": {
-                            "api": "responses",
-                            "apiKey": "",
-                            "models": [{"id": "gpt-5.4-mini"}],
+                        "deepseek": {
+                            "api": "chat-completions",
+                            "baseURL": "https://api.deepseek.com",
+                            "apiKey": "deepseek-placeholder",
+                            "models": [{"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro"}],
                         },
                     },
                 }
@@ -43,28 +44,25 @@ def test_model_catalog_preserves_default_and_provider_refs(tmp_path):
     assert catalog.primary == f"deepseek/{DEFAULT_DEEPSEEK_MODEL}"
     assert [model.ref for model in catalog.models] == [
         f"deepseek/{DEFAULT_DEEPSEEK_MODEL}",
-        "qwen/qwen3.6",
-        "openai/gpt-5.4-mini",
     ]
-    assert catalog.models[1].requires_bridge is True
-    assert catalog.models[2].requires_bridge is False
+    assert catalog.models[0].requires_bridge is True
 
 
-def test_config_expands_env_and_selected_provider(tmp_path):
-    """User config maps provider/model refs to the env contract."""
+def test_config_expands_env_and_deepseek_provider(tmp_path):
+    """User config maps the DeepSeek provider ref to the env contract."""
 
     config_path = tmp_path / "config.json"
     config_path.write_text(
         json.dumps(
             {
                 "model": {
-                    "primary": "qwen/qwen3.6",
+                    "primary": "deepseek/deepseek-v4-pro",
                     "providers": {
-                        "qwen": {
+                        "deepseek": {
                             "api": "chat-completions",
-                            "baseURL": "${QWEN_BASE_URL}",
-                            "apiKey": "local-placeholder",
-                            "models": [{"id": "qwen3.6"}],
+                            "baseURL": "${DEEPSEEK_BASE_URL}",
+                            "apiKey": "deepseek-placeholder",
+                            "models": [{"id": "deepseek-v4-pro"}],
                         }
                     },
                 }
@@ -75,14 +73,14 @@ def test_config_expands_env_and_selected_provider(tmp_path):
     env = load_model_runtime_env(
         {
             "KODEKS_CONFIG_PATH": str(config_path),
-            "QWEN_BASE_URL": "http://127.0.0.1:8010/v1",
+            "DEEPSEEK_BASE_URL": "https://api.deepseek.com",
         },
-        "qwen/qwen3.6",
+        "deepseek/deepseek-v4-pro",
     )
 
     assert env["KODEKS_MODEL_PROVIDER"] == "moonbridge"
-    assert env["KODEKS_CHAT_COMPLETIONS_BASE_URL"] == "http://127.0.0.1:8010/v1"
-    assert env["KODEKS_CHAT_COMPLETIONS_MODEL"] == "qwen3.6"
+    assert env["KODEKS_CHAT_COMPLETIONS_BASE_URL"] == "https://api.deepseek.com"
+    assert env["KODEKS_CHAT_COMPLETIONS_MODEL"] == "deepseek-v4-pro"
 
 
 def test_lmstudio_embeddings_config_maps_to_openai_compatible_env(tmp_path):
@@ -137,29 +135,34 @@ def test_removed_aliases_fail_with_migration_guidance(env, expected):
     assert expected in str(error.value)
 
 
-def test_hosted_tools_are_direct_openai_only():
-    """Hosted OpenAI tools are ignored when routing through MoonBridge."""
+def test_direct_openai_provider_is_removed():
+    """Direct OpenAI/Responses model routing no longer participates in runtime config."""
 
-    openai = resolve_model_client_options(
-        {
-            "KODEKS_MODEL_PROVIDER": "openai",
-            "KODEKS_RESPONSES_API_KEY": "responses-key",
-            "KODEKS_OPENAI_HOSTED_TOOLS": (
-                "web_search_preview,unknown,web_search_preview"
-            ),
-        }
+    with pytest.raises(ModelConfigurationError) as error:
+        resolve_model_client_options(
+            {
+                "KODEKS_MODEL_PROVIDER": "openai",
+                "KODEKS_RESPONSES_API_KEY": "responses-key",
+            }
+        )
+
+    assert "Direct OpenAI/Responses model providers have been removed" in str(
+        error.value
     )
+
+
+def test_hosted_tools_are_ignored_for_deepseek_route():
+    """Hosted OpenAI tools are ignored when routing through DeepSeek/MoonBridge."""
+
     moonbridge = resolve_model_client_options(
         {
             "KODEKS_CHAT_COMPLETIONS_API_KEY": "chat-key",
-            "KODEKS_CHAT_COMPLETIONS_BASE_URL": "https://qwen.test/v1",
-            "KODEKS_CHAT_COMPLETIONS_MODEL": "qwen-coder",
+            "KODEKS_CHAT_COMPLETIONS_BASE_URL": "https://api.deepseek.com",
+            "KODEKS_CHAT_COMPLETIONS_MODEL": DEFAULT_DEEPSEEK_MODEL,
             "KODEKS_OPENAI_HOSTED_TOOLS": "web_search_preview",
         }
     )
 
-    assert openai is not None
-    assert openai["hostedTools"] == ["web_search_preview"]
     assert moonbridge is not None
     assert moonbridge["provider"] == "moonbridge"
     assert "hostedTools" not in moonbridge

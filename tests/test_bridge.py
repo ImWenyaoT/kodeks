@@ -1,6 +1,6 @@
 import pytest
 
-from kodeks.bridge import from_deepseek_stream, to_deepseek_chat_request
+from kodeks.providers.bridge import from_deepseek_stream, to_deepseek_chat_request
 
 
 def test_bridge_maps_responses_request_to_chat_completions():

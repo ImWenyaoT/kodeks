@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import Any
 
-from ..tools import default_tool_definitions
+from ..tools.schemas import default_tool_definitions
 
 
 def build_openai_responses_payload(

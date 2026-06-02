@@ -15,11 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from .agents_runtime import AgentsSdkRunner
-from .bridge import (
-    fetch_chat_completions_stream,
-    from_deepseek_stream,
-    to_deepseek_chat_request,
-)
+from .api.sse import sse_frame
+from .api.ui_transport import to_ui_transport_payload
 from .config import (
     ModelConfigurationError,
     load_configured_model_catalog,
@@ -28,17 +25,20 @@ from .config import (
     read_chat_completions_config,
     resolve_model_client_options,
 )
+from .providers.bridge import (
+    fetch_chat_completions_stream,
+    from_deepseek_stream,
+    to_deepseek_chat_request,
+)
 from .runtime import (
     ResponsesEventFactory,
     run_python_chat_turn,
 )
-from .sse import sse_frame
 from .storage import (
     ApprovalAlreadyResolvedError,
     ApprovalNotFoundError,
     KodeksDatabase,
 )
-from .ui_transport import to_ui_transport_payload
 from .workspace import (
     ShellCommandTimeoutError,
     WorkspaceService,
@@ -277,15 +277,7 @@ def create_app(
                 "status": "unavailable",
                 "provider": requested_provider,
                 "code": "model_provider_missing",
-                "reason": "No model provider is configured. Set KODEKS_CHAT_COMPLETIONS_* for DeepSeek-first MoonBridge or KODEKS_RESPONSES_* / OPENAI_* for OpenAI fallback.",
-                "checkedAt": checked_at,
-            }
-        if model_options["provider"] != "moonbridge":
-            return {
-                "status": "not_required",
-                "provider": requested_provider,
-                "resolvedProvider": model_options["provider"],
-                "bridgeModel": model_options["model"],
+                "reason": "No DeepSeek provider is configured. Set KODEKS_CHAT_COMPLETIONS_* for the MoonBridge route.",
                 "checkedAt": checked_at,
             }
         upstream = read_chat_completions_config(model_env)
@@ -455,7 +447,7 @@ def _approved_command(value: object) -> str | None:
 def _requested_provider(value: object) -> str:
     """Return the diagnostic provider label used by the TypeScript preflight."""
 
-    return value if value in {"openai", "moonbridge"} else "auto"
+    return value if value == "moonbridge" else "auto"
 
 
 async def _check_chat_completions_upstream(base_url: str) -> dict[str, str] | None:

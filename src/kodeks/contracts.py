@@ -115,9 +115,9 @@ class ShellResult(BaseModel):
 class MoonBridgePreflightResult(BaseModel):
     """Diagnostic result for the current MoonBridge/provider selection."""
 
-    status: Literal["ready", "unavailable", "not_required"]
-    provider: Literal["openai", "moonbridge", "auto"]
-    resolved_provider: Literal["openai", "moonbridge"] | None = Field(
+    status: Literal["ready", "unavailable"]
+    provider: Literal["moonbridge", "auto"]
+    resolved_provider: Literal["moonbridge"] | None = Field(
         default=None, alias="resolvedProvider"
     )
     code: str | None = None

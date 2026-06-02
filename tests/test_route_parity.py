@@ -246,7 +246,7 @@ def test_approval_routes_execute_once_and_record_audit(tmp_path, monkeypatch):
 def test_bridge_preflight_preserves_provider_labels_and_missing_states(
     tmp_path, monkeypatch
 ):
-    """Bridge preflight mirrors provider labels for route diagnostics."""
+    """Bridge preflight reports DeepSeek/MoonBridge missing states."""
 
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(tmp_path / "missing.json"))
     monkeypatch.delenv("KODEKS_CHAT_COMPLETIONS_API_KEY", raising=False)
@@ -264,16 +264,9 @@ def test_bridge_preflight_preserves_provider_labels_and_missing_states(
 
     assert missing.status_code == 200
     assert missing.json()["status"] == "unavailable"
-    assert missing.json()["provider"] == "openai"
-    assert missing.json()["code"] == "model_provider_missing"
-
-    monkeypatch.setenv("KODEKS_RESPONSES_BASE_URL", "http://127.0.0.1:9999/v1")
-    local_openai = client.post("/api/bridge/preflight", json={"provider": "openai"})
-
-    assert local_openai.status_code == 200
-    assert local_openai.json()["status"] == "not_required"
-    assert local_openai.json()["provider"] == "openai"
-    assert local_openai.json()["resolvedProvider"] == "openai"
+    assert missing.json()["provider"] == "auto"
+    assert missing.json()["code"] == "model_configuration_error"
+    assert "Direct OpenAI/Responses model providers have been removed" in missing.json()["reason"]
 
 
 def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
@@ -293,13 +286,15 @@ def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
     monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
     monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "local-placeholder")
     monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_BASE_URL", "http://local.test/v1")
-    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "qwen3.6")
+    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "deepseek-v4-pro")
     monkeypatch.setattr(
         "kodeks.app._check_chat_completions_upstream", fake_unreachable
     )
     client = TestClient(create_app())
 
-    response = client.post("/api/bridge/preflight", json={"model": "qwen/qwen3.6"})
+    response = client.post(
+        "/api/bridge/preflight", json={"model": "deepseek/deepseek-v4-pro"}
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -309,14 +304,15 @@ def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
 
 
 def test_chat_routes_use_default_agents_sdk_runner(tmp_path, monkeypatch):
-    """Chat stream and UI routes use the Python Agents SDK branch by default."""
+    """Chat stream and UI routes can use the Python Agents SDK diagnostics branch."""
 
     runner = FakeAgentsSdkRunner()
     monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
     monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "openai")
-    monkeypatch.setenv("KODEKS_RESPONSES_API_KEY", "sk-test")
-    monkeypatch.setenv("KODEKS_RESPONSES_MODEL", "gpt-test")
+    monkeypatch.setenv("KODEKS_FORCE_AGENTS_SDK_RUNTIME", "true")
+    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
+    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "sk-test")
+    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "deepseek-v4-pro")
     client = TestClient(create_app(agents_runner=runner))
 
     stream = client.post(
@@ -345,9 +341,10 @@ def test_chat_route_pauses_on_agents_sdk_approval_interruption(tmp_path, monkeyp
 
     monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
     monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "openai")
-    monkeypatch.setenv("KODEKS_RESPONSES_API_KEY", "sk-test")
-    monkeypatch.setenv("KODEKS_RESPONSES_MODEL", "gpt-test")
+    monkeypatch.setenv("KODEKS_FORCE_AGENTS_SDK_RUNTIME", "true")
+    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
+    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "sk-test")
+    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "deepseek-v4-pro")
     client = TestClient(create_app(agents_runner=FakeApprovalAgentsSdkRunner()))
 
     response = client.post(

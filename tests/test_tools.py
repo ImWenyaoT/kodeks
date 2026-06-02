@@ -1,10 +1,12 @@
 import json
 
 from kodeks.storage import KodeksDatabase
-from kodeks.tools import (
+from kodeks.tools.registry import (
     ToolExecutionContext,
     ToolRegistryServices,
     build_default_tool_registry,
+)
+from kodeks.tools.schemas import (
     default_tool_definitions,
 )
 from kodeks.workspace import WorkspaceService

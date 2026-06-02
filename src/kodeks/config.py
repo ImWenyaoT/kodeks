@@ -24,8 +24,6 @@ DEFAULT_BRIDGE_API_KEY = "bridge"
 DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:38440/v1"
 DEFAULT_BRIDGE_MODEL = "bridge"
 DEFAULT_BRIDGE_REASONING_EFFORT: ReasoningEffort = "high"
-DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
-DEFAULT_OPENAI_REASONING_EFFORT: ReasoningEffort = "medium"
 LOCAL_ENDPOINT_API_KEY = "not-needed"
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
 
@@ -101,7 +99,7 @@ def load_model_runtime_env(
 def load_configured_model_catalog(
     env: RuntimeEnv | None = None,
 ) -> ConfiguredModelCatalog:
-    """Return the secret-free provider/model catalog used by the frontend."""
+    """Return the secret-free DeepSeek model catalog used by the frontend."""
 
     runtime_env = dict(os.environ if env is None else env)
     path = resolve_kodeks_config_path(runtime_env)
@@ -110,22 +108,9 @@ def load_configured_model_catalog(
             ConfiguredModelCatalog(models=[]), runtime_env
         )
     config = _resolve_config_env_vars(json.loads(path.read_text()), runtime_env)
-    model = _object_value(config.get("model"))
-    root_models = _object_value(config.get("models"))
-    providers = _object_value(model.get("providers")) if model else None
-    if providers is None:
-        providers = _object_value(root_models.get("providers")) if root_models else None
-    if providers is None:
-        providers = {}
-    models: list[ConfiguredModelOption] = []
-    for provider_id, provider in providers.items():
-        provider_config = _object_value(provider)
-        if provider_config is None:
-            continue
-        models.extend(_configured_models_from_provider(provider_id, provider_config))
-    primary = _string_value(model.get("primary")) if model else None
     return _with_default_model_catalog(
-        ConfiguredModelCatalog(primary=primary, models=models), runtime_env
+        ConfiguredModelCatalog(models=_configured_deepseek_models(config)),
+        runtime_env,
     )
 
 
@@ -139,8 +124,6 @@ def resolve_model_client_options(
     runtime_env = dict(os.environ if env is None else env)
     _assert_no_deprecated_model_env(runtime_env)
     provider_override = _resolve_provider_override(requested_provider)
-    if provider_override == "openai":
-        return _resolve_openai_options(runtime_env, requested_reasoning_effort)
     if provider_override == "moonbridge":
         return _resolve_bridge_options(
             {**runtime_env, "KODEKS_MODEL_PROVIDER": "moonbridge"},
@@ -149,13 +132,9 @@ def resolve_model_client_options(
     configured_provider = _resolve_configured_provider(
         runtime_env.get("KODEKS_MODEL_PROVIDER")
     )
-    if configured_provider == "openai":
-        return _resolve_openai_options(runtime_env, requested_reasoning_effort)
     if configured_provider == "moonbridge":
         return _resolve_bridge_options(runtime_env, requested_reasoning_effort)
-    return _resolve_bridge_options_if_configured(
-        runtime_env, requested_reasoning_effort
-    ) or _resolve_openai_options(runtime_env, requested_reasoning_effort)
+    return _resolve_bridge_options_if_configured(runtime_env, requested_reasoning_effort)
 
 
 def read_chat_completions_api_key(env: RuntimeEnv) -> str | None:
@@ -233,87 +212,70 @@ def _model_config_to_env(
         )
         _write_endpoint(
             values,
-            "KODEKS_RESPONSES",
-            _object_value(model.get("responses")) or _object_value(model.get("openai")),
-        )
-        _write_endpoint(
-            values,
             "KODEKS_CHAT_COMPLETIONS",
             _object_value(model.get("chatCompletions")),
         )
         _write_bridge(values, _object_value(model.get("bridge")))
-        _write_selected_provider(
-            values,
-            model,
-            _object_value(root_models.get("providers")) if root_models else None,
-            requested_model_ref,
-        )
-    else:
-        _write_selected_provider(
-            values,
-            None,
-            _object_value(root_models.get("providers")) if root_models else None,
-            requested_model_ref,
-        )
+    _write_deepseek_provider(
+        values,
+        model,
+        _object_value(root_models.get("providers")) if root_models else None,
+        requested_model_ref,
+    )
     _write_embeddings(values, _object_value(config.get("embeddings")))
     return values
 
 
-def _write_selected_provider(
+def _write_deepseek_provider(
     values: MutableMapping[str, str],
     model: Mapping[str, Any] | None,
     root_providers: Mapping[str, Any] | None,
     requested_model_ref: object | None,
 ) -> None:
+    """Expand only the DeepSeek provider registry entry into runtime env."""
+
     providers = _object_value(model.get("providers")) if model else None
     if providers is None and root_providers is not None:
         providers = dict(root_providers)
-    selection = _resolve_selected_provider(model, providers, requested_model_ref)
-    if selection is None:
-        return
-    _provider_id, provider, model_id = selection
-    api = _normalize_api_shape(provider.get("api"))
-    endpoint = {**provider, "model": provider.get("model") or model_id}
-    if api == "responses":
-        values["KODEKS_MODEL_PROVIDER"] = "openai"
-        _write_endpoint(values, "KODEKS_RESPONSES", endpoint)
-    if api == "chat-completions":
-        values["KODEKS_MODEL_PROVIDER"] = "moonbridge"
-        _write_endpoint(values, "KODEKS_CHAT_COMPLETIONS", endpoint)
-
-
-def _resolve_selected_provider(
-    model: Mapping[str, Any] | None,
-    providers: Mapping[str, Any] | None,
-    requested_model_ref: object | None,
-) -> tuple[str, Mapping[str, Any], str | None] | None:
-    if providers is None:
-        return None
-    primary = _string_value(requested_model_ref) or (
-        _string_value(model.get("primary")) if model else None
-    )
-    from_primary = _split_model_ref(primary)
-    provider_name = _string_value(model.get("provider")) if model else None
-    provider_id = from_primary[0] if from_primary else provider_name
-    if provider_id is None:
-        return None
-    provider = _object_value(providers.get(provider_id))
+    provider = _object_value(providers.get("deepseek")) if providers else None
     if provider is None:
-        return None
+        return
+    requested = _split_model_ref(_string_value(requested_model_ref))
+    if requested is not None and requested[0] != "deepseek":
+        return
     model_id = (
-        from_primary[1]
-        if from_primary
+        requested[1]
+        if requested is not None
         else _string_value(provider.get("model"))
         or _first_configured_model_id(provider)
+        or DEFAULT_DEEPSEEK_MODEL
     )
-    return provider_id, provider, model_id
+    endpoint = {**provider, "model": provider.get("model") or model_id}
+    values["KODEKS_MODEL_PROVIDER"] = "moonbridge"
+    _write_endpoint(values, "KODEKS_CHAT_COMPLETIONS", endpoint)
 
 
-def _configured_models_from_provider(
-    provider_id: str, provider: Mapping[str, Any]
+def _configured_deepseek_models(config: Mapping[str, Any]) -> list[ConfiguredModelOption]:
+    """Read configured DeepSeek model options and ignore other provider entries."""
+
+    model = _object_value(config.get("model"))
+    root_models = _object_value(config.get("models"))
+    providers = _object_value(model.get("providers")) if model else None
+    if providers is None and root_models is not None:
+        providers = _object_value(root_models.get("providers"))
+    provider = _object_value(providers.get("deepseek")) if providers else None
+    if provider is None:
+        provider = _object_value(model.get("chatCompletions")) if model else None
+    if provider is None:
+        return []
+    return _configured_models_from_deepseek_provider(provider)
+
+
+def _configured_models_from_deepseek_provider(
+    provider: Mapping[str, Any]
 ) -> list[ConfiguredModelOption]:
     api = _normalize_api_shape(provider.get("api"))
-    if api is None:
+    if api not in {None, "chat-completions"}:
         return []
     raw_models = provider.get("models")
     explicit: list[ConfiguredModelOption] = []
@@ -325,9 +287,7 @@ def _configured_models_from_provider(
                 continue
             explicit.append(
                 _create_configured_model_option(
-                    provider_id,
                     provider,
-                    api,
                     model_id,
                     (_string_value(item.get("name")) if item is not None else None)
                     or model_id,
@@ -338,34 +298,29 @@ def _configured_models_from_provider(
         return explicit
     return [
         _create_configured_model_option(
-            provider_id, provider, api, fallback_model_id, fallback_model_id
+            provider, fallback_model_id, fallback_model_id
         )
     ]
 
 
 def _create_configured_model_option(
-    provider_id: str,
     provider: Mapping[str, Any],
-    api: Literal["responses", "chat-completions"],
     model_id: str,
     model_name: str,
 ) -> ConfiguredModelOption:
     base_url = _string_value(provider.get("baseURL"))
     api_key = _string_value(provider.get("apiKey"))
-    configured = (
-        base_url is not None or api_key is not None
-        if api == "responses"
-        else base_url is not None
-        and (api_key is not None or is_local_http_url(base_url))
+    configured = base_url is not None and (
+        api_key is not None or is_local_http_url(base_url)
     )
     return ConfiguredModelOption(
-        ref=f"{provider_id}/{model_id}",
-        providerId=provider_id,
-        providerName=provider_id,
+        ref=f"deepseek/{model_id}",
+        providerId="deepseek",
+        providerName="DeepSeek",
         modelId=model_id,
         modelName=model_name,
-        api=api,
-        requiresBridge=api == "chat-completions",
+        api="chat-completions",
+        requiresBridge=True,
         baseURL=base_url,
         configured=configured,
     )
@@ -431,35 +386,6 @@ def _resolve_bridge_options_if_configured(
     )
 
 
-def _resolve_openai_options(
-    env: RuntimeEnv, requested_reasoning_effort: object
-) -> dict[str, object] | None:
-    api_key = (
-        env.get("KODEKS_RESPONSES_API_KEY")
-        or env.get("OPENAI_API_KEY")
-        or (LOCAL_ENDPOINT_API_KEY if env.get("KODEKS_RESPONSES_BASE_URL") else None)
-    )
-    if not api_key:
-        return None
-    return {
-        "provider": "openai",
-        "apiKey": api_key,
-        "baseURL": env.get("KODEKS_RESPONSES_BASE_URL") or env.get("OPENAI_BASE_URL"),
-        "model": env.get("KODEKS_RESPONSES_MODEL")
-        or env.get("OPENAI_MODEL")
-        or DEFAULT_OPENAI_MODEL,
-        "reasoningEffort": _resolve_reasoning_effort(
-            requested_reasoning_effort,
-            env.get("KODEKS_RESPONSES_REASONING_EFFORT")
-            or env.get("OPENAI_REASONING_EFFORT"),
-            DEFAULT_OPENAI_REASONING_EFFORT,
-        ),
-        "statefulResponses": env.get("KODEKS_RESPONSES_STATEFUL") == "true",
-        "strictTools": env.get("KODEKS_STRICT_TOOL_SCHEMAS") == "true",
-        "hostedTools": _resolve_hosted_tools(env.get("KODEKS_OPENAI_HOSTED_TOOLS")),
-    }
-
-
 def _should_use_bridge(env: RuntimeEnv) -> bool:
     return (
         any(
@@ -475,13 +401,16 @@ def _should_use_bridge(env: RuntimeEnv) -> bool:
                 "KODEKS_BRIDGE_MODEL",
             ]
         )
-        and env.get("KODEKS_MODEL_PROVIDER") != "openai"
     )
 
 
-def _resolve_provider_override(value: object) -> Literal["openai", "moonbridge"] | None:
-    if value in {"openai", "moonbridge"}:
-        return value  # type: ignore[return-value]
+def _resolve_provider_override(value: object) -> Literal["moonbridge"] | None:
+    if value == "moonbridge":
+        return "moonbridge"
+    if value in {"openai", "responses"}:
+        raise ModelConfigurationError(
+            "Direct OpenAI/Responses model providers have been removed. Configure DeepSeek Chat Completions instead."
+        )
     if isinstance(value, str) and value in DEPRECATED_PROVIDER_VALUES:
         raise ModelConfigurationError(
             f'Model provider "{value}" has been removed. Use "{DEPRECATED_PROVIDER_VALUES[value]}" instead.'
@@ -491,19 +420,21 @@ def _resolve_provider_override(value: object) -> Literal["openai", "moonbridge"]
 
 def _resolve_configured_provider(
     value: str | None,
-) -> Literal["openai", "moonbridge"] | None:
+) -> Literal["moonbridge"] | None:
     if not value:
         return None
-    if value == "responses":
-        return "openai"
-    if value in {"openai", "moonbridge"}:
-        return value  # type: ignore[return-value]
+    if value == "moonbridge":
+        return "moonbridge"
+    if value in {"openai", "responses"}:
+        raise ModelConfigurationError(
+            "Direct OpenAI/Responses model providers have been removed. Configure DeepSeek Chat Completions instead."
+        )
     if value in DEPRECATED_PROVIDER_VALUES:
         raise ModelConfigurationError(
             f'KODEKS_MODEL_PROVIDER="{value}" has been removed. Use "{DEPRECATED_PROVIDER_VALUES[value]}" instead.'
         )
     raise ModelConfigurationError(
-        f'Unsupported KODEKS_MODEL_PROVIDER="{value}". Use "openai", "responses", or "moonbridge".'
+        f'Unsupported KODEKS_MODEL_PROVIDER="{value}". Use "moonbridge" for the DeepSeek Chat Completions route.'
     )
 
 
@@ -511,7 +442,7 @@ def _assert_no_deprecated_model_env(env: RuntimeEnv) -> None:
     for old, new in DEPRECATED_ENV_MIGRATIONS.items():
         if env.get(old) is not None:
             raise ModelConfigurationError(
-                f"{old} has been removed. Rename it to {new}; Kodeks now only accepts KODEKS_* model configuration keys plus official OPENAI_* fallback keys."
+                f"{old} has been removed. Rename it to {new}; Kodeks now only accepts DeepSeek/MoonBridge KODEKS_* model configuration keys."
             )
 
 
@@ -609,8 +540,8 @@ def _write_string(values: MutableMapping[str, str], key: str, value: object) -> 
 
 
 def _normalize_provider(value: object) -> str | None:
-    if value == "responses":
-        return "openai"
+    if value in {"deepseek", "chat-completions"}:
+        return "moonbridge"
     return _string_value(value)
 
 
@@ -618,13 +549,11 @@ def _normalize_api_shape(
     value: object,
 ) -> Literal["responses", "chat-completions"] | None:
     if value in {
-        "responses",
-        "openai-responses",
-        "openai-codex-responses",
-        "azure-openai-responses",
+        "chat-completions",
+        "openai-completions",
+        "completions",
+        "deepseek",
     }:
-        return "responses"
-    if value in {"chat-completions", "openai-completions", "completions"}:
         return "chat-completions"
     return None
 
@@ -637,18 +566,6 @@ def _resolve_reasoning_effort(
     if configured in SUPPORTED_REASONING_EFFORTS:
         return configured  # type: ignore[return-value]
     return fallback
-
-
-def _resolve_hosted_tools(value: str | None) -> list[str]:
-    if value is None:
-        return []
-    return sorted(
-        {
-            item.strip()
-            for item in value.split(",")
-            if item.strip() == "web_search_preview"
-        }
-    )
 
 
 def _split_model_ref(value: str | None) -> tuple[str, str] | None:

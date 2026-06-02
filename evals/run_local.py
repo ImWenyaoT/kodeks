@@ -261,9 +261,10 @@ def run_case(case: Case) -> EvalResult:
         if runtime == "agents_sdk":
             env.update(
                 {
-                    "KODEKS_MODEL_PROVIDER": "openai",
-                    "KODEKS_RESPONSES_API_KEY": "sk-eval",
-                    "KODEKS_RESPONSES_MODEL": "gpt-eval",
+                    "KODEKS_FORCE_AGENTS_SDK_RUNTIME": "true",
+                    "KODEKS_MODEL_PROVIDER": "moonbridge",
+                    "KODEKS_CHAT_COMPLETIONS_API_KEY": "sk-eval",
+                    "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
                 }
             )
         scenario = str(case.get("scenario") or "final_text")
