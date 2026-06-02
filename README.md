@@ -229,7 +229,7 @@ writes `evals/results/latest.json`, which is ignored by Git.
 
 The TypeScript OpenAI/Agents SDK backend packages, Next.js shell, and pnpm workspace have been removed. The Python runtime currently covers health, model catalog, sessions, workspace file listing, approvals, MoonBridge protocol adapters, deterministic chat-loop tests, same-turn tool continuations, local tool execution, approval-required events, UI transport mapping, static UI serving, and route-level chat streaming through DeepSeek/MoonBridge.
 
-- `src/kodeks`: Python compatibility runtime, FastAPI routes, Pydantic contracts, SQLite repositories, model config, MoonBridge adapter, tools, workspace policy, and SSE helpers.
+- `src/kodeks`: Python runtime, FastAPI routes, Pydantic contracts, SQLite repositories, model config, MoonBridge adapter, tools, workspace policy, and SSE helpers.
 
 ## Safety Model
 

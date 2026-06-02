@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the incremental Python Kodeks runtime."""
+"""FastAPI entrypoint for the Python Kodeks runtime."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def create_app(
     responses_event_factory: ResponsesEventFactory | None = None,
     agents_runner: AgentsSdkRunner | None = None,
 ) -> FastAPI:
-    """Create the Python runtime app with compatibility routes."""
+    """Create the Python runtime app with stable HTTP routes."""
 
     state: dict[str, KodeksDatabase | None] = {"database": None}
 

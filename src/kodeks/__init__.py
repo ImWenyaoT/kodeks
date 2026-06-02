@@ -1,4 +1,4 @@
-"""Python compatibility runtime for Kodeks."""
+"""Python runtime package for Kodeks."""
 
 from typing import Any
 

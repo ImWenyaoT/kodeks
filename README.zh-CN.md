@@ -218,7 +218,7 @@ eval suite 会用 deterministic model / Agents SDK fake 调用真实 FastAPI rou
 
 TypeScript OpenAI/Agents SDK backend packages、Next.js shell 和 pnpm workspace 已删除。当前 Python runtime 覆盖 health、模型清单、sessions、workspace 文件列表、approvals、MoonBridge 协议 adapter、可确定性测试的 chat loop、同一轮 tool continuation、本地工具执行、approval-required events、UI transport 映射、static UI serving，以及通过 DeepSeek/MoonBridge 的 route-level chat streaming。
 
-- `src/kodeks`: Python compatibility runtime、FastAPI routes、Pydantic contracts、SQLite repositories、模型配置、MoonBridge adapter、tools、workspace policy 和 SSE helpers。
+- `src/kodeks`: Python runtime、FastAPI routes、Pydantic contracts、SQLite repositories、模型配置、MoonBridge adapter、tools、workspace policy 和 SSE helpers。
 
 ## 安全模型
 

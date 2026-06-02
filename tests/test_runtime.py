@@ -3,21 +3,13 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from kodeks.api.ui_transport import to_ui_transport_payload
 from kodeks.app import create_app
-from kodeks.conversation_state import build_responses_input_from_transcript
 from kodeks.plans import build_plan_artifact_content
 from kodeks.runtime import (
     build_plan_artifact_content as runtime_build_plan_artifact_content,
 )
 from kodeks.runtime import (
-    build_responses_input_from_transcript as runtime_build_responses_input_from_transcript,
-)
-from kodeks.runtime import (
     run_python_chat_turn,
-)
-from kodeks.runtime import (
-    to_ui_transport_payload as runtime_to_ui_transport_payload,
 )
 from kodeks.storage import KodeksDatabase
 
@@ -421,10 +413,6 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
 async def test_python_chat_loop_replays_tool_continuation_input(tmp_path):
     """Persisted tool calls and outputs are replayed as Responses input items."""
 
-    assert (
-        runtime_build_responses_input_from_transcript
-        is build_responses_input_from_transcript
-    )
     (tmp_path / "README.md").write_text("hello from workspace\n")
     captured = []
     database = KodeksDatabase(":memory:")
@@ -799,7 +787,6 @@ async def test_python_chat_loop_emits_approval_required(tmp_path):
 def test_python_chat_routes_stream_runtime_and_ui_payloads(tmp_path, monkeypatch):
     """FastAPI chat routes expose runtime SSE and UI transport SSE."""
 
-    assert runtime_to_ui_transport_payload is to_ui_transport_payload
     (tmp_path / "README.md").write_text("route body\n")
     monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
     monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))

@@ -1,4 +1,4 @@
-"""Python chat runtime loop for the incremental Kodeks migration."""
+"""Python chat runtime loop for Kodeks."""
 
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ from .agents_runtime import (
     default_agents_sdk_runner,
     to_agents_sdk_input_items,
 )
-from .api.ui_transport import to_ui_transport_payload as _to_ui_transport_payload
 from .config import (
     ModelConfigurationError,
     load_model_runtime_env,
@@ -33,9 +32,7 @@ from .config import (
     resolve_model_client_options,
 )
 from .contracts import StoredPlanArtifact
-from .conversation_state import (
-    build_responses_input_from_transcript as _build_responses_input_from_transcript,
-)
+from .conversation_state import build_responses_input_from_transcript
 from .plans import build_plan_artifact_content
 from .providers.bridge import (
     fetch_chat_completions_stream,
@@ -63,9 +60,6 @@ from .tools.registry import (
 from .tools.schemas import default_tool_definitions
 from .tools.types import ToolRegistryServices
 from .workspace import WorkspaceService
-
-to_ui_transport_payload = _to_ui_transport_payload
-build_responses_input_from_transcript = _build_responses_input_from_transcript
 
 ResponsesEventStream = AsyncIterator[dict[str, Any]] | Iterable[dict[str, Any]]
 ResponsesEventFactory = Callable[
