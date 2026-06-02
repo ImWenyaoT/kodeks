@@ -7,21 +7,11 @@ from kodeks.api.ui_transport import to_ui_transport_payload
 from kodeks.app import create_app
 from kodeks.conversation_state import build_responses_input_from_transcript
 from kodeks.plans import build_plan_artifact_content
-from kodeks.providers.responses_adapter import (
-    build_openai_responses_payload,
-    normalize_responses_event_stream,
-)
-from kodeks.runtime import (
-    build_openai_responses_payload as runtime_build_openai_responses_payload,
-)
 from kodeks.runtime import (
     build_plan_artifact_content as runtime_build_plan_artifact_content,
 )
 from kodeks.runtime import (
     build_responses_input_from_transcript as runtime_build_responses_input_from_transcript,
-)
-from kodeks.runtime import (
-    normalize_responses_event_stream as runtime_normalize_responses_event_stream,
 )
 from kodeks.runtime import (
     run_python_chat_turn,
@@ -169,19 +159,6 @@ def _plan_events(body, env):
         {
             "type": "response.completed",
             "response": {"id": "resp_plan", "status": "completed"},
-        },
-    ]
-
-
-def _stateful_first_events(body, env):
-    return [
-        {
-            "type": "response.output_text.delta",
-            "delta": "Hello",
-        },
-        {
-            "type": "response.completed",
-            "response": {"id": "resp_1", "status": "completed"},
         },
     ]
 
@@ -349,18 +326,6 @@ async def test_python_chat_loop_rejects_direct_responses_provider(
 ):
     """Direct OpenAI/Responses runtime is no longer a configured provider path."""
 
-    async def fake_openai_responses_events(_body, _model_options):
-        """Yield deterministic direct Responses events without opening a network call."""
-
-        yield {"type": "response.output_text.delta", "delta": "Direct"}
-        yield {
-            "type": "response.completed",
-            "response": {"id": "resp_direct", "status": "completed"},
-        }
-
-    monkeypatch.setattr(
-        "kodeks.runtime._openai_responses_events", fake_openai_responses_events
-    )
     database = KodeksDatabase(":memory:")
     try:
         events = [
@@ -370,10 +335,7 @@ async def test_python_chat_loop_rejects_direct_responses_provider(
                 database,
                 str(tmp_path),
                 {
-                    "KODEKS_DIRECT_RESPONSES_RUNTIME": "true",
                     "KODEKS_MODEL_PROVIDER": "openai",
-                    "KODEKS_RESPONSES_API_KEY": "sk-test",
-                    "KODEKS_RESPONSES_MODEL": "gpt-test",
                 },
             )
         ]
@@ -383,7 +345,10 @@ async def test_python_chat_loop_rejects_direct_responses_provider(
             "error",
         ]
         assert events[1]["code"] == "model_configuration_error"
-        assert "Direct OpenAI/Responses model providers have been removed" in events[1]["message"]
+        assert (
+            "Direct OpenAI/Responses model providers have been removed"
+            in events[1]["message"]
+        )
     finally:
         database.close()
 
@@ -456,7 +421,10 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
 async def test_python_chat_loop_replays_tool_continuation_input(tmp_path):
     """Persisted tool calls and outputs are replayed as Responses input items."""
 
-    assert runtime_build_responses_input_from_transcript is build_responses_input_from_transcript
+    assert (
+        runtime_build_responses_input_from_transcript
+        is build_responses_input_from_transcript
+    )
     (tmp_path / "README.md").write_text("hello from workspace\n")
     captured = []
     database = KodeksDatabase(":memory:")
@@ -531,9 +499,9 @@ async def test_python_chat_loop_stops_unknown_tool_locally(tmp_path):
         assert events[3]["tool_status"] == "error"
         assert events[3]["tool_output"] == "Unknown tool requested by model: glob"
         assert events[4]["code"] == "model_requested_unknown_tool"
-        assert [message.role for message in database.sessions.get_transcript("sess_unknown")] == [
-            "user"
-        ]
+        assert [
+            message.role for message in database.sessions.get_transcript("sess_unknown")
+        ] == ["user"]
     finally:
         database.close()
 
@@ -564,51 +532,6 @@ async def test_python_chat_loop_maps_responses_error_events(tmp_path):
                 "session_id": "sess_error",
             },
         ]
-    finally:
-        database.close()
-
-
-@pytest.mark.asyncio
-async def test_python_chat_loop_passes_previous_response_id_when_stateful(tmp_path):
-    """Stateful Responses turns reuse the latest assistant response id."""
-
-    seen_bodies = []
-
-    def second_events(body, env):
-        seen_bodies.append(body)
-        return [
-            {"type": "response.output_text.delta", "delta": "Continuing"},
-            {"type": "response.completed", "response": {"id": "resp_2"}},
-        ]
-
-    database = KodeksDatabase(":memory:")
-    try:
-        _first = [
-            event
-            async for event in run_python_chat_turn(
-                {"input": "hello", "session_id": "sess_stateful"},
-                database,
-                str(tmp_path),
-                {},
-                _stateful_first_events,
-            )
-        ]
-        _second = [
-            event
-            async for event in run_python_chat_turn(
-                {"input": "continue", "session_id": "sess_stateful"},
-                database,
-                str(tmp_path),
-                {"KODEKS_RESPONSES_STATEFUL": "true"},
-                second_events,
-            )
-        ]
-
-        assert seen_bodies[0]["previous_response_id"] == "resp_1"
-        assert (
-            database.sessions.get_latest_assistant_response_id("sess_stateful")
-            == "resp_2"
-        )
     finally:
         database.close()
 
@@ -778,7 +701,9 @@ async def test_python_chat_loop_injects_recalled_memory_before_model(tmp_path):
             )
         ]
 
-        memory_event = next(event for event in events if event["type"] == "memory_recalled")
+        memory_event = next(
+            event for event in events if event["type"] == "memory_recalled"
+        )
 
         assert memory_event["memory_ids"][0].startswith("atom_")
         assert memory_event["memory_layers"] == {"atom": 1}
@@ -850,16 +775,23 @@ async def test_python_chat_loop_emits_approval_required(tmp_path):
             )
         ]
 
-        approval = next(event for event in events if event["type"] == "approval_required")
+        approval = next(
+            event for event in events if event["type"] == "approval_required"
+        )
         tool_result = next(event for event in events if event["type"] == "tool_result")
 
         assert tool_result["tool_status"] == "approval_required"
         assert approval["approval_id"].startswith("appr_")
-        assert database.approvals.get_approval(approval["approval_id"]).status == "pending"
-        assert database.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0] == 1
-        assert [message.role for message in database.sessions.get_transcript("sess_py")] == [
-            "user"
-        ]
+        assert (
+            database.approvals.get_approval(approval["approval_id"]).status == "pending"
+        )
+        assert (
+            database.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
+            == 1
+        )
+        assert [
+            message.role for message in database.sessions.get_transcript("sess_py")
+        ] == ["user"]
     finally:
         database.close()
 
@@ -876,9 +808,7 @@ def test_python_chat_routes_stream_runtime_and_ui_payloads(tmp_path, monkeypatch
     runtime = client.post(
         "/api/chat/stream", json={"input": "read it", "session_id": "sess_route"}
     )
-    ui = client.post(
-        "/api/chat/ui", json={"input": "read it", "session_id": "sess_ui"}
-    )
+    ui = client.post("/api/chat/ui", json={"input": "read it", "session_id": "sess_ui"})
 
     assert runtime.status_code == 200
     assert "event: text_delta" in runtime.text
@@ -888,91 +818,6 @@ def test_python_chat_routes_stream_runtime_and_ui_payloads(tmp_path, monkeypatch
     assert "event: text-delta" in ui.text
     assert '"toolName":"read_file"' in ui.text
     assert "event: finish" in ui.text
-
-
-def test_openai_responses_payload_maps_tools_and_stateful_options():
-    """Direct Responses payload preserves model options and strict tool schemas."""
-
-    assert runtime_build_openai_responses_payload is build_openai_responses_payload
-    payload = build_openai_responses_payload(
-        {"input": "hello"},
-        {
-            "provider": "openai",
-            "apiKey": "sk-test",
-            "model": "gpt-test",
-            "reasoningEffort": "low",
-            "statefulResponses": True,
-            "strictTools": True,
-            "hostedTools": ["web_search_preview"],
-        },
-    )
-
-    assert payload["model"] == "gpt-test"
-    assert payload["input"] == "hello"
-    assert payload["store"] is True
-    assert payload["reasoning"] == {"effort": "low"}
-    assert payload["stream"] is True
-    assert payload["tools"][0]["type"] == "function"
-    assert payload["tools"][0]["strict"] is True
-    assert payload["tools"][0]["parameters"]["additionalProperties"] is False
-    assert payload["tools"][-1] == {"type": "web_search_preview"}
-
-
-def test_openai_responses_payload_marks_default_tools_non_strict():
-    """Direct Responses payload keeps TS-compatible explicit strict false default."""
-
-    payload = build_openai_responses_payload(
-        {"input": "hello"},
-        {"provider": "openai", "apiKey": "sk-test", "model": "gpt-test"},
-    )
-
-    assert all(tool["strict"] is False for tool in payload["tools"])
-
-
-def test_openai_responses_payload_maps_previous_response_id():
-    """Direct Responses payload uses the SDK previous_response_id field."""
-
-    payload = build_openai_responses_payload(
-        {"input": "continue", "previous_response_id": "resp_1"},
-        {"provider": "openai", "apiKey": "sk-test", "model": "gpt-test"},
-    )
-
-    assert payload["previous_response_id"] == "resp_1"
-
-
-def test_openai_responses_payload_preserves_replay_input_items():
-    """Direct Responses payload keeps transcript replay input as structured items."""
-
-    replay_input = [
-        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "hi"}]},
-        {"type": "function_call_output", "call_id": "call_1", "output": "ok"},
-    ]
-    payload = build_openai_responses_payload(
-        {"input": replay_input},
-        {"provider": "openai", "apiKey": "sk-test", "model": "gpt-test"},
-    )
-
-    assert payload["input"] == replay_input
-
-
-def test_openai_responses_payload_filters_mutating_tools_in_plan_mode():
-    """Plan-mode live payloads expose only the TS-compatible read-only tools."""
-
-    payload = build_openai_responses_payload(
-        {"input": "plan", "mode": "plan"},
-        {"provider": "openai", "apiKey": "sk-test", "model": "gpt-test"},
-    )
-
-    assert [tool["name"] for tool in payload["tools"]] == [
-        "read_file",
-        "grep",
-        "recall_memory",
-        "read_memory_artifact",
-        "spawn_explore_agent",
-        "list_mcp_servers",
-        "list_skills",
-        "read_skill",
-    ]
 
 
 def test_build_plan_artifact_content_matches_typescript_parser_shape():
@@ -1002,32 +847,3 @@ def test_build_plan_artifact_content_matches_typescript_parser_shape():
             },
         ],
     }
-
-
-@pytest.mark.asyncio
-async def test_normalize_responses_event_stream_accepts_sdk_like_objects():
-    """SDK event objects are normalized before entering the Python loop."""
-
-    assert runtime_normalize_responses_event_stream is normalize_responses_event_stream
-
-    class Event:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def model_dump(self, by_alias=True, exclude_none=True):
-            return self.payload
-
-    events = [
-        event
-        async for event in normalize_responses_event_stream(
-            [
-                Event({"type": "response.output_text.delta", "delta": "hi"}),
-                {"type": "response.completed", "response": {"id": "resp_1"}},
-            ]
-        )
-    ]
-
-    assert events == [
-        {"type": "response.output_text.delta", "delta": "hi"},
-        {"type": "response.completed", "response": {"id": "resp_1"}},
-    ]

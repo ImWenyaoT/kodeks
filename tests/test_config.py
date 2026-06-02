@@ -139,30 +139,8 @@ def test_direct_openai_provider_is_removed():
     """Direct OpenAI/Responses model routing no longer participates in runtime config."""
 
     with pytest.raises(ModelConfigurationError) as error:
-        resolve_model_client_options(
-            {
-                "KODEKS_MODEL_PROVIDER": "openai",
-                "KODEKS_RESPONSES_API_KEY": "responses-key",
-            }
-        )
+        resolve_model_client_options({"KODEKS_MODEL_PROVIDER": "openai"})
 
     assert "Direct OpenAI/Responses model providers have been removed" in str(
         error.value
     )
-
-
-def test_hosted_tools_are_ignored_for_deepseek_route():
-    """Hosted OpenAI tools are ignored when routing through DeepSeek/MoonBridge."""
-
-    moonbridge = resolve_model_client_options(
-        {
-            "KODEKS_CHAT_COMPLETIONS_API_KEY": "chat-key",
-            "KODEKS_CHAT_COMPLETIONS_BASE_URL": "https://api.deepseek.com",
-            "KODEKS_CHAT_COMPLETIONS_MODEL": DEFAULT_DEEPSEEK_MODEL,
-            "KODEKS_OPENAI_HOSTED_TOOLS": "web_search_preview",
-        }
-    )
-
-    assert moonbridge is not None
-    assert moonbridge["provider"] == "moonbridge"
-    assert "hostedTools" not in moonbridge

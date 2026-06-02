@@ -378,8 +378,6 @@ def test_python_chat_routes_keep_feature_flag_error_path(tmp_path, monkeypatch):
         "KODEKS_CHAT_COMPLETIONS_API_KEY",
         "KODEKS_CHAT_COMPLETIONS_BASE_URL",
         "KODEKS_CHAT_COMPLETIONS_MODEL",
-        "KODEKS_RESPONSES_API_KEY",
-        "KODEKS_RESPONSES_BASE_URL",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
     ]:

@@ -9,8 +9,6 @@ from collections.abc import AsyncIterator, Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from openai import AsyncOpenAI
-
 from .agents_events import (
     AgentsSdkApprovalMetadata,
     approval_from_sdk_item,
@@ -44,12 +42,6 @@ from .providers.bridge import (
     from_deepseek_stream,
     to_deepseek_chat_request,
 )
-from .providers.responses_adapter import (
-    build_openai_responses_payload as _build_openai_responses_payload,
-)
-from .providers.responses_adapter import (
-    normalize_responses_event_stream as _normalize_responses_event_stream,
-)
 from .responses_tool_loop import (
     ToolRoundState,
     append_tool_continuation_messages,
@@ -73,8 +65,6 @@ from .tools.schemas import default_tool_definitions
 from .workspace import WorkspaceService
 
 to_ui_transport_payload = _to_ui_transport_payload
-build_openai_responses_payload = _build_openai_responses_payload
-normalize_responses_event_stream = _normalize_responses_event_stream
 build_responses_input_from_transcript = _build_responses_input_from_transcript
 
 ResponsesEventStream = AsyncIterator[dict[str, Any]] | Iterable[dict[str, Any]]
@@ -133,13 +123,6 @@ async def run_python_chat_turn(
     runtime_body = body_with_runtime_context(
         body, mode, active_plan, memory_context, selected_files
     )
-    if runtime_env.get("KODEKS_RESPONSES_STATEFUL") == "true":
-        previous_response_id = database.sessions.get_latest_assistant_response_id(
-            session_id
-        )
-        if previous_response_id is not None:
-            runtime_body["previous_response_id"] = previous_response_id
-
     try:
         if responses_event_factory is None and _use_agents_sdk_runtime(
             runtime_env, body
@@ -461,23 +444,6 @@ async def _live_responses_events(
         yield event
 
 
-async def _openai_responses_events(
-    body: Mapping[str, Any], model_options: Mapping[str, Any]
-) -> AsyncIterator[dict[str, Any]]:
-    """Stream direct Responses API events through the OpenAI Python SDK."""
-
-    client = AsyncOpenAI(
-        api_key=str(model_options["apiKey"]),
-        base_url=str(model_options["baseURL"])
-        if isinstance(model_options.get("baseURL"), str)
-        else None,
-    )
-    payload = build_openai_responses_payload(body, model_options)
-    stream = await client.responses.create(**payload)
-    async for event in normalize_responses_event_stream(stream):
-        yield event
-
-
 async def _persist_completed_assistant_turn(
     database: KodeksDatabase,
     session_id: str,
@@ -554,8 +520,6 @@ def _use_agents_sdk_runtime(
 ) -> bool:
     """Return whether the current model should use the OpenAI Agents SDK path."""
 
-    if env.get("KODEKS_DIRECT_RESPONSES_RUNTIME") in {"1", "true", "TRUE"}:
-        return False
     if env.get("KODEKS_FORCE_AGENTS_SDK_RUNTIME") in {"1", "true", "TRUE"}:
         return True
     return False
