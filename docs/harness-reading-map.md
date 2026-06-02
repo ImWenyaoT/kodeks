@@ -33,7 +33,7 @@ user / web UI
 | Runtime | `src/kodeks/runtime.py`, `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/conversation_state.py`, `src/kodeks/runtime_context.py` | Turn session state plus user input into model calls, tool continuations, and persisted events. |
 | Tools | `src/kodeks/tools/`, `src/kodeks/workspace.py` | Define what the model may call and enforce local workspace/shell boundaries. |
 | Storage | `src/kodeks/storage/` | Keep durable sessions, approvals, plans, memory, subagent runs, schema, and row mapping in one package. |
-| Providers | `src/kodeks/config.py`, `src/kodeks/model_config.py`, `src/kodeks/providers/` | Load user config, resolve DeepSeek/MoonBridge model options, and keep MoonBridge as an implicit protocol adapter. |
+| Providers | `src/kodeks/config.py`, `src/kodeks/model_config.py`, `src/kodeks/embedding_config.py`, `src/kodeks/providers/` | Load user config, resolve model and embeddings options, and keep MoonBridge as an implicit protocol adapter. |
 | Evals | `evals/` | Prove harness behavior with deterministic cases plus optional live model cases. |
 
 ## Suggested First Tour
