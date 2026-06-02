@@ -102,6 +102,33 @@ def create_app(
         state["database"] = current
         return current
 
+    async def chat_turn_events(body: Mapping[str, Any]) -> AsyncIterator[dict[str, Any]]:
+        """Run one chat turn through the configured runtime dependencies."""
+
+        async for event in run_python_chat_turn(
+            body,
+            database(),
+            resolve_workspace_root(),
+            os.environ,
+            responses_event_factory,
+            agents_runner,
+        ):
+            yield event
+
+    async def runtime_sse_frames(body: Mapping[str, Any]) -> AsyncIterator[str]:
+        """Stream raw Kodeks runtime events as SSE frames."""
+
+        async for event in chat_turn_events(body):
+            yield sse_frame(str(event["type"]), event)
+
+    async def ui_sse_frames(body: Mapping[str, Any]) -> AsyncIterator[str]:
+        """Stream UI-transport-adapted chat events as SSE frames."""
+
+        async for event in chat_turn_events(body):
+            payload = to_ui_transport_payload(event)
+            if payload is not None:
+                yield sse_frame(str(payload["type"]), payload)
+
     @app.get("/")
     def index() -> HTMLResponse:
         """Serve the minimal Python-native Kodeks UI."""
@@ -375,40 +402,16 @@ def create_app(
         """Run one Python chat turn and stream Kodeks runtime events."""
 
         body = await _json_body(request)
-
-        async def frames() -> AsyncIterator[str]:
-            async for event in run_python_chat_turn(
-                body,
-                database(),
-                resolve_workspace_root(),
-                os.environ,
-                responses_event_factory,
-                agents_runner,
-            ):
-                yield sse_frame(str(event["type"]), event)
-
-        return StreamingResponse(frames(), media_type="text/event-stream")
+        return StreamingResponse(
+            runtime_sse_frames(body), media_type="text/event-stream"
+        )
 
     @app.post("/api/chat/ui")
     async def chat_ui_stream(request: Request) -> StreamingResponse:
         """Run one Python chat turn and stream UI transport adapter events."""
 
         body = await _json_body(request)
-
-        async def frames() -> AsyncIterator[str]:
-            async for event in run_python_chat_turn(
-                body,
-                database(),
-                resolve_workspace_root(),
-                os.environ,
-                responses_event_factory,
-                agents_runner,
-            ):
-                payload = to_ui_transport_payload(event)
-                if payload is not None:
-                    yield sse_frame(str(payload["type"]), payload)
-
-        return StreamingResponse(frames(), media_type="text/event-stream")
+        return StreamingResponse(ui_sse_frames(body), media_type="text/event-stream")
 
     return app
 
