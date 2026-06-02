@@ -15,7 +15,7 @@ eval coverage.
 | Agents SDK | `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py` | `agents_sdk_act_tool_surface`, `agents_sdk_plan_tool_surface`, `agents_sdk_approval_pause` |
 | Safety and approvals | `src/kodeks/workspace.py`, approval repository/routes in `src/kodeks/storage/session.py` and `src/kodeks/app.py` | `dangerous_shell_requires_approval`, `agents_sdk_approval_pause` |
 | Planning | plan-mode instructions in `src/kodeks/runtime_context.py`, plan artifacts in `src/kodeks/plans.py` | `plan_mode_creates_plan_artifact`, `live_plan_mode_artifact` |
-| Model routing | `src/kodeks/config.py`, MoonBridge routes in `src/kodeks/app.py`, bridge adapter in `src/kodeks/providers/bridge.py` | `bridge_preflight_missing_provider` |
+| Model routing | `src/kodeks/config.py`, `src/kodeks/model_config.py`, MoonBridge routes in `src/kodeks/app.py`, bridge adapter in `src/kodeks/providers/bridge.py` | `bridge_preflight_missing_provider` |
 | Streaming UI transport | `src/kodeks/api/sse.py`, `src/kodeks/api/ui_transport.py`, `/api/chat/ui` | `ui_transport_finish_event` |
 | Evals | `evals/run_local.py`, `evals/cases.jsonl`, `evals/live_cases.jsonl` | deterministic lane and optional live lane |
 
@@ -40,8 +40,8 @@ eval coverage.
    construction.
 3. Conversation state: name transcript replay after the OpenAI concept it
    implements.
-4. Model routing: isolate the runtime-path decision while keeping provider
-   config in `config.py`.
+4. Model routing: keep config file loading in `config.py` and runtime-path
+   decisions in `model_config.py`.
 5. Tool schemas: separate model-facing tool schema definitions from handlers
    if `tools.py` continues to grow.
 6. Approval service: only after the earlier splits are stable, extract approval

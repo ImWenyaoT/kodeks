@@ -83,7 +83,7 @@ UI
 
 MoonBridge 的意义是让 Kodeks 内部继续使用一套 Responses-shaped event contract，同时兼容 DeepSeek Chat Completions endpoint。
 
-`src/kodeks/config.py` 应该保持小。它只负责解析 DeepSeek 配置、创建 MoonBridge client options，不应该再拥有多 provider 产品概念。Python runtime 对外只保留 `deepseek/deepseek-v4-pro` 这个模型 ref，MoonBridge 是内部适配层。
+`src/kodeks/config.py` 应该保持小。它只负责定位并读取用户配置；`src/kodeks/model_config.py` 负责解释 DeepSeek 配置、创建 MoonBridge client options，不应该再拥有多 provider 产品概念。Python runtime 对外只保留 `deepseek/deepseek-v4-pro` 这个模型 ref，MoonBridge 是内部适配层。
 
 ## Memory 边界
 
