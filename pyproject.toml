@@ -1,0 +1,49 @@
+[project]
+name = "kodeks"
+version = "0.1.0"
+description = "Python compatibility runtime for the Kodeks local-first agent workbench."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "httpx>=0.28.0",
+  "httpx2>=2.3.0",
+  "openai>=2.0.0",
+  "openai-agents>=0.6.0",
+  "pydantic>=2.12.0",
+  "uvicorn>=0.35.0",
+]
+
+[project.scripts]
+kodeks-server = "kodeks.server:main"
+kodeks-smoke = "kodeks.smoke:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.18.0",
+  "pytest>=9.0.0",
+  "pytest-asyncio>=1.3.0",
+  "ruff>=0.14.0",
+]
+
+[build-system]
+requires = []
+build-backend = "kodeks_build"
+backend-path = ["build_backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/kodeks", "build_backend"]

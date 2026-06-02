@@ -1,5 +1,8 @@
 # Agent Feedback Retrospective: 2026-05-24
 
+Status: historical. Verification commands in this retrospective reference the
+previous TypeScript backend workspace and are not current migration gates.
+
 ## Goal
 
 这份记录整理了 `kodeks` 从“最小聊天界面”走向“可解释 coding agent demo”过程中暴露的一批真实问题。它不是发布日志，而是面试复盘材料：每个问题都按现象、根因、修复、验证和可讲点整理，方便后续解释自己如何把一个 demo 打磨成更接近真实产品的 agent harness。

@@ -1,20 +1,20 @@
 # kodeks
 
-**kodeks** 是一个 local-first 的 TypeScript coding agent runtime，用来实验现代软件工程 agent 的核心闭环：流式对话、workspace tools、shell approval、memory、session、plan mode 和 subagent exploration。
+**kodeks** 是一个 local-first coding agent workbench，用来实验现代软件工程 agent 的核心闭环：流式对话、workspace tools、shell approval、memory、session、plan mode 和 subagent exploration。
 
-[English README](./README.md) · [产品需求](./docs/PRD.md) · [现代化计划](./docs/MODERNIZATION.md) · [迁移设计](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
+[English README](./README.md) · [产品需求](./docs/PRD.md) · [概念映射](./docs/concepts-map.md) · [现代化计划](./docs/MODERNIZATION.md) · [历史 TS 设计](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
 
 ## 当前状态
 
-kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实现是 MVP，不是托管型产品。它的目标是保持足够小，方便学习和扩展，同时保留真实 coding agent 需要的关键边界。
+kodeks 已经完成从 TypeScript OpenAI/Agents SDK workspace 到 Python OpenAI SDK runtime 的 active migration。当前实现是 MVP，不是托管型产品。它的目标是保持足够小，方便学习和扩展，同时保留真实 coding agent 需要的关键边界。
 
-旧 Python 实现已经从当前仓库移除；TypeScript workspace 是唯一维护中的 runtime。
+Chat 现在要求 Python/FastAPI runtime。旧 TypeScript OpenAI/Agents SDK runtime、Next.js API routes、pnpm workspace 和 TypeScript web shell 都已从 active repository 移除。Python 负责 UI 入口、API routes、chat runtime、model routing、storage、workspace tools、approvals 和 bridge compatibility layers。
 
 ## 功能亮点
 
-- Next.js App Router Web 应用和 API routes。
+- FastAPI 服务的 Python-hosted 浏览器 UI。
 - 基于 Server-Sent Events 的流式对话。
-- OpenAI Agents SDK 作为主 agent runtime，并默认通过 MoonBridge 走 DeepSeek-first 模型路由，OpenAI Responses 作为 fallback。
+- Python OpenAI Agents SDK 作为主 agent runtime，并默认通过 MoonBridge 走 DeepSeek-first 模型路由，OpenAI Responses 作为 fallback。
 - 支持直连 Responses-compatible endpoint。
 - 内置 MoonBridge，可把 Chat Completions-compatible endpoint 暴露成本地 Responses API。
 - 受 workspace policy 约束的文件工具，并阻止内部路径访问。
@@ -25,40 +25,24 @@ kodeks 已经从 Python/FastAPI 原型迁移到 TypeScript workspace。当前实
 ## 快速开始
 
 ```bash
-pnpm install
-pnpm run dev
+uv sync
+uv run kodeks-server --reload
 ```
 
-打开 `http://127.0.0.1:3000`。
+打开 `http://127.0.0.1:8000`。
 
-Next.js 在 3000 空闲时默认使用 3000 端口。日常本地开发建议显式指定端口，
-这样其它项目占用 3000 时也不会影响 kodeks 的访问地址：
-
-```bash
-PORT=3001 pnpm run dev
-APP_URL=http://127.0.0.1:3001
-```
-
-Windows PowerShell 下：
-
-```powershell
-$env:PORT=3001; pnpm run dev
-$env:APP_URL="http://127.0.0.1:3001"
-```
-
-如果没有设置 `PORT`，请以 Next.js 终端输出的实际 URL 为准。多个本地 Web
-项目同时运行时，不要默认认为 `localhost:3000` 一定是 kodeks。
+安装后的 package 会暴露同一个 server entrypoint：`kodeks-server`。
 
 健康检查：
 
 ```bash
-curl "$APP_URL/api/sessions"
+curl http://127.0.0.1:8000/health
 ```
 
 SSE chat stream：
 
 ```bash
-curl -N -X POST "$APP_URL/api/chat/stream" \
+curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
 ```
@@ -161,8 +145,8 @@ KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
 
 # 可选：LM Studio / OpenAI-compatible embeddings endpoint
 KODEKS_EMBEDDINGS_PROVIDER=lmstudio
-KODEKS_LMSTUDIO_BASE_URL=http://127.0.0.1:1234/v1
-KODEKS_LMSTUDIO_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
+KODEKS_OPENAI_COMPAT_BASE_URL=http://127.0.0.1:1234/v1
+KODEKS_OPENAI_COMPAT_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
 
 # 可选：Hugging Face-compatible endpoint
 KODEKS_EMBEDDINGS_PROVIDER=huggingface
@@ -203,51 +187,62 @@ KODEKS_HUGGINGFACE_API_TOKEN=hf_...
 
 ### MoonBridge for Chat Completions
 
-MoonBridge 的存在意义是服务那些只暴露 Chat Completions、没有 Responses API 的 OpenAI-compatible endpoint。Kodeks 自己仍然发送 Responses 形态的请求到 `http://127.0.0.1:38440/v1/responses`，MoonBridge 再把请求转换成上游 `/chat/completions`。
+MoonBridge 的存在意义是服务那些只暴露 Chat Completions、没有 Responses API 的 OpenAI-compatible endpoint。Python runtime 暴露 Responses 形态的 bridge routes，并把请求转换成上游 `/chat/completions`。
 
-先启动内置 TypeScript bridge，再这样启动 Kodeks：
+这样启动 Python runtime：
 
 ```bash
 KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
 KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
 KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
-pnpm run bridge:start
-
-KODEKS_MODEL_PROVIDER=moonbridge pnpm run dev
+uv run kodeks-server --reload
 ```
 
-如果由 Next.js runtime 托管 bridge，设置同样的 `KODEKS_CHAT_COMPLETIONS_*` 并在 UI 里选择 `moonbridge` 即可；runtime 会在需要时启动本地 bridge。
+Python service 会在 `/v1/responses` 暴露 bridge endpoint。设置同样的 `KODEKS_CHAT_COMPLETIONS_*` 并在 UI 里选择 `moonbridge` 即可使用它。
 
-Bridge helper 命令：
+Bridge health 和 smoke check 指向 Python service：
 
 ```bash
-pnpm run bridge:start
-pnpm run bridge:health
-pnpm run bridge:smoke
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"moonbridge","input":"hello","stream":false}'
 ```
 
-旧的 `moonbridge:start`、`moonbridge:health`、`moonbridge:smoke` 脚本 alias 已移除。请使用上面的 `bridge:*` 脚本。
+旧的 TypeScript `moonbridge:*` 和 `bridge:*` 脚本 alias 已随 TypeScript SDK backend packages 一起移除。
 
 ## 开发
 
 ```bash
-pnpm run test
-pnpm run typecheck
-pnpm run lint
-pnpm run build
-pnpm run start
+uv run pytest
+uv run ruff check
+uv run mypy
+uv build
 ```
 
-仓库使用 pnpm workspaces：
+Runtime smoke checks：
 
-- `apps/web`: UI、API routes 和 stream adapters。
-- `packages/agent-runtime`: OpenAI Agents SDK turn orchestration、context assembly、plan mode 和本地 tool wrappers。
-- `packages/model`: provider 配置和直连 Responses-compatible model calls。
-- `packages/responses-bridge`: 内置 Responses-to-Chat-Completions bridge 和协议 adapter。
-- `packages/tools`: model-callable tool registry 和 policy wrappers。
-- `packages/workspace`: workspace path policy、file access 和 shell execution。
-- `packages/storage`: SQLite repositories。
-- `packages/shared`: shared IDs、errors、results 和 JSON helpers。
+```bash
+uv run python -m kodeks.smoke --in-process
+uv run kodeks-server --reload
+uv run python -m kodeks.smoke --base-url http://127.0.0.1:8000
+uv run python -m kodeks.smoke --live-provider --model moonbridge
+```
+
+第一条不会打开本地 socket。安装后的 package 会暴露同一个 smoke entrypoint：`kodeks-smoke`。默认 smoke 会覆盖 health、模型清单、无副作用 `/api/chat/stream` validation 和 bridge preflight。最后一条会调用 `/v1/responses`，需要已经配置 provider secret。
+
+Agent evals：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python evals/run_local.py
+UV_CACHE_DIR=.uv-cache uv run python evals/run_local.py --live-provider
+```
+
+eval suite 会用 deterministic model / Agents SDK fake 调用真实 FastAPI route，然后按 OpenAI concept 给 event trace 打分：tools、approval、context management、memory、planning、model routing 和 UI transport。可选的 `--live-provider` lane 会使用已配置的真实 provider，并在结果 JSON 里记录 latency。运行结果写入 `evals/results/latest.json`，该文件不会进入 Git。
+
+TypeScript OpenAI/Agents SDK backend packages、Next.js shell 和 pnpm workspace 已删除。当前 Python runtime 覆盖 health、模型清单、sessions、workspace 文件列表、approvals、MoonBridge 协议 adapter、可确定性测试的 chat loop、同一轮 tool continuation、本地工具执行、approval-required events、UI transport 映射、static UI serving，以及通过 `openai-agents` 的 route-level chat streaming。
+
+- `src/kodeks`: Python compatibility runtime、FastAPI routes、Pydantic contracts、SQLite repositories、模型配置、MoonBridge adapter、tools、workspace policy 和 SSE helpers。
 
 ## 安全模型
 
@@ -263,9 +258,9 @@ kodeks 把本地能力视为高权限能力：
 ## 文档
 
 - [`docs/PRD.md`](./docs/PRD.md): 产品目标、能力路线和验收标准。
+- [`docs/concepts-map.md`](./docs/concepts-map.md): OpenAI concept 到 Kodeks 代码资产和 eval coverage 的映射。
 - [`docs/MODERNIZATION.md`](./docs/MODERNIZATION.md): 模型 provider 迁移、依赖状态、验证和回退计划。
 - [`docs/superpowers/`](./docs/superpowers/): 需要跨机器同步的设计 specs。
-- [`AGENTS.md`](./AGENTS.md): 本地 agent 协作说明。
 
 生成型 notes、scratch docs、本地数据库和编辑器状态会被排除在版本控制之外。
 

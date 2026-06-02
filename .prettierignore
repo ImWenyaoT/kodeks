@@ -1,9 +1,0 @@
-.kodeks/
-.next/
-apps/web/.next/
-coverage/
-dist/
-node_modules/
-bun.lock
-docs/Google TypeScript Style Guide.html
-docs/Google TypeScript Style Guide_files/

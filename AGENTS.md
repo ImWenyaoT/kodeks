@@ -1,23 +1,34 @@
-# Sample AGENTS.md file
+## TL;DR
 
-## Dev environment tips
+- 请保持对话语言为中文。
+- 用户系统可能是 Mac、Windows 或 Linux。
+- 生成代码时添加函数级注释。
 
-- Use `pnpm dlx turbo run where <project_name>` to jump to a package instead of scanning with `ls`.
-- Run `pnpm install --filter <project_name>` to add the package to your workspace so Vite, ESLint, and TypeScript can see it.
-- Use `pnpm create vite@latest <project_name> -- --template react-ts` to spin up a new React + Vite package with TypeScript checks ready.
-- Check the name field inside each package's package.json to confirm the right name—skip the top-level one.
+## Python Runtime Defaults
 
-## Testing instructions
+- Use `uv run` or the project's existing Python environment.
+- Run focused tests after each migration checkpoint, then run the full Python gate before handoff.
+- Keep the active runtime Python-only: do not reintroduce TypeScript SDK packages, Next.js routes, Node workspace manifests, or Node build tooling.
+- Treat `~/.kodeks/config.json` as the user-level model configuration source. Do not put provider secrets in repo-local files.
+- When model configuration changes, fill and validate the new configuration before removing old aliases or local secret files.
 
-- Find the CI plan in the .github/workflows folder.
-- Run `pnpm turbo run test --filter <project_name>` to run every check defined for that package.
-- From the package root you can just call `pnpm test`. The commit should pass all tests before you merge.
-- To focus on one step, add the Vitest pattern: `pnpm vitest run -t "<test name>"`.
-- Fix any test or type errors until the whole suite is green.
-- After moving files or changing imports, run `pnpm lint --filter <project_name>` to be sure ESLint and TypeScript rules still pass.
-- Add or update tests for the code you change, even if nobody asked.
+## Data Analysis Defaults
 
-## PR instructions
+- Keep source data in `data/raw/` and write cleaned data to `data/processed/`.
+- Put exploratory notebooks in `analysis/` and final artifacts in `output/`.
+- Never overwrite raw files.
+- Prefer scripts or checked-in notebooks over unnamed scratch cells.
+- Before merging datasets, report candidate keys, null rates, and join coverage.
 
-- Title format: [<project_name>] <Title>
-- Always run `pnpm lint` and `pnpm test` before committing.
+## Review Guidelines
+
+- Flag typos and grammar issues as P0 issues.
+- Flag potential missing documentation as P1 issues.
+- Flag missing tests as P1 issues.
+
+## Documentation
+
+- When user-facing behavior changes, check whether docs, examples, or changelogs need updates.
+- Public docs must only include public information or behavior visible in this repo.
+- Preserve existing terminology and frontmatter.
+- Run the docs formatting and build checks before final handoff.

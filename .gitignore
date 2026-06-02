@@ -1,25 +1,8 @@
-# Dependencies
-node_modules/
-apps/*/node_modules/
-packages/*/node_modules/
-.pnpm-store/
-.npm/
-
 # Build output and framework caches
 dist/
 build/
 coverage/
-playwright-report/
-test-results/
-apps/web/next-env.d.ts
-.next/
-apps/*/.next/
-apps/*/out/
-.turbo/
-.vite/
 .cache/
-.eslintcache
-*.tsbuildinfo
 
 # Runtime state and local databases
 .kodeks/
@@ -47,6 +30,7 @@ __pycache__/
 .pyre/
 .tox/
 .nox/
+.uv-cache/
 
 # OS and editor-local files
 .DS_Store
@@ -68,6 +52,7 @@ Thumbs.db
 docs/*
 !docs/PRD.md
 !docs/architecture.md
+!docs/concepts-map.md
 !docs/MODERNIZATION.md
 !docs/refactor-parity.md
 !docs/2026-05-24-agent-feedback-retrospective.md
@@ -79,7 +64,3 @@ docs/*
 
 # Logs
 *.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*

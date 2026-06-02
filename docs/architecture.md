@@ -1,69 +1,139 @@
-# Kodeks Architecture
+# Kodeks 架构说明
 
-Kodeks is a TypeScript full-stack coding agent workbench for internship-level learning and interview storytelling. The target is intentionally narrower than a production agent platform: keep the core coding-agent loop understandable while still covering memory, multi-session, subagent exploration, and plan mode.
+Kodeks 是一个 local-first 的 coding agent workbench。当前默认用户界面由 Python/FastAPI 直接服务，chat/runtime 后端也已经迁到 Python OpenAI SDK。旧 TypeScript OpenAI/Agents SDK backend packages、Next.js shell、pnpm workspace 和 TypeScript tooling 已从 workspace 删除。你可以先把它理解成：
 
-## Product Boundary
+```text
+agent = LLM + harness
+```
 
-The required product surface is:
+这里的 LLM 当前主要走 DeepSeek 或其他 OpenAI-compatible endpoint。LLM 本身不是这个仓库要实现的东西；这个仓库真正值得读、值得讲、也适合作为实习项目经验的部分，是 harness。
 
-- streaming chat over a project workspace
-- multi-session transcript storage and resume
-- workspace tools for reading, writing, grep, and shell execution
-- approval records for risky shell commands
-- memory write, recall, and artifact read tools
-- plan mode with mutating tools filtered out
-- subagent exploration with auditable summaries
-- MCP server and skill discovery
-- model routing through OpenAI Responses or MoonBridge
+Harness 负责把用户输入接进来，组织上下文，决定模型能调用哪些工具，执行文件和 shell 操作，记录 session、memory 和 approval，再把结果流式返回给 UI。
 
-Everything outside that list should earn its place. Web search, duplicate stream protocols, provider dashboards, advanced memory ranking, and large plugin surfaces are deferred until the required loop is small and reliable.
+## 产品边界
 
-## Runtime Flow
+当前 Kodeks 只保留 coding agent 闭环里最核心的能力：
 
-The main request path is:
+- 在一个本地 project workspace 上进行流式对话。
+- 保存多 session transcript，并支持继续历史会话。
+- 提供 workspace tools：读文件、写文件、grep、执行 shell。
+- 对危险 shell 命令记录 approval。
+- 提供 memory 写入、召回和 artifact 读取。
+- 支持 plan mode，并在 plan mode 下过滤会修改 workspace 的工具。
+- 支持 subagent exploration，并保存可审计 summary。
+- 支持 MCP server 和 skill discovery。
+- 支持通过 OpenAI Responses 或 MoonBridge 路由模型。
 
-1. The Next.js UI posts chat input to `/api/chat/stream`.
-2. The route parses request state and opens a single SSE stream.
-3. `apps/web/src/lib/server/kodeks-runtime.ts` creates the runtime context, model options, storage repositories, and tool services.
-4. `packages/agent-runtime` runs the OpenAI Agents SDK path when available, maps model/tool events into Kodeks events, and applies plan-mode filtering.
-5. `packages/tools` owns deterministic tool definitions and execution wrappers.
-6. `packages/workspace` enforces path and shell policy.
-7. `packages/storage` persists sessions, messages, memories, approvals, and subagent records.
-8. The UI renders Kodeks SSE events directly.
+不在这条主线上的东西都应该谨慎加入。Web search、重复的 stream 协议、provider dashboard、高级 memory ranking、大型 plugin surface 都先延后，直到这条核心闭环足够小、足够可靠。
 
-There is no second UIMessage stream route. If a future UI layer needs a Vercel AI SDK transport, it should be added as one adapter around the same runtime event contract, not as a parallel runtime path.
+## 主请求链路
 
-## Model Boundary
+默认 chat 请求的主路径是：
 
-The public provider surface is only:
+1. 浏览器打开 FastAPI 服务的 `/` Python-hosted UI。
+2. 浏览器把用户输入 POST 到 Python `/api/chat/stream`。
+3. `src/kodeks/app.py` 的 FastAPI route 接收请求并打开同一 SSE stream contract。
+4. `src/kodeks/runtime.py` 创建 runtime context，包括 workspace、model options、storage repositories、memory、plan artifact 和 tool services。
+5. `src/kodeks/agents_runtime.py` 通过 Python `openai-agents` 把本地 tools 包装成 SDK function tools。
+6. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage.py` 执行工具、workspace policy、approval 和 transcript 写入。
+7. UI 直接渲染 Kodeks SSE events。
 
-- `openai`: direct Responses-compatible provider configuration.
-- `moonbridge`: local Responses-compatible bridge for Chat Completions providers.
+可以把链路记成：
 
-MoonBridge stays because it lets Kodeks keep one Responses-shaped agent runtime while still using DeepSeek, local Qwen, or another Chat Completions endpoint. Removed aliases such as `bridge`, `deepseek`, and `chat-completions` now fail with migration guidance instead of silently changing provider behavior.
+```text
+UI
+ -> FastAPI /api/chat/stream
+ -> run_python_chat_turn()
+ -> openai-agents Python SDK
+ -> model text/tool_call
+ -> Python ToolRegistry.execute()
+ -> Python WorkspaceService / Storage
+ -> tool_result
+ -> model continues
+ -> SSE event back to UI
+```
 
-`packages/model` should stay small. Its job is resolving model options and creating a Responses-shaped client, not owning a second agent loop.
+本地启动方式：
 
-## Memory Boundary
+1. 运行 `uv run kodeks-server --reload`。
+2. 打开 `http://127.0.0.1:8000`。
 
-Memory should be TencentDB-Agent-Memory-inspired, but implemented as a minimum viable layered system instead of a direct port:
+旧 TypeScript SDK runtime、Next.js shell 和 pnpm workspace 已从 Web chat route 运行路径和 workspace 中移除。默认 chat route 不再自动或显式回到 TypeScript OpenAI SDK。
 
-- L0: transcript and tool evidence already stored by the runtime.
-- L1: atomic facts such as user preferences, project facts, and durable lessons.
-- L2: scenario memories that summarize repeated workflows or debugging patterns.
-- L3: profile and project-level summaries assembled from stable lower layers.
-- Artifacts: large evidence blobs referenced by id instead of copied into every prompt.
+## 推荐阅读顺序
 
-Deferred memory work includes embeddings, vector rerank, freshness scoring, dashboards, full graph structures, and automatic large-scale consolidation. Those are useful later, but they are not needed to explain the current coding-agent loop.
+不要从旧 TypeScript backend 的提交历史开始读。当前 runtime 已迁到 Python，先按下面的路径理解现有系统。
 
-## Deliberate Removals
+更好的顺序是：
 
-The current simplification removes:
+1. `docs/architecture.md`：先建立全局地图。
+2. `docs/MODERNIZATION.md`：如果在做 Python 迁移，先看迁移面和 checkpoint 合同。
+3. `src/kodeks/app.py`：看 Python runtime 接管的 HTTP route 和默认 UI。
+4. `src/kodeks/static/index.html`：看 Python-hosted browser shell。
+5. `src/kodeks/runtime.py`：看一轮 chat turn 如何准备 session、memory、tools 和 SSE events。
+6. `src/kodeks/agents_runtime.py`：看 Python OpenAI Agents SDK adapter。
+7. `src/kodeks/contracts.py`：看 Python Pydantic 模型如何冻结旧 TypeScript wire shape。
+8. `src/kodeks/tools.py`、`src/kodeks/workspace.py`、`src/kodeks/storage.py`：看工具、安全边界和持久化。
 
-- web search tools and settings
-- Brave/Tavily environment configuration
-- `/api/chat/ui-stream`
-- direct runtime dependency on Vercel AI SDK UIMessage helpers
-- user-facing `bridge` provider naming
+## 模型边界
 
-The remaining stack is easier to explain: one web app, one runtime event contract, one tool registry, one storage boundary, and two model-facing options.
+前端和用户真正需要理解的 provider surface 只有两类：
+
+- `openai`：直连 Responses-compatible provider。
+- `moonbridge`：本地 Responses-compatible bridge，用来接 DeepSeek、Qwen 或其他只支持 Chat Completions 的 endpoint。
+
+MoonBridge 的意义是让 Kodeks 内部继续使用一套 Responses-shaped agent runtime，同时兼容 DeepSeek 这类 Chat Completions endpoint。
+
+`src/kodeks/config.py` 应该保持小。它只负责解析模型配置、选择 provider、创建 Responses-shaped client options，不应该再拥有第二套产品概念。Python runtime 必须继续保持 `provider/model` 这个产品表面，MoonBridge 只是 `chat-completions` provider 的隐式后端适配层。
+
+## Memory 边界
+
+Memory 可以参考 TencentDB-Agent-Memory 的分层想法，但当前实现故意保持 MVP：
+
+- L0：runtime 已经保存的 transcript 和 tool evidence。
+- L1：用户偏好、项目事实、稳定经验等 atomic facts。
+- L2：重复 workflow 或 debugging pattern 的 scenario memories。
+- L3：从低层 memory 汇总出来的 profile 和 project-level summaries。
+- Artifacts：较大的证据内容只存引用 id，避免每次 prompt 都塞大段内容。
+
+Embedding、vector rerank、freshness scoring、dashboard、完整 graph structure、自动大规模 consolidation 都是后续能力，不是理解当前 coding-agent loop 的前置条件。
+
+## 调试入口
+
+日常开发命令：
+
+```bash
+uv run kodeks-server --reload
+uv run pytest
+uv run ruff check
+uv run mypy
+uv run python -m kodeks.smoke --in-process
+```
+
+如果只想调 MoonBridge：
+
+```bash
+uv run pytest tests/test_bridge.py tests/test_route_parity.py
+uv run kodeks-server --reload
+```
+
+如果只想调 Python compatibility runtime：
+
+```bash
+uv run pytest
+uv run ruff check
+uv run mypy
+uv run kodeks-server --reload
+```
+
+## 当前刻意删除或延后的东西
+
+为了让项目更适合学习和讲述，当前简化掉了：
+
+- web search tools 和相关 settings。
+- Brave/Tavily 环境配置。
+- `/api/chat/ui-stream` 这类重复 stream runtime。
+- runtime 对 Vercel AI SDK UIMessage helpers 的直接依赖。
+- 用户可见的 `bridge` provider naming。
+
+剩下的系统可以概括成：一个 web app、一个 runtime event contract、一个 tool registry、一个 storage boundary、两个模型接入选项。

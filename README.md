@@ -1,20 +1,20 @@
 # kodeks
 
-**kodeks** is a local-first TypeScript coding agent runtime for experimenting with the core loops behind modern software engineering agents: streaming chat, workspace tools, shell approvals, memory, sessions, plan mode, and subagent exploration.
+**kodeks** is a local-first coding agent workbench for experimenting with the core loops behind modern software engineering agents: streaming chat, workspace tools, shell approvals, memory, sessions, plan mode, and subagent exploration.
 
-[中文 README](./README.zh-CN.md) · [Product requirements](./docs/PRD.md) · [Modernization plan](./docs/MODERNIZATION.md) · [Migration design](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
+[中文 README](./README.zh-CN.md) · [Product requirements](./docs/PRD.md) · [Concept map](./docs/concepts-map.md) · [Modernization plan](./docs/MODERNIZATION.md) · [Historical TS design](./docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md)
 
 ## Status
 
-kodeks has migrated from a Python/FastAPI prototype to a TypeScript workspace. The current implementation is an MVP, not a hosted product. It is designed to be small enough to study and extend while still preserving the boundaries a real coding agent needs.
+kodeks has completed the active migration away from the TypeScript OpenAI/Agents SDK workspace and now runs on the Python OpenAI SDK behind FastAPI. The current implementation is an MVP, not a hosted product. It is designed to be small enough to study and extend while still preserving the boundaries a real coding agent needs.
 
-The legacy Python implementation has been removed from the active repository; the TypeScript workspace is now the only maintained runtime.
+Chat now requires the Python/FastAPI runtime. The old TypeScript OpenAI/Agents SDK runtime, Next.js API routes, pnpm workspace, and TypeScript web shell have been removed from the active repository. Python owns the UI entrypoint, API routes, chat runtime, model routing, storage, workspace tools, approvals, and bridge compatibility layers.
 
 ## Highlights
 
-- Next.js App Router web app and API routes.
+- Python-hosted browser UI served by FastAPI.
 - Streaming chat over Server-Sent Events.
-- OpenAI Agents SDK as the primary agent runtime, with DeepSeek-first model routing through MoonBridge and OpenAI Responses as fallback.
+- Python OpenAI Agents SDK as the primary agent runtime, with DeepSeek-first model routing through MoonBridge and OpenAI Responses as fallback.
 - Direct Responses-compatible endpoint support.
 - Built-in MoonBridge adapter for exposing Chat Completions-compatible endpoints through a local Responses API.
 - Workspace-scoped file tools with internal path blocking.
@@ -25,40 +25,24 @@ The legacy Python implementation has been removed from the active repository; th
 ## Quick Start
 
 ```bash
-pnpm install
-pnpm run dev
+uv sync
+uv run kodeks-server --reload
 ```
 
-Open `http://127.0.0.1:3000`.
+Open `http://127.0.0.1:8000`.
 
-Next.js defaults to port 3000 when it is free. For repeatable local development,
-prefer an explicit port so another app on 3000 cannot change the URL you use:
-
-```bash
-PORT=3001 pnpm run dev
-APP_URL=http://127.0.0.1:3001
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:PORT=3001; pnpm run dev
-$env:APP_URL="http://127.0.0.1:3001"
-```
-
-If you omit `PORT`, use the actual URL printed by Next.js. Do not assume
-`localhost:3000` belongs to kodeks when other local web apps are running.
+Installed packages expose the same server entrypoint as `kodeks-server`.
 
 Health check:
 
 ```bash
-curl "$APP_URL/api/sessions"
+curl http://127.0.0.1:8000/health
 ```
 
 SSE chat stream:
 
 ```bash
-curl -N -X POST "$APP_URL/api/chat/stream" \
+curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
 ```
@@ -163,8 +147,8 @@ KODEKS_OLLAMA_EMBED_MODEL=embeddinggemma
 
 # Optional: LM Studio / OpenAI-compatible embeddings endpoint
 KODEKS_EMBEDDINGS_PROVIDER=lmstudio
-KODEKS_LMSTUDIO_BASE_URL=http://127.0.0.1:1234/v1
-KODEKS_LMSTUDIO_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
+KODEKS_OPENAI_COMPAT_BASE_URL=http://127.0.0.1:1234/v1
+KODEKS_OPENAI_COMPAT_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B
 
 # Optional: Hugging Face-compatible endpoint
 KODEKS_EMBEDDINGS_PROVIDER=huggingface
@@ -205,51 +189,71 @@ Runtime state is written under `.kodeks/` by default and is intentionally ignore
 
 ### MoonBridge for Chat Completions
 
-MoonBridge exists for OpenAI-compatible services that expose Chat Completions but not Responses. Kodeks continues to send Responses-shaped requests to `http://127.0.0.1:38440/v1/responses`; MoonBridge converts those requests to `/chat/completions` upstream.
+MoonBridge exists for OpenAI-compatible services that expose Chat Completions but not Responses. The Python runtime exposes Responses-shaped bridge routes and converts those requests to `/chat/completions` upstream.
 
-Start the built-in TypeScript bridge, then run Kodeks with:
+Start the Python runtime with:
 
 ```bash
 KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
 KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
 KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
-pnpm run bridge:start
-
-KODEKS_MODEL_PROVIDER=moonbridge pnpm run dev
+uv run kodeks-server --reload
 ```
 
-If Kodeks manages the bridge from the Next.js runtime, setting the same `KODEKS_CHAT_COMPLETIONS_*` values and selecting `moonbridge` is enough; the runtime starts the local bridge when needed.
+The bridge endpoint is available from the Python service at `/v1/responses`. Setting the same `KODEKS_CHAT_COMPLETIONS_*` values and selecting `moonbridge` is enough for Kodeks to use it.
 
-Bridge helpers:
+Bridge health and smoke checks target the Python service:
 
 ```bash
-pnpm run bridge:start
-pnpm run bridge:health
-pnpm run bridge:smoke
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"moonbridge","input":"hello","stream":false}'
 ```
 
-The old `moonbridge:start`, `moonbridge:health`, and `moonbridge:smoke` script aliases have been removed. Use the `bridge:*` scripts above.
+The old TypeScript `moonbridge:*` and `bridge:*` script aliases have been removed with the TypeScript SDK backend packages.
 
 ## Development
 
 ```bash
-pnpm run test
-pnpm run typecheck
-pnpm run lint
-pnpm run build
-pnpm run start
+uv run pytest
+uv run ruff check
+uv run mypy
+uv build
 ```
 
-The repository uses pnpm workspaces:
+Runtime smoke checks:
 
-- `apps/web`: UI, API routes, and stream adapters.
-- `packages/agent-runtime`: OpenAI Agents SDK turn orchestration, context assembly, plan mode, and local tool wrappers.
-- `packages/model`: provider configuration and direct Responses-compatible model calls.
-- `packages/responses-bridge`: built-in Responses-to-Chat-Completions bridge with protocol adapters.
-- `packages/tools`: model-callable tool registry and policy wrappers.
-- `packages/workspace`: workspace path policy, file access, and shell execution.
-- `packages/storage`: SQLite repositories.
-- `packages/shared`: shared IDs, errors, results, and JSON helpers.
+```bash
+uv run python -m kodeks.smoke --in-process
+uv run kodeks-server --reload
+uv run python -m kodeks.smoke --base-url http://127.0.0.1:8000
+uv run python -m kodeks.smoke --live-provider --model moonbridge
+```
+
+The first command does not open a socket. Installed packages expose the same
+smoke entrypoint as `kodeks-smoke`. The default smoke set covers health, the
+model catalog, no-side-effect `/api/chat/stream` validation, and bridge
+preflight. The final command calls `/v1/responses` and requires configured
+provider secrets.
+
+Agent evals:
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python evals/run_local.py
+UV_CACHE_DIR=.uv-cache uv run python evals/run_local.py --live-provider
+```
+
+The eval suite exercises the FastAPI routes users hit with deterministic model
+and Agents SDK fakes, then grades event traces by OpenAI concept: tools,
+approvals, context management, memory, planning, model routing, and UI
+transport. The optional `--live-provider` lane adds real provider cases using
+the configured model credentials and reports latency in the result JSON. It
+writes `evals/results/latest.json`, which is ignored by Git.
+
+The TypeScript OpenAI/Agents SDK backend packages, Next.js shell, and pnpm workspace have been removed. The Python runtime currently covers health, model catalog, sessions, workspace file listing, approvals, MoonBridge protocol adapters, deterministic chat-loop tests, same-turn tool continuations, local tool execution, approval-required events, UI transport mapping, static UI serving, and route-level chat streaming through `openai-agents`.
+
+- `src/kodeks`: Python compatibility runtime, FastAPI routes, Pydantic contracts, SQLite repositories, model config, MoonBridge adapter, tools, workspace policy, and SSE helpers.
 
 ## Safety Model
 
@@ -265,9 +269,9 @@ This is a local development project. Review the policy and storage code before u
 ## Documentation
 
 - [`docs/PRD.md`](./docs/PRD.md): product goals, capability roadmap, and acceptance criteria.
+- [`docs/concepts-map.md`](./docs/concepts-map.md): OpenAI concept to Kodeks asset and eval coverage map.
 - [`docs/MODERNIZATION.md`](./docs/MODERNIZATION.md): model-provider migration, dependency status, validation, and rollback plan.
 - [`docs/superpowers/`](./docs/superpowers/): design specs that should stay synchronized across machines.
-- [`AGENTS.md`](./AGENTS.md): local agent collaboration instructions.
 
 Generated notes, scratch docs, local databases, and editor state are intentionally excluded from version control.
 
