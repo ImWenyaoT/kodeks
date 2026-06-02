@@ -1,4 +1,4 @@
-"""OpenAI Agents SDK compatibility helpers for the Python migration."""
+"""OpenAI Agents SDK helpers for the Python runtime."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ class AgentsSdkRunner(Protocol):
         """Run one streaming Agents SDK turn."""
 
 
-def build_agents_sdk_build_agent(
+def build_agents_sdk_agent(
     *,
     database: KodeksDatabase,
     workspace_root: str,
@@ -69,7 +69,7 @@ def build_agents_sdk_build_agent(
     registry: ToolRegistry | None = None,
     approval_state: dict[str, AgentsSdkApprovalMetadata] | None = None,
 ) -> Agent[Any]:
-    """Build a TS-compatible OpenAI Agents SDK agent with local tool wrappers."""
+    """Build an OpenAI Agents SDK agent with local tool wrappers."""
 
     runtime_env = os.environ if environment is None else environment
     workspace = WorkspaceService(workspace_root)
@@ -131,7 +131,7 @@ def create_agents_sdk_run_config(
 
 
 def to_agents_sdk_input_items(transcript: Iterable[StoredMessage]) -> list[dict[str, Any]]:
-    """Convert durable transcript rows into TS-compatible Agents SDK input items."""
+    """Convert durable transcript rows into Agents SDK input items."""
 
     items: list[dict[str, Any]] = []
     for message in transcript:

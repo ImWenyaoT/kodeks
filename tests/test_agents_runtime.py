@@ -11,19 +11,19 @@ from kodeks.agents_events import (
     read_agents_sdk_tool_result,
 )
 from kodeks.agents_runtime import (
-    build_agents_sdk_build_agent,
+    build_agents_sdk_agent,
     create_agents_sdk_run_config,
     to_agents_sdk_input_items,
 )
 from kodeks.storage import KodeksDatabase
 
 
-def test_build_agents_sdk_build_agent_wraps_local_tools(tmp_path):
-    """Agents SDK agent construction preserves TS tool names and default non-strict schemas."""
+def test_build_agents_sdk_agent_wraps_local_tools(tmp_path):
+    """Agents SDK agent construction preserves tool names and default non-strict schemas."""
 
     database = KodeksDatabase(":memory:")
     try:
-        agent = build_agents_sdk_build_agent(
+        agent = build_agents_sdk_agent(
             database=database,
             workspace_root=str(tmp_path),
             model="gpt-test",
@@ -51,12 +51,12 @@ def test_build_agents_sdk_build_agent_wraps_local_tools(tmp_path):
         database.close()
 
 
-def test_build_agents_sdk_build_agent_filters_plan_tools_and_strict_mode(tmp_path):
+def test_build_agents_sdk_agent_filters_plan_tools_and_strict_mode(tmp_path):
     """Plan mode exposes read-only tools and strict schemas only when explicitly enabled."""
 
     database = KodeksDatabase(":memory:")
     try:
-        agent = build_agents_sdk_build_agent(
+        agent = build_agents_sdk_agent(
             database=database,
             workspace_root=str(tmp_path),
             mode="plan",
@@ -85,7 +85,7 @@ async def test_agents_sdk_run_shell_approval_records_durable_state(tmp_path):
     database = KodeksDatabase(":memory:")
     approval_state: dict[str, AgentsSdkApprovalMetadata] = {}
     try:
-        agent = build_agents_sdk_build_agent(
+        agent = build_agents_sdk_agent(
             database=database,
             workspace_root=str(tmp_path),
             session_id="sess_agents",
@@ -118,7 +118,7 @@ async def test_agents_sdk_tool_wrapper_invokes_local_registry(tmp_path):
     (tmp_path / "README.md").write_text("hello from sdk\n")
     database = KodeksDatabase(":memory:")
     try:
-        agent = build_agents_sdk_build_agent(
+        agent = build_agents_sdk_agent(
             database=database,
             workspace_root=str(tmp_path),
             session_id="sess_agents",
@@ -135,7 +135,7 @@ async def test_agents_sdk_tool_wrapper_invokes_local_registry(tmp_path):
 
 
 def test_to_agents_sdk_input_items_skips_tool_rows(tmp_path):
-    """Agents SDK input replay matches TS behavior by omitting persisted tool rows."""
+    """Agents SDK input replay omits persisted local tool rows."""
 
     database = KodeksDatabase(":memory:")
     try:

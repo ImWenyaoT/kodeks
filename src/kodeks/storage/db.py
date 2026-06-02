@@ -147,7 +147,6 @@ CREATE TABLE IF NOT EXISTS memory_atoms (
   source_session_id TEXT,
   confidence REAL NOT NULL,
   freshness REAL NOT NULL,
-  legacy_memory_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT

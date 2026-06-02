@@ -70,12 +70,6 @@ class StoredSession(BaseModel):
     archived_at: str | None = Field(default=None, alias="archivedAt")
 
 
-class StoredSessionWithPlan(StoredSession):
-    """Session list item with an optional active plan."""
-
-    active_plan: StoredPlanArtifact | None = Field(default=None, alias="activePlan")
-
-
 class StoredMessage(BaseModel):
     """Transcript message persisted in the shared SQLite schema."""
 
@@ -98,40 +92,3 @@ class StoredApproval(BaseModel):
     reason: str
     created_at: str = Field(alias="createdAt")
     decided_at: str | None = Field(default=None, alias="decidedAt")
-
-
-class ShellResult(BaseModel):
-    """Result shape returned after executing an approved command."""
-
-    command: str
-    exit_code: int | None = Field(alias="exitCode")
-    stdout: str
-    stderr: str
-    approval_required: bool = Field(alias="approvalRequired")
-    stdout_truncated: bool = Field(alias="stdoutTruncated")
-    stderr_truncated: bool = Field(alias="stderrTruncated")
-
-
-class MoonBridgePreflightResult(BaseModel):
-    """Diagnostic result for the current MoonBridge/provider selection."""
-
-    status: Literal["ready", "unavailable"]
-    provider: Literal["moonbridge", "auto"]
-    resolved_provider: Literal["moonbridge"] | None = Field(
-        default=None, alias="resolvedProvider"
-    )
-    code: str | None = None
-    reason: str | None = None
-    bridge_base_url: str | None = Field(default=None, alias="bridgeBaseURL")
-    bridge_model: str | None = Field(default=None, alias="bridgeModel")
-    upstream_base_url: str | None = Field(default=None, alias="upstreamBaseURL")
-    upstream_model: str | None = Field(default=None, alias="upstreamModel")
-    checked_at: str = Field(alias="checkedAt")
-
-
-class AgentEvent(BaseModel):
-    """Loose event envelope used while Python parity grows milestone by milestone."""
-
-    type: str
-    session_id: str = Field(alias="sessionId")
-    payload: dict[str, Any] = Field(default_factory=dict)

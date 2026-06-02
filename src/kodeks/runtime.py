@@ -19,7 +19,7 @@ from .agents_events import (
 )
 from .agents_runtime import (
     AgentsSdkRunner,
-    build_agents_sdk_build_agent,
+    build_agents_sdk_agent,
     create_agents_sdk_run_config,
     default_agents_sdk_runner,
     to_agents_sdk_input_items,
@@ -282,7 +282,7 @@ async def _run_agents_sdk_chat_turn(
     instructions = build_runtime_instructions(
         mode, active_plan, memory_context, selected_files
     )
-    agent = build_agents_sdk_build_agent(
+    agent = build_agents_sdk_agent(
         database=database,
         workspace_root=workspace_root,
         mode=mode,

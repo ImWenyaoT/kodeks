@@ -34,8 +34,8 @@ class MemoryRepository:
         self.database.connection.execute(
             """
             INSERT INTO memory_atoms
-              (id, scope, content, source_session_id, confidence, freshness, legacy_memory_id, created_at, updated_at, deleted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, scope, content, source_session_id, confidence, freshness, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 prefixed_id("atom"),
@@ -44,7 +44,6 @@ class MemoryRepository:
                 source_session_id,
                 1.0,
                 1.0,
-                memory_id,
                 now,
                 now,
                 None,

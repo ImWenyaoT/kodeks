@@ -9,9 +9,10 @@ separate migration task explicitly changes it.
   `session_created`, `assistant_status`, `text_delta`, `tool_call`,
   `tool_result`, `approval_required`, `memory_recalled`, `plan_artifact`,
   `subagent_started`, `subagent_completed`, `response_completed`, and `error`.
-- Model routing keeps the public providers stable: `moonbridge` for
-  Chat-Completions-compatible upstreams and `openai`/`responses` for direct
-  Responses-compatible endpoints.
+- Model routing keeps the public provider surface stable around `moonbridge`
+  for Chat-Completions-compatible upstreams. Direct `openai`/`responses` chat
+  providers have been removed and must continue to fail with migration
+  guidance.
 - MoonBridge keeps exposing a local Responses-shaped endpoint while forwarding
   upstream calls to `/chat/completions`.
 - DeepSeek thinking/tool-call turns preserve `reasoning_content` on assistant
@@ -26,11 +27,13 @@ separate migration task explicitly changes it.
   assistant answer.
 - Memory recall and large tool-output compaction continue to expose memory ids,
   layer counts, and artifact refs without copying full artifacts into prompts.
-- Bridge preflight still reports not-required, unavailable, ready, and recovered
-  states with the existing user-facing status fields.
-- Chat route execution goes through the Python OpenAI SDK runtime. The
-  TypeScript OpenAI/Agents SDK runtime, Next.js shell, and pnpm workspace have
-  been removed from active Web chat routes.
+- Bridge preflight still reports `ready` and `unavailable` states with the
+  existing user-facing status fields.
+- Chat route execution goes through the Python runtime with DeepSeek/MoonBridge
+  as the default model path. The Python Agents SDK path is diagnostic-only via
+  `KODEKS_FORCE_AGENTS_SDK_RUNTIME=true`. The TypeScript OpenAI/Agents SDK
+  runtime, Next.js shell, and pnpm workspace have been removed from active Web
+  chat routes.
 
 ## Review Pass Template
 
