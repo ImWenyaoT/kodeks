@@ -58,10 +58,10 @@ from .runtime_context import (
 )
 from .storage import KodeksDatabase
 from .tools.registry import (
-    ToolRegistryServices,
     build_default_tool_registry,
 )
 from .tools.schemas import default_tool_definitions
+from .tools.types import ToolRegistryServices
 from .workspace import WorkspaceService
 
 to_ui_transport_payload = _to_ui_transport_payload
