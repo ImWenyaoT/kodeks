@@ -150,29 +150,6 @@ class SessionRepository:
         ).fetchall()
         return [map_message(row) for row in rows]
 
-    def get_latest_assistant_response_id(self, session_id: str) -> str | None:
-        """Read the newest persisted assistant response id for stateful APIs."""
-
-        rows = self.database.connection.execute(
-            """
-            SELECT * FROM messages
-            WHERE session_id = ? AND role = 'assistant'
-            ORDER BY rowid DESC
-            """,
-            (session_id,),
-        ).fetchall()
-        for row in rows:
-            content = json.loads(row["content_json"])
-            if isinstance(content, dict) and isinstance(content.get("responseId"), str):
-                return str(content["responseId"])
-            if row["agent_event_json"] is not None:
-                agent_event = json.loads(row["agent_event_json"])
-                if isinstance(agent_event, dict) and isinstance(
-                    agent_event.get("responseId"), str
-                ):
-                    return str(agent_event["responseId"])
-        return None
-
 
 class ApprovalRepository:
     """Stores approval records for dangerous command execution."""

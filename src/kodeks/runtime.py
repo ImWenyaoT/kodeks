@@ -303,18 +303,12 @@ async def _run_agents_sdk_chat_turn(
         else None,
         reasoning_effort=str(model_options.get("reasoningEffort") or "medium"),
     )
-    previous_response_id = (
-        database.sessions.get_latest_assistant_response_id(session_id)
-        if model_options.get("provider") == "openai"
-        and model_options.get("statefulResponses") is True
-        else None
-    )
     result = (runner or default_agents_sdk_runner()).run_streamed(
         agent,
         to_agents_sdk_input_items(database.sessions.get_transcript(session_id)),
         max_turns=MAX_TOOL_LOOP_TURNS,
         run_config=run_config,
-        previous_response_id=previous_response_id,
+        previous_response_id=None,
     )
     assistant_text = ""
     waiting_for_approval = False
