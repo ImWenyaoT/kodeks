@@ -62,7 +62,7 @@ def test_bridge_filters_hosted_openai_tools_from_chat_completions():
     assert [tool["function"]["name"] for tool in payload["tools"]] == ["read_file"]
 
 
-def test_bridge_maps_core_replay_items_like_typescript_bridge():
+def test_bridge_maps_core_replay_items_for_tool_continuation():
     """Function-call replay items keep empty content and reasoning metadata."""
 
     payload = to_deepseek_chat_request(
@@ -199,7 +199,7 @@ async def test_bridge_preserves_reasoning_content_on_tool_calls():
 
 
 @pytest.mark.asyncio
-async def test_bridge_merges_tool_call_chunks_like_typescript_bridge():
+async def test_bridge_merges_tool_call_chunks_for_responses_contract():
     """Chunked tool calls replace id/name fields and append arguments only."""
 
     chunks = [

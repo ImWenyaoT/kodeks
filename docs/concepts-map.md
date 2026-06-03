@@ -1,56 +1,45 @@
-# Kodeks OpenAI Concepts Map
+# Kodeks Harness Concepts Map
 
-Kodeks is organized as a coding-agent harness around OpenAI concepts rather
-than ordinary CRUD domains. This map is the reference for future refactors and
-eval coverage.
+Kodeks is organized around a compact coding-agent harness, not ordinary CRUD
+domains and not a broad agent platform. This map connects the six review
+dimensions to code ownership and eval coverage.
 
-## Concept Coverage
+## Dimension Coverage
 
-| OpenAI concept | Kodeks asset | Eval coverage |
+| Harness dimension | Kodeks assets | Eval / test coverage |
 | --- | --- | --- |
-| Responses-shaped runtime contract | `src/kodeks/providers/bridge.py`, `src/kodeks/responses_runtime.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/runtime.py` | `read_file_tool_loop`, `unknown_tool_halts_locally`, `live_basic_completion` |
-| Function calling / tools | `src/kodeks/tools/schemas.py`, `src/kodeks/tools/registry.py`, `src/kodeks/agents_runtime.py` | `read_file_tool_loop`, `large_tool_output_becomes_artifact`, `agents_sdk_act_tool_surface`, `live_read_file_tool_loop` |
-| Conversation state | `src/kodeks/conversation_state.py`, `src/kodeks/storage/session.py` session/message repositories | `memory_recall_injected`, `live_memory_recall` |
-| Context management | `src/kodeks/runtime_context.py`, memory artifact offload in `src/kodeks/storage/memory.py` | `large_tool_output_becomes_artifact`, `memory_recall_injected` |
-| Agents SDK | `src/kodeks/agents_runtime.py`, `src/kodeks/agents_events.py` | `agents_sdk_act_tool_surface`, `agents_sdk_plan_tool_surface`, `agents_sdk_approval_pause` |
-| Safety and approvals | `src/kodeks/workspace.py`, approval repository/routes in `src/kodeks/storage/session.py` and `src/kodeks/app.py` | `dangerous_shell_requires_approval`, `agents_sdk_approval_pause` |
-| Planning | plan-mode instructions in `src/kodeks/runtime_context.py`, plan artifacts in `src/kodeks/plans.py` | `plan_mode_creates_plan_artifact`, `live_plan_mode_artifact` |
-| Model routing | `src/kodeks/config.py`, `src/kodeks/model_config.py`, MoonBridge routes in `src/kodeks/app.py`, bridge adapter in `src/kodeks/providers/bridge.py` | `bridge_preflight_missing_provider` |
-| Streaming UI transport | `src/kodeks/api/sse.py`, `src/kodeks/api/ui_transport.py`, `/api/chat/ui` | `ui_transport_finish_event` |
-| Evals | `evals/run_local.py`, `evals/cases.jsonl`, `evals/live_cases.jsonl` | deterministic lane and optional live lane |
+| 状态管理 | `src/kodeks/storage/session.py`, `src/kodeks/storage/memory.py`, `src/kodeks/storage/db.py`, `src/kodeks/conversation_state.py`, `src/kodeks/runtime_context.py` | session repository tests, transcript replay tests, session fork tests, `memory_recall_injected`, `large_tool_output_becomes_artifact`, plan artifact tests |
+| 流程控制 | `src/kodeks/runtime.py`, `src/kodeks/harness.py`, `src/kodeks/responses_runtime.py`, `src/kodeks/responses_tool_loop.py`, `src/kodeks/api/chat_routes.py`, `src/kodeks/api/sse.py` | `read_file_tool_loop`, `unknown_tool_halts_locally`, stream error tests, tool continuation tests, harness pattern evals |
+| 人工审批 | `src/kodeks/workspace.py`, approval repository in `src/kodeks/storage/session.py`, `src/kodeks/api/approval_routes.py`, `src/kodeks/tools/registry.py` | `dangerous_shell_requires_approval`, approval route tests, audit log assertions |
+| 可观测性 | SSE event contract in `src/kodeks/api/sse.py`, UI transport in `src/kodeks/api/ui_transport.py`, audit log repository, `evals/run_local.py`, `src/kodeks/smoke.py` | smoke checks, deterministic eval lane, UI transport tests, turn/tool/subagent/harness audit assertions |
+| 多 Agent | `src/kodeks/tools/registry.py` explore subagent tool, `src/kodeks/storage/memory.py` `SubagentRepository`, `subagent_runs` table | `subagent_explore_is_bounded`, structured contract assertions, durable run record assertions |
+| 协议集成 | `src/kodeks/providers/bridge.py`, `src/kodeks/responses_runtime.py`, `src/kodeks/responses_tool_loop.py` | bridge mapping tests, `reasoning_content` tests, terminal `response.failed`, tool replay tests |
 
-## Refactor Rules
+## Boundary Rules
 
-- Keep MoonBridge implicit. It is a protocol adapter that converts
-  Chat-Completions-compatible providers into a Responses-shaped runtime path.
-  It is important infrastructure, not a user-facing product concept.
-- Split files only when the new file maps cleanly to an OpenAI concept and
-  reduces local cognitive load.
-- Prefer preserving current behavior and proving it with evals before moving
-  code.
+- Keep the public product definition centered on memory, multi-session,
+  subagent, plan mode, workspace tools, approvals, observability, and protocol
+  adaptation.
+- Keep MoonBridge implicit. It is a protocol adapter that converts DeepSeek
+  Chat Completions into the Responses-shaped runtime path.
+- Do not add web search, provider dashboards, a plugin marketplace, or generic
+  multi-agent orchestration.
+- Do not add arbitrary workflow scripts. Kodeks only selects from the fixed
+  harness patterns in `src/kodeks/harness.py`.
 - Do not add provider directories, one-file-per-tool handlers, custom tracing
-  processors, or a generic permission engine until evals show those entities
-  are needed.
+  processors, skill marketplaces, or a generic permission engine unless evals
+  show a concrete harness problem that the new boundary solves.
+- Borrow AX-style runtime discipline only in small forms: single controller,
+  durable event log, clear resume/fork semantics, and bounded child runs.
+- Prefer behavior-preserving refactors backed by focused tests and eval cases.
 
-## Refactor Order
+## Reading Path
 
-1. Responses tool loop: move function-call continuation state out of the broad
-   runtime orchestrator.
-2. Agents SDK event normalization: separate SDK event readers from agent
-   construction.
-3. Conversation state: name transcript replay after the OpenAI concept it
-   implements.
-4. Model routing: keep config file loading in `config.py` and runtime-path
-   decisions in `model_config.py`.
-5. Tool schemas: separate model-facing tool schema definitions from handlers
-   if `tools.py` continues to grow.
-6. Approval service: only after the earlier splits are stable, extract approval
-   creation/audit/execute-once behavior without introducing a full permission
-   engine.
-
-## Beginner Reading Path
-
-If you are building the harness mental model first, start with
-`docs/harness-reading-map.md`. This concepts map is better as the second pass:
-it explains why the implementation boundaries line up with OpenAI concepts and
-eval coverage.
+1. `docs/architecture.md`: product boundary and main request path.
+2. `docs/PRD.md`: six harness dimensions and acceptance checks.
+3. `src/kodeks/runtime.py`: turn-level orchestration.
+4. `src/kodeks/responses_runtime.py` and `src/kodeks/responses_tool_loop.py`:
+   tool continuation and stream control.
+5. `src/kodeks/tools/`, `src/kodeks/workspace.py`, and `src/kodeks/storage/`:
+   local capability, safety, and state.
+6. `src/kodeks/providers/bridge.py`: protocol integration.

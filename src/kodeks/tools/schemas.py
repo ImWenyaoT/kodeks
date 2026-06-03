@@ -67,7 +67,7 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
         },
         {
             "name": "recall_memory",
-            "description": "Recall relevant layered memory facts, scenarios, and artifact refs.",
+            "description": "Recall relevant memory facts and artifact refs.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -77,7 +77,7 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["atom", "scenario", "artifact"],
+                            "enum": ["atom", "artifact"],
                         },
                     },
                 },
@@ -95,7 +95,7 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
         },
         {
             "name": "spawn_explore_agent",
-            "description": "Run one read-only explore subagent task and return its compact summary.",
+            "description": "Run one quarantined read-only explore subagent task and return claim/evidence/risk/confidence/nextAction.",
             "parameters": {
                 "type": "object",
                 "properties": {"task": {"type": "string"}},
@@ -107,26 +107,6 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
             "description": "List configured MCP server manifests from KODEKS_MCP_SERVERS or KODEKS_MCP_SERVER_URL.",
             "parameters": {"type": "object", "properties": {}},
         },
-        {
-            "name": "list_skills",
-            "description": "List available Kodeks skills from KODEKS_SKILLS_PATHS or the workspace .kodeks/skills directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "limit": {"type": "integer"},
-                },
-            },
-        },
-        {
-            "name": "read_skill",
-            "description": "Read one available skill's SKILL.md by name.",
-            "parameters": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"],
-            },
-        },
     ]
     if not read_only_only:
         return definitions
@@ -137,7 +117,5 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
         "read_memory_artifact",
         "spawn_explore_agent",
         "list_mcp_servers",
-        "list_skills",
-        "read_skill",
     }
     return [definition for definition in definitions if definition["name"] in read_only_names]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ..workspace import (
@@ -12,7 +11,6 @@ from ..workspace import (
 from .helpers import (
     clamp_integer,
     completed_output,
-    discover_skills,
     error_message,
     failed_output,
     json_output,
@@ -132,18 +130,6 @@ def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
                 True,
                 False,
                 lambda arguments, context: execute_list_mcp_servers(services),
-            ),
-            RegisteredTool(
-                definitions[9],
-                True,
-                False,
-                lambda arguments, context: execute_list_skills(arguments, services),
-            ),
-            RegisteredTool(
-                definitions[10],
-                True,
-                False,
-                lambda arguments, context: execute_read_skill(arguments, services),
             ),
         ]
     )
@@ -334,17 +320,50 @@ def execute_spawn_explore_agent(
     task = string_argument(arguments, "task")
     if task is None:
         return failed_output("spawn_explore_agent requires a non-empty string task")
-    run = services.database.subagents.start_run(
-        context.session_id or "session_unknown", "explore", task
+    session_id = context.session_id or "session_unknown"
+    run = services.database.subagents.start_run(session_id, "explore", task)
+    visible_files = services.workspace.list_files(limit=12)
+    allowed_tools = ["read_file", "grep", "recall_memory", "read_memory_artifact"]
+    services.database.audit_log.record(
+        session_id,
+        "subagent_started",
+        {
+            "runId": run["id"],
+            "agentName": run["agentName"],
+            "task": task,
+            "allowedTools": allowed_tools,
+            "visibleFileCount": len(visible_files),
+        },
     )
-    summary = f"Explore agent completed task: {task}"
+    summary = _subagent_summary(task, visible_files)
+    contract = _subagent_contract(task, visible_files)
     completed = services.database.subagents.complete_run(str(run["id"]), summary)
+    services.database.audit_log.record(
+        session_id,
+        "subagent_completed",
+        {
+            "runId": completed["id"],
+            "agentName": completed["agentName"],
+            "status": completed["status"],
+            "summary": completed["summary"],
+            "allowedTools": allowed_tools,
+            "contract": contract,
+        },
+    )
     return completed_output(
         {
             "ok": True,
             "runId": completed["id"],
             "status": completed["status"],
             "summary": completed["summary"],
+            "allowedTools": allowed_tools,
+            "parentSessionId": session_id,
+            "contract": contract,
+            "quarantine": {
+                "readOnly": True,
+                "canMutateWorkspace": False,
+                "canRequestApproval": False,
+            },
         }
     )
 
@@ -356,41 +375,24 @@ def execute_list_mcp_servers(services: ToolRegistryServices) -> ToolExecutionRes
     return completed_output({"ok": True, "servers": servers, "count": len(servers)})
 
 
-def execute_list_skills(
-    arguments: ToolArguments, services: ToolRegistryServices
-) -> ToolExecutionResult:
-    """List available skill directories and titles."""
+def _subagent_summary(task: str, visible_files: list[str]) -> str:
+    """Build a bounded read-only subagent summary from workspace inventory."""
 
-    query = string_argument(arguments, "query")
-    limit = clamp_integer(arguments.get("limit"), 1, 50, 20)
-    skills = discover_skills(services)
-    if query is not None:
-        lowered = query.lower()
-        skills = [
-            skill
-            for skill in skills
-            if lowered in f"{skill['name']}\n{skill['title']}".lower()
-        ]
-    return completed_output({"ok": True, "skills": skills[:limit]})
+    preview = ", ".join(visible_files[:5]) if visible_files else "no visible files"
+    return (
+        "Read-only explore run completed. "
+        f"Task: {task}. Visible workspace sample: {preview}."
+    )
 
 
-def execute_read_skill(
-    arguments: ToolArguments, services: ToolRegistryServices
-) -> ToolExecutionResult:
-    """Read one discovered skill body by exact directory name."""
+def _subagent_contract(task: str, visible_files: list[str]) -> dict[str, object]:
+    """Build a structured, synthesis-friendly contract for subagent output."""
 
-    name = string_argument(arguments, "name")
-    if name is None:
-        return failed_output("read_skill requires a non-empty string name")
-    for skill in discover_skills(services):
-        if skill["name"] == name:
-            path = Path(str(skill["path"]))
-            return completed_output(
-                {
-                    "ok": True,
-                    "name": skill["name"],
-                    "title": skill["title"],
-                    "content": path.read_text(),
-                }
-            )
-    return failed_output(f"Unknown skill: {name}")
+    evidence = visible_files[:5]
+    return {
+        "claim": "Read-only workspace exploration completed.",
+        "evidence": evidence,
+        "risk": "This run only sampled visible files and did not mutate or execute commands.",
+        "confidence": "medium" if evidence else "low",
+        "nextAction": f"Main agent should synthesize this with the parent task: {task}.",
+    }

@@ -7,7 +7,6 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from .contracts import ConfiguredModelCatalog, ConfiguredModelOption, ReasoningEffort
-from .embedding_config import write_embeddings_config
 
 RuntimeEnv = Mapping[str, str | None]
 
@@ -21,28 +20,24 @@ DEFAULT_BRIDGE_REASONING_EFFORT: ReasoningEffort = "high"
 LOCAL_ENDPOINT_API_KEY = "not-needed"
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
 
-DEPRECATED_ENV_MIGRATIONS = {
-    "DEEPSEEK_API_KEY": "KODEKS_CHAT_COMPLETIONS_API_KEY",
-    "DEEPSEEK_BASE_URL": "KODEKS_CHAT_COMPLETIONS_BASE_URL",
-    "DEEPSEEK_MODEL": "KODEKS_CHAT_COMPLETIONS_MODEL",
-    "DEEPSEEK_REASONING_EFFORT": "KODEKS_BRIDGE_REASONING_EFFORT",
-    "KODEKS_BRIDGE_DEEPSEEK_API_KEY": "KODEKS_CHAT_COMPLETIONS_API_KEY",
-    "KODEKS_BRIDGE_DEEPSEEK_BASE_URL": "KODEKS_CHAT_COMPLETIONS_BASE_URL",
-    "KODEKS_BRIDGE_DEEPSEEK_MODEL": "KODEKS_CHAT_COMPLETIONS_MODEL",
-    "MOONBRIDGE_API_KEY": "KODEKS_BRIDGE_API_KEY",
-    "MOONBRIDGE_BASE_URL": "KODEKS_BRIDGE_BASE_URL",
-    "MOONBRIDGE_ENABLED": "KODEKS_BRIDGE_ENABLED",
-    "MOONBRIDGE_MODEL": "KODEKS_BRIDGE_MODEL",
-    "MOONBRIDGE_REASONING_EFFORT": "KODEKS_BRIDGE_REASONING_EFFORT",
-    "MOONBRIDGE_DEEPSEEK_API_KEY": "KODEKS_CHAT_COMPLETIONS_API_KEY",
-    "MOONBRIDGE_DEEPSEEK_BASE_URL": "KODEKS_CHAT_COMPLETIONS_BASE_URL",
-    "MOONBRIDGE_DEEPSEEK_MODEL": "KODEKS_CHAT_COMPLETIONS_MODEL",
+UNSUPPORTED_MODEL_ENV_KEYS = {
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_MODEL",
+    "DEEPSEEK_REASONING_EFFORT",
+    "KODEKS_BRIDGE_DEEPSEEK_API_KEY",
+    "KODEKS_BRIDGE_DEEPSEEK_BASE_URL",
+    "KODEKS_BRIDGE_DEEPSEEK_MODEL",
+    "MOONBRIDGE_API_KEY",
+    "MOONBRIDGE_BASE_URL",
+    "MOONBRIDGE_ENABLED",
+    "MOONBRIDGE_MODEL",
+    "MOONBRIDGE_REASONING_EFFORT",
+    "MOONBRIDGE_DEEPSEEK_API_KEY",
+    "MOONBRIDGE_DEEPSEEK_BASE_URL",
+    "MOONBRIDGE_DEEPSEEK_MODEL",
 }
-DEPRECATED_PROVIDER_VALUES = {
-    "bridge": "moonbridge",
-    "deepseek": "moonbridge",
-    "chat-completions": "moonbridge",
-}
+UNSUPPORTED_PROVIDER_VALUES = {"bridge", "deepseek", "chat-completions"}
 
 
 class ModelConfigurationError(RuntimeError):
@@ -61,22 +56,17 @@ def model_config_to_env(
     root_models = _object_value(config.get("models"))
     _write_env_section(values, _object_value(config.get("env")))
     if model is not None:
-        _write_string(
-            values, "KODEKS_MODEL_PROVIDER", _normalize_provider(model.get("provider"))
-        )
         _write_endpoint(
             values,
             "KODEKS_CHAT_COMPLETIONS",
             _object_value(model.get("chatCompletions")),
         )
-        _write_bridge(values, _object_value(model.get("bridge")))
     _write_deepseek_provider(
         values,
         model,
         _object_value(root_models.get("providers")) if root_models else None,
         requested_model_ref,
     )
-    write_embeddings_config(values, _object_value(config.get("embeddings")))
     return values
 
 
@@ -359,11 +349,11 @@ def _resolve_provider_override(value: object) -> Literal["moonbridge"] | None:
         return "moonbridge"
     if value in {"openai", "responses"}:
         raise ModelConfigurationError(
-            "Direct OpenAI/Responses model providers have been removed. Configure DeepSeek Chat Completions instead."
+            "Direct OpenAI/Responses model providers are outside the Kodeks product boundary. Configure DeepSeek Chat Completions through MoonBridge."
         )
-    if isinstance(value, str) and value in DEPRECATED_PROVIDER_VALUES:
+    if isinstance(value, str) and value in UNSUPPORTED_PROVIDER_VALUES:
         raise ModelConfigurationError(
-            f'Model provider "{value}" has been removed. Use "{DEPRECATED_PROVIDER_VALUES[value]}" instead.'
+            f'Model provider "{value}" is unsupported. Use a deepseek/<model> ref; MoonBridge remains an internal adapter.'
         )
     return None
 
@@ -379,11 +369,11 @@ def _resolve_configured_provider(
         return "moonbridge"
     if value in {"openai", "responses"}:
         raise ModelConfigurationError(
-            "Direct OpenAI/Responses model providers have been removed. Configure DeepSeek Chat Completions instead."
+            "Direct OpenAI/Responses model providers are outside the Kodeks product boundary. Configure DeepSeek Chat Completions through MoonBridge."
         )
-    if value in DEPRECATED_PROVIDER_VALUES:
+    if value in UNSUPPORTED_PROVIDER_VALUES:
         raise ModelConfigurationError(
-            f'KODEKS_MODEL_PROVIDER="{value}" has been removed. Use "{DEPRECATED_PROVIDER_VALUES[value]}" instead.'
+            f'KODEKS_MODEL_PROVIDER="{value}" is unsupported. Use a deepseek/<model> ref; MoonBridge remains an internal adapter.'
         )
     raise ModelConfigurationError(
         f'Unsupported KODEKS_MODEL_PROVIDER="{value}". Use "moonbridge" for the DeepSeek Chat Completions route.'
@@ -393,10 +383,10 @@ def _resolve_configured_provider(
 def _assert_no_deprecated_model_env(env: RuntimeEnv) -> None:
     """Fail fast when old model env aliases are still present."""
 
-    for old, new in DEPRECATED_ENV_MIGRATIONS.items():
-        if env.get(old) is not None:
+    for key in UNSUPPORTED_MODEL_ENV_KEYS:
+        if env.get(key) is not None:
             raise ModelConfigurationError(
-                f"{old} has been removed. Rename it to {new}; Kodeks now only accepts DeepSeek/MoonBridge KODEKS_* model configuration keys."
+                f"{key} is unsupported. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek Chat Completions route."
             )
 
 
@@ -411,18 +401,6 @@ def _write_endpoint(
     _write_string(values, f"{prefix}_BASE_URL", endpoint.get("baseURL"))
     _write_string(values, f"{prefix}_MODEL", endpoint.get("model"))
     _write_string(values, f"{prefix}_REASONING_EFFORT", endpoint.get("reasoningEffort"))
-
-
-def _write_bridge(
-    values: MutableMapping[str, str], bridge: Mapping[str, Any] | None
-) -> None:
-    """Write bridge config to env-style values."""
-
-    if bridge is None:
-        return
-    if isinstance(bridge.get("enabled"), bool):
-        values["KODEKS_BRIDGE_ENABLED"] = str(bridge["enabled"]).lower()
-    _write_endpoint(values, "KODEKS_BRIDGE", bridge)
 
 
 def _write_env_section(
@@ -442,14 +420,6 @@ def _write_string(values: MutableMapping[str, str], key: str, value: object) -> 
     string = _string_value(value)
     if string is not None:
         values[key] = string
-
-
-def _normalize_provider(value: object) -> str | None:
-    """Normalize old config provider labels that point at MoonBridge."""
-
-    if value in {"deepseek", "chat-completions"}:
-        return "moonbridge"
-    return _string_value(value)
 
 
 def _normalize_api_shape(

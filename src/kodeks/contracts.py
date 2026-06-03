@@ -1,4 +1,4 @@
-"""Pydantic contracts that mirror the current TypeScript runtime boundary."""
+"""Pydantic contracts for the Kodeks runtime wire boundary."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class StoredPlanArtifact(BaseModel):
 
 
 class StoredSession(BaseModel):
-    """Session metadata compatible with the TypeScript route response."""
+    """Session metadata returned by session routes and transcript loaders."""
 
     id: str
     title: str

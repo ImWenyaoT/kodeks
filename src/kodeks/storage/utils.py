@@ -24,7 +24,7 @@ def current_timestamp() -> str:
 
 
 def prefixed_id(prefix: str) -> str:
-    """Create a compact prefixed id compatible with existing TS ids."""
+    """Create a compact prefixed id for durable Kodeks records."""
 
     return f"{prefix}_{uuid4().hex}"
 

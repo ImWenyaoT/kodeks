@@ -131,43 +131,10 @@ CREATE TABLE IF NOT EXISTS memories (
   updated_at TEXT NOT NULL,
   deleted_at TEXT
 );
-CREATE TABLE IF NOT EXISTS memory_events (
-  id TEXT PRIMARY KEY,
-  session_id TEXT,
-  role TEXT NOT NULL,
-  content TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  source_id TEXT,
-  created_at TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS memory_atoms (
   id TEXT PRIMARY KEY,
   scope TEXT NOT NULL,
   content TEXT NOT NULL,
-  source_session_id TEXT,
-  confidence REAL NOT NULL,
-  freshness REAL NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  deleted_at TEXT
-);
-CREATE TABLE IF NOT EXISTS memory_scenarios (
-  id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL,
-  title TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  source_session_id TEXT,
-  confidence REAL NOT NULL,
-  freshness REAL NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  deleted_at TEXT
-);
-CREATE TABLE IF NOT EXISTS memory_profiles (
-  id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL,
-  content TEXT NOT NULL,
-  priority REAL NOT NULL,
   source_session_id TEXT,
   confidence REAL NOT NULL,
   freshness REAL NOT NULL,
@@ -187,22 +154,6 @@ CREATE TABLE IF NOT EXISTS memory_artifacts (
   content_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
   deleted_at TEXT
-);
-CREATE TABLE IF NOT EXISTS memory_embeddings (
-  content_hash TEXT NOT NULL,
-  embedding_model TEXT NOT NULL,
-  dimensions INTEGER NOT NULL,
-  vector_blob BLOB NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (content_hash, embedding_model)
-);
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_search_fts USING fts5(
-  id UNINDEXED,
-  layer UNINDEXED,
-  scope UNINDEXED,
-  content,
-  source_id UNINDEXED,
-  updated_at UNINDEXED
 );
 CREATE TABLE IF NOT EXISTS approvals (
   id TEXT PRIMARY KEY,

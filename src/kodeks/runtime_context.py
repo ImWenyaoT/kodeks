@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from .contracts import StoredPlanArtifact
+from .harness import HarnessDecision
 
 
 def body_with_runtime_context(
@@ -14,13 +15,14 @@ def body_with_runtime_context(
     active_plan: StoredPlanArtifact | None,
     memory_context: Mapping[str, list[dict[str, Any]]],
     selected_files: list[dict[str, Any]],
+    harness_decision: HarnessDecision | None = None,
 ) -> dict[str, Any]:
     """Add model-facing runtime context while preserving the incoming request body."""
 
     next_body = dict(body)
     next_body["mode"] = mode
     instructions = build_runtime_instructions(
-        mode, active_plan, memory_context, selected_files
+        mode, active_plan, memory_context, selected_files, harness_decision
     )
     if instructions:
         existing = _string_value(body.get("instructions"))
@@ -35,6 +37,7 @@ def build_runtime_instructions(
     active_plan: StoredPlanArtifact | None,
     memory_context: Mapping[str, list[dict[str, Any]]],
     selected_files: list[dict[str, Any]],
+    harness_decision: HarnessDecision | None = None,
 ) -> str:
     """Build compact model instructions for Python runtime parity."""
 
@@ -46,6 +49,8 @@ def build_runtime_instructions(
     ]
     if mode == "plan":
         lines.append("Plan mode is read-only; use only read-only tools.")
+    if harness_decision is not None:
+        lines.extend(["", _format_harness_decision(harness_decision)])
     lines.extend(
         [
             "",
@@ -99,7 +104,7 @@ def selected_files_from_body(body: Mapping[str, Any]) -> list[dict[str, Any]]:
 def build_memory_context(database: Any, query: str) -> dict[str, list[dict[str, Any]]]:
     """Recall layered memories for the current user input."""
 
-    layers = ["atom", "scenario", "artifact"]
+    layers = ["atom", "artifact"]
     context = cast(
         dict[str, list[dict[str, Any]]],
         database.memories.recall_layered(query, 5, layers),
@@ -108,7 +113,6 @@ def build_memory_context(database: Any, query: str) -> dict[str, list[dict[str, 
         return context
     merged: dict[str, list[dict[str, Any]]] = {
         "atoms": [],
-        "scenarios": [],
         "artifacts": [],
     }
     seen: set[str] = set()
@@ -131,7 +135,7 @@ def memory_context_ids(context: Mapping[str, list[dict[str, Any]]]) -> list[str]
     """Return memory ids that should be exposed in memory_recalled events."""
 
     ids: list[str] = []
-    for layer in ("profiles", "atoms", "scenarios"):
+    for layer in ("atoms",):
         for item in context.get(layer, []):
             item_id = item.get("id")
             if isinstance(item_id, str):
@@ -146,9 +150,7 @@ def memory_context_layer_counts(
 
     counts: dict[str, int] = {}
     mapping = {
-        "profiles": "profile",
         "atoms": "atom",
-        "scenarios": "scenario",
         "artifacts": "artifact",
     }
     for key, label in mapping.items():
@@ -180,24 +182,37 @@ def _format_memory_context(context: Mapping[str, list[dict[str, Any]]]) -> str:
     """Format layered memory as compact model instructions."""
 
     lines: list[str] = []
-    for profile in context.get("profiles", []):
-        lines.append(
-            f"- [profile:{profile.get('scope') or 'project'}] {profile.get('content') or ''}"
-        )
     for atom in context.get("atoms", []):
         lines.append(
             f"- [atom:{atom.get('scope') or 'project'}] {atom.get('content') or ''}"
         )
-    for scenario in context.get("scenarios", []):
-        title = scenario.get("title") or "scenario"
-        summary = scenario.get("summary") or ""
-        lines.append(f"- [scenario:{scenario.get('scope') or 'project'}] {title}: {summary}")
     for artifact in context.get("artifacts", []):
         ref_id = artifact.get("refId") or artifact.get("id") or "artifact"
         lines.append(
             f"- [artifact:{ref_id}] {artifact.get('summary') or ''} (use read_memory_artifact to inspect full output)"
         )
     return "\n".join(lines) if lines else "No recalled memories."
+
+
+def _format_harness_decision(decision: HarnessDecision) -> str:
+    """Format the selected harness pattern as compact model guidance."""
+
+    lines = [
+        f"Harness pattern for this turn: {decision.pattern}.",
+        f"Why: {'; '.join(decision.reasons)}.",
+        f"Stop condition: {decision.stop_condition}.",
+        f"Approval boundary: {decision.approval_boundary}",
+    ]
+    if decision.failure_modes:
+        lines.append(
+            "Failure modes to guard against: "
+            + ", ".join(decision.failure_modes)
+            + "."
+        )
+    lines.append(
+        "If using spawn_explore_agent, expect its summary to support claim, evidence, risk, confidence, and nextAction."
+    )
+    return "\n".join(lines)
 
 
 def _memory_query_terms(query: str) -> list[str]:

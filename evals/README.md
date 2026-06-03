@@ -19,7 +19,7 @@ fails.
 
 - `cases.jsonl` maps deterministic cases to an OpenAI concept such as
   tools/function calling, conversation state, context management, planning,
-  model routing, or Agents SDK tool surfaces.
+  model routing, bounded subagents, harness pattern selection, or UI transport.
 - `live_cases.jsonl` maps optional real-provider cases to the same concept
   taxonomy. The live lane uses the configured model credentials and temporary
   workspaces.

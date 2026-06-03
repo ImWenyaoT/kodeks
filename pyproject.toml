@@ -1,14 +1,13 @@
 [project]
 name = "kodeks"
 version = "0.1.0"
-description = "Python compatibility runtime for the Kodeks local-first agent workbench."
+description = "Local-first coding agent harness with memory, sessions, approvals, plan mode, and subagent exploration."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.116.0",
   "httpx2>=2.3.0",
   "openai>=2.0.0",
-  "openai-agents>=0.6.0",
   "pydantic>=2.12.0",
   "socksio>=1.0.0",
   "uvicorn>=0.35.0",

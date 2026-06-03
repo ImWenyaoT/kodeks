@@ -12,69 +12,34 @@ from kodeks.tools.schemas import default_tool_definitions
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_workspace_no_longer_contains_typescript_runtime_surface():
-    """The migration contract keeps the active workspace Python-only."""
-
-    forbidden_paths = [
-        "apps/web",
-        "packages",
-        "package.json",
-        "pnpm-lock.yaml",
-        "pnpm-workspace.yaml",
-        "eslint.config.mjs",
-        "tsconfig.base.json",
-        ".prettierrc.json",
-        ".prettierignore",
-    ]
-
-    for relative_path in forbidden_paths:
-        assert not (REPO_ROOT / relative_path).exists(), relative_path
-
-    typescript_sources = [
-        path
-        for path in REPO_ROOT.rglob("*")
-        if path.suffix in {".ts", ".tsx"}
-        and ".git" not in path.parts
-        and ".venv" not in path.parts
-    ]
-
-    assert typescript_sources == []
-
-
-def test_python_package_includes_static_ui_assets():
-    """Python packaging keeps the browser shell after removing Next.js."""
+def test_python_package_declares_harness_identity():
+    """Package metadata and entrypoints describe the Kodeks harness."""
 
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
 
+    assert "coding agent harness" in pyproject["project"]["description"]
     assert pyproject["project"]["scripts"] == {
         "kodeks-server": "kodeks.server:main",
         "kodeks-smoke": "kodeks.smoke:main",
     }
-    assert (REPO_ROOT / "src/kodeks/static/index.html").exists()
-
-
-def test_root_agents_instructions_are_removed_from_repository():
-    """Repository-local agent instructions are no longer part of the runtime tree."""
-
-    assert not (REPO_ROOT / "AGENTS.md").exists()
-
-
-def test_python_package_build_backend_is_declared():
-    """Python packaging uses the offline in-tree build backend."""
-
-    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
-
     assert pyproject["build-system"] == {
         "requires": [],
         "build-backend": "kodeks_build",
         "backend-path": ["build_backend"],
     }
     assert (REPO_ROOT / "build_backend/kodeks_build.py").exists()
+    assert (REPO_ROOT / "src/kodeks/static/index.html").exists()
     assert pyproject["tool"]["mypy"]["files"] == ["src/kodeks", "build_backend"]
 
 
-def test_python_fastapi_route_surface_matches_migration_inventory():
-    """FastAPI exposes the Python replacement routes and bridge aliases."""
+def test_root_agents_instructions_are_not_part_of_repository():
+    """Repository-local agent instructions are outside the runtime tree."""
+
+    assert not (REPO_ROOT / "AGENTS.md").exists()
+
+
+def test_fastapi_route_surface_matches_harness_boundary():
+    """FastAPI exposes the local coding-agent harness routes."""
 
     route_surface = {
         (method, route.path)
@@ -104,13 +69,11 @@ def test_python_fastapi_route_surface_matches_migration_inventory():
     assert expected_routes <= route_surface
 
 
-def test_ci_runs_python_validation_and_in_process_smoke():
-    """CI no longer depends on Node and includes Python smoke validation."""
+def test_ci_runs_python_harness_validation_and_smoke():
+    """CI includes the validation gates for the harness runtime."""
 
     ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "actions/setup-node" not in ci
-    assert "pnpm" not in ci
     assert "uv sync" in ci
     assert "uv run mypy" in ci
     assert "uv run ruff check" in ci
@@ -119,8 +82,8 @@ def test_ci_runs_python_validation_and_in_process_smoke():
     assert "uv build" in ci
 
 
-def test_uv_lock_tracks_python_only_dependency_graph():
-    """The lockfile reflects the Python runtime and no Node toolchain packages."""
+def test_uv_lock_tracks_runtime_dependency_graph():
+    """The lockfile includes the runtime and dev validation dependencies."""
 
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text())
     packages = {package["name"]: package for package in lock["package"]}
@@ -131,7 +94,6 @@ def test_uv_lock_tracks_python_only_dependency_graph():
         "fastapi",
         "httpx2",
         "openai",
-        "openai-agents",
         "pydantic",
         "uvicorn",
     }
@@ -143,72 +105,47 @@ def test_uv_lock_tracks_python_only_dependency_graph():
         dependency["name"]
         for dependency in packages["kodeks"]["metadata"]["requires-dev"]["dev"]
     } >= {"mypy", "pytest", "pytest-asyncio", "ruff"}
-    for forbidden in [
-        "typescript",
-        "next",
-        "react",
-        "eslint",
-        "vitest",
-        "prettier",
-        "pnpm",
-    ]:
-        assert forbidden not in packages
 
 
-def test_refactor_parity_docs_require_python_validation_and_build():
-    """Migration docs keep Python validation gates current."""
+def test_refactor_boundary_docs_require_validation_and_six_dimensions():
+    """Refactor docs keep validation tied to the six harness dimensions."""
 
     checklist = (REPO_ROOT / "docs/refactor-parity.md").read_text()
 
+    for dimension in [
+        "状态管理",
+        "流程控制",
+        "人工审批",
+        "可观测性",
+        "多 Agent",
+        "协议集成",
+    ]:
+        assert dimension in checklist
     assert "uv run pytest" in checklist
     assert "uv run ruff check" in checklist
     assert "uv run mypy" in checklist
     assert "uv build" in checklist
     assert "focused pytest files" in checklist
-    assert "route parity checks" in checklist
-    assert "build isolation" not in checklist
-    assert "package tests" not in checklist
 
 
-def test_readme_marks_superseded_typescript_design_as_historical():
-    """README navigation points to current migration docs before history."""
+def test_readme_navigation_centers_current_boundary_docs():
+    """README navigation points to current product and harness docs."""
 
     readme = (REPO_ROOT / "README.md").read_text()
     readme_zh = (REPO_ROOT / "README.zh-CN.md").read_text()
 
-    assert "Modernization plan" in readme
-    assert "Historical TS design" in readme
-    assert "Migration design" not in readme
-    assert "现代化计划" in readme_zh
-    assert "历史 TS 设计" in readme_zh
-    assert "迁移设计" not in readme_zh
-
-
-def test_superseded_typescript_design_stays_archival_only():
-    """The historical design doc cannot become an active TS migration guide again."""
-
-    design = (
-        REPO_ROOT / "docs/superpowers/specs/2026-05-24-ts-agents-migration-design.md"
-    ).read_text()
-
-    assert "Superseded archival note" in design
-    assert "Do not use this archived note to recreate TypeScript SDK packages" in design
-    assert "docs/MODERNIZATION.md" in design
-    assert "src/kodeks/*" in design
-    assert "not an active migration plan" in design
-    for forbidden in [
-        "## Chosen Stack",
-        "## Package Layout",
-        "Next.js App Router",
-        "OpenAI JS SDK",
-        "The migrated project should be strong enough",
-        "implementation remains Next.js",
-    ]:
-        assert forbidden not in design
+    assert "[Architecture](./docs/architecture.md)" in readme
+    assert "[Product requirements](./docs/PRD.md)" in readme
+    assert "[Concept map](./docs/concepts-map.md)" in readme
+    assert "[架构说明](./docs/architecture.md)" in readme_zh
+    assert "[产品需求](./docs/PRD.md)" in readme_zh
+    assert "[概念映射](./docs/concepts-map.md)" in readme_zh
+    assert "./docs/superpowers/" not in readme
+    assert "./docs/superpowers/" not in readme_zh
 
 
 def test_readme_quickstart_uses_python_runtime_commands():
-    """README examples point users at the Python runtime and health route."""
+    """README examples point users at the local FastAPI runtime and health route."""
 
     readme = (REPO_ROOT / "README.md").read_text()
     readme_zh = (REPO_ROOT / "README.zh-CN.md").read_text()
@@ -223,65 +160,55 @@ def test_readme_quickstart_uses_python_runtime_commands():
         assert "uv run mypy" in content
         assert "uv build" in content
         assert "uv run python -m kodeks.smoke --in-process" in content
-        assert "no-side-effect `/api/chat/stream` validation" in content or (
-            "无副作用 `/api/chat/stream` validation" in content
-        )
-        assert "KODEKS_OPENAI_COMPAT_BASE_URL" in content
-        assert "KODEKS_OPENAI_COMPAT_EMBED_MODEL" in content
-        assert "pnpm install" not in content
-        assert "pnpm run" not in content
         assert "localhost:3000" not in content
-        assert "KODEKS_LMSTUDIO_BASE_URL" not in content
-        assert "KODEKS_LMSTUDIO_EMBED_MODEL" not in content
 
 
-def test_modernization_plan_covers_required_migration_surfaces():
-    """Migration plan documents the requested surfaces, gates, and fallback."""
-
-    modernization = (REPO_ROOT / "docs/MODERNIZATION.md").read_text()
-
-    for surface in [
-        "Routing",
-        "Data models",
-        "Auth and safety",
-        "Configuration",
-        "Build tooling",
-        "Tests",
-        "Deployment/runtime",
-        "External contracts",
-    ]:
-        assert f"| {surface}" in modernization
-    assert "## Milestones" in modernization
-    assert "Rollback is the last TS-backed branch/release" in modernization
-    assert "Cut the Python agent loop over by default" in modernization
-    assert "KODEKS_FORCE_AGENTS_SDK_RUNTIME=true" in modernization
-    assert "behind a feature flag" not in modernization
-    assert "no-side-effect chat route validation" in modernization
-    assert "no-side-effect `/api/chat/stream` validation" in modernization
-    assert "live provider smoke success" in modernization
-    assert "local sockets are allowed" in modernization
-    for command in [
-        "uv run pytest",
-        "uv run ruff check",
-        "uv run mypy",
-        "uv run python -m kodeks.smoke --in-process",
-        "uv build",
-    ]:
-        assert command in modernization
-
-
-def test_prd_marks_reference_paths_as_non_active_surface():
-    """PRD reference paths must not reopen the TypeScript implementation target."""
+def test_prd_defines_minimal_harness_boundary():
+    """PRD uses the six harness dimensions as the product standard."""
 
     prd = (REPO_ROOT / "docs/PRD.md").read_text()
 
-    assert "不是当前 Kodeks 的 active implementation surface" in prd
-    assert "`src/kodeks/*` 的 Python runtime 模块为准" in prd
-    assert "不要把参考项目里的 TypeScript 路径当成" in prd
+    assert "带 memory、multi-session、subagent、plan mode 的 coding agent" in prd
+    for dimension in [
+        "状态管理",
+        "流程控制",
+        "人工审批",
+        "可观测性",
+        "多 Agent",
+        "协议集成",
+    ]:
+        assert dimension in prd
+    assert "web search tools" in prd
+    assert "provider dashboard" in prd
+    assert "通用多 Agent 编排平台" in prd
+
+
+def test_concepts_map_links_dimensions_to_assets_and_evals():
+    """Concepts map is organized by harness dimensions."""
+
+    concepts = (REPO_ROOT / "docs/concepts-map.md").read_text()
+
+    for asset in [
+        "src/kodeks/runtime.py",
+        "src/kodeks/responses_runtime.py",
+        "src/kodeks/workspace.py",
+        "src/kodeks/providers/bridge.py",
+        "evals/run_local.py",
+    ]:
+        assert asset in concepts
+    for dimension in [
+        "状态管理",
+        "流程控制",
+        "人工审批",
+        "可观测性",
+        "多 Agent",
+        "协议集成",
+    ]:
+        assert dimension in concepts
 
 
 def test_models_route_keeps_secret_free_deepseek_contract(tmp_path, monkeypatch):
-    """The Python `/api/models` route returns only DeepSeek metadata without secrets."""
+    """The `/api/models` route returns only DeepSeek metadata without secrets."""
 
     config_path = tmp_path / "config.json"
     config_path.write_text(
@@ -369,8 +296,8 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_deepseek(
     assert body["upstreamModel"] == "deepseek-v4-pro"
 
 
-def test_python_chat_routes_keep_feature_flag_error_path(tmp_path, monkeypatch):
-    """Chat routes keep rollback visible through config errors until cutover."""
+def test_chat_routes_emit_config_errors_without_side_effects(tmp_path, monkeypatch):
+    """Chat routes expose missing model configuration as runtime events."""
 
     monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(tmp_path / "missing.json"))
@@ -400,7 +327,7 @@ def test_python_chat_routes_keep_feature_flag_error_path(tmp_path, monkeypatch):
 
 
 def test_tool_definition_order_matches_runtime_contract():
-    """Python tool schemas keep the model-facing names and order used by TS."""
+    """Tool schemas keep the model-facing names and order stable."""
 
     assert [tool["name"] for tool in default_tool_definitions()] == [
         "read_file",
@@ -412,8 +339,6 @@ def test_tool_definition_order_matches_runtime_contract():
         "read_memory_artifact",
         "spawn_explore_agent",
         "list_mcp_servers",
-        "list_skills",
-        "read_skill",
     ]
 
 
@@ -464,5 +389,3 @@ def test_bridge_request_keeps_responses_to_chat_contract_for_replay_items():
             "tool_call_id": "call_read",
         },
     ]
-    assert payload["thinking"] == {"type": "enabled"}
-    assert payload["reasoning_effort"] == "high"

@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 import time
-from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,7 +31,6 @@ class EvalEvidence:
     status_code: int | None = None
     duration_ms: float = 0.0
     model_bodies: list[dict[str, Any]] = field(default_factory=list)
-    agent_tools: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -44,64 +43,6 @@ class EvalResult:
     passed: bool
     failures: list[str]
     evidence: EvalEvidence
-
-
-class FakeAgentsSdkResult:
-    """Minimal streaming result used to avoid live provider calls in evals."""
-
-    def __init__(
-        self,
-        events: list[dict[str, Any]],
-        final_output: str = "eval final",
-        last_response_id: str = "resp_eval",
-    ) -> None:
-        self.events = events
-        self.final_output = final_output
-        self.last_response_id = last_response_id
-        self.interruptions: list[Any] = []
-
-    async def stream_events(self) -> AsyncIterator[object]:
-        """Yield deterministic Agents SDK stream events."""
-
-        for event in self.events:
-            yield event
-
-
-class EvalAgentsSdkRunner:
-    """Capture Agents SDK tool surfaces and return deterministic events."""
-
-    def __init__(self, scenario: str, evidence: EvalEvidence) -> None:
-        self.scenario = scenario
-        self.evidence = evidence
-
-    def run_streamed(
-        self, starting_agent: Any, input: list[dict[str, Any]], **kwargs: Any
-    ) -> FakeAgentsSdkResult:
-        """Record agent tools and return a case-specific fake stream."""
-
-        self.evidence.agent_tools = [tool.name for tool in starting_agent.tools]
-        if self.scenario == "agents_sdk_approval":
-            return FakeAgentsSdkResult(
-                [
-                    {
-                        "type": "run_item_stream_event",
-                        "name": "tool_approval_requested",
-                        "item": {"rawItem": {"call_id": "call_shell"}},
-                    }
-                ]
-            )
-        return FakeAgentsSdkResult(
-            [
-                {
-                    "type": "raw_model_stream_event",
-                    "data": {"type": "output_text_delta", "delta": "eval"},
-                },
-                {
-                    "type": "raw_model_stream_event",
-                    "data": {"type": "output_text_delta", "delta": " final"},
-                },
-            ]
-        )
 
 
 class ScriptedResponsesFactory:
@@ -192,6 +133,24 @@ class ScriptedResponsesFactory:
                 "# Eval plan\n\nAdd deterministic eval coverage.\n\n1. Add cases\n2. Run the benchmark",
                 "resp_plan",
             )
+        if self.scenario == "subagent_explore":
+            if _has_function_call_output(captured):
+                return _final_text_events("Subagent summary reviewed.", "resp_subagent_final")
+            return [
+                {
+                    "type": "response.output_item.done",
+                    "item": {
+                        "type": "function_call",
+                        "call_id": "call_subagent",
+                        "name": "spawn_explore_agent",
+                        "arguments": json.dumps({"task": "inspect workspace shape"}),
+                    },
+                },
+                {
+                    "type": "response.completed",
+                    "response": {"id": "resp_subagent", "status": "completed"},
+                },
+            ]
         return _final_text_events("Done.", "resp_final")
 
 
@@ -258,15 +217,6 @@ def run_case(case: Case) -> EvalResult:
         runtime = case.get("runtime")
         if runtime != "live_provider":
             env["KODEKS_CONFIG_PATH"] = str(workspace / "missing-config.json")
-        if runtime == "agents_sdk":
-            env.update(
-                {
-                    "KODEKS_FORCE_AGENTS_SDK_RUNTIME": "true",
-                    "KODEKS_MODEL_PROVIDER": "moonbridge",
-                    "KODEKS_CHAT_COMPLETIONS_API_KEY": "sk-eval",
-                    "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
-                }
-            )
         scenario = str(case.get("scenario") or "final_text")
         route = str(case.get("route") or "chat_stream")
         with patched_environ(env):
@@ -275,8 +225,6 @@ def run_case(case: Case) -> EvalResult:
                 run_bridge_case(case, evidence)
             elif runtime == "live_provider":
                 run_live_provider_case(case, evidence, route)
-            elif runtime == "agents_sdk":
-                run_agents_sdk_case(case, scenario, evidence, route)
             else:
                 run_responses_case(case, scenario, evidence, route)
             evidence.duration_ms = (time.perf_counter() - started_at) * 1000
@@ -316,22 +264,9 @@ def seed_database(db_path: Path, memories: list[dict[str, Any]]) -> None:
 def run_responses_case(
     case: Case, scenario: str, evidence: EvalEvidence, route: str
 ) -> None:
-    """Run a case through the direct Responses diagnostic path."""
+    """Run a case through the scripted Responses-shaped harness path."""
 
     app = create_app(responses_event_factory=ScriptedResponsesFactory(scenario, evidence))
-    client = TestClient(app)
-    path = "/api/chat/ui" if route == "chat_ui" else "/api/chat/stream"
-    response = client.post(path, json=chat_payload(case))
-    evidence.status_code = response.status_code
-    evidence.events = parse_sse_events(response.text)
-
-
-def run_agents_sdk_case(
-    case: Case, scenario: str, evidence: EvalEvidence, route: str
-) -> None:
-    """Run a case through the default Agents SDK app branch."""
-
-    app = create_app(agents_runner=EvalAgentsSdkRunner(scenario, evidence))
     client = TestClient(app)
     path = "/api/chat/ui" if route == "chat_ui" else "/api/chat/stream"
     response = client.post(path, json=chat_payload(case))
@@ -448,12 +383,6 @@ def check_assertion(
     if assertion_type == "plan_title":
         expected = assertion.get("equals")
         return None if any(item.get("type") == "plan_artifact" and _path(item, ["plan", "title"]) == expected for item in evidence.events) else f"Missing plan title {expected!r}."
-    if assertion_type == "agent_tool_present":
-        tool = str(assertion["tool"])
-        return None if tool in evidence.agent_tools else f"Agent tool {tool} was not exposed."
-    if assertion_type == "agent_tool_absent":
-        tool = str(assertion["tool"])
-        return None if tool not in evidence.agent_tools else f"Agent tool {tool} was unexpectedly exposed."
     if assertion_type == "http_status":
         status = int(assertion["status"])
         return None if evidence.status_code == status else f"HTTP status {evidence.status_code} != {status}."
@@ -546,7 +475,6 @@ def result_to_json(result: EvalResult) -> dict[str, Any]:
             }
             for event in result.evidence.events
         ],
-        "agentTools": result.evidence.agent_tools,
         "statusCode": result.evidence.status_code,
         "responseJson": result.evidence.response_json,
     }

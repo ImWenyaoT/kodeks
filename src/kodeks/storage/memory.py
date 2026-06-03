@@ -80,14 +80,11 @@ class MemoryRepository:
     def recall_layered(
         self, query: str, limit: int, layers: list[str]
     ) -> dict[str, list[dict[str, Any]]]:
-        """Recall memory layers using the current MVP literal search."""
+        """Recall the bounded fact and artifact layers used by the harness."""
 
         return {
             "atoms": self._recall_layer("memory_atoms", query, limit)
             if "atom" in layers
-            else [],
-            "scenarios": self._recall_scenarios(query, limit)
-            if "scenario" in layers
             else [],
             "artifacts": self._recall_artifacts(query, limit)
             if "artifact" in layers
@@ -260,33 +257,6 @@ class MemoryRepository:
             for row in rows
         ]
 
-    def _recall_scenarios(self, query: str, limit: int) -> list[dict[str, Any]]:
-        """Recall memory scenarios by title or summary."""
-
-        rows = self.database.connection.execute(
-            """
-            SELECT * FROM memory_scenarios
-            WHERE deleted_at IS NULL AND (title LIKE ? OR summary LIKE ?)
-            ORDER BY updated_at DESC, rowid DESC
-            LIMIT ?
-            """,
-            (f"%{query}%", f"%{query}%", limit),
-        ).fetchall()
-        return [
-            {
-                "id": row["id"],
-                "scope": row["scope"],
-                "title": row["title"],
-                "summary": row["summary"],
-                "sourceSessionId": row["source_session_id"],
-                "confidence": row["confidence"],
-                "freshness": row["freshness"],
-                "createdAt": row["created_at"],
-                "updatedAt": row["updated_at"],
-            }
-            for row in rows
-        ]
-
     def _recall_artifacts(self, query: str, limit: int) -> list[dict[str, Any]]:
         """Recall offloaded memory artifact metadata by summary."""
 
@@ -315,7 +285,7 @@ class MemoryRepository:
 
 
 class SubagentRepository:
-    """Stores minimal subagent run records for tool parity."""
+    """Stores bounded subagent exploration run records."""
 
     def __init__(self, database: HasConnection) -> None:
         self.database = database

@@ -258,7 +258,7 @@ class ApprovalRepository:
 
 
 class PlanRepository:
-    """Reads and writes active plan artifacts for session compatibility."""
+    """Reads and writes active plan artifacts for session recovery."""
 
     def __init__(self, database: HasConnection) -> None:
         self.database = database

@@ -104,7 +104,7 @@ def _dict_content(value: object) -> dict[str, Any]:
 
 
 def _content_text(value: object) -> str:
-    """Read text from stored TypeScript or Python transcript content."""
+    """Read text from stored transcript content."""
 
     if isinstance(value, str):
         return value

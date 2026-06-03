@@ -83,19 +83,20 @@ def test_config_expands_env_and_deepseek_provider(tmp_path):
     assert env["KODEKS_CHAT_COMPLETIONS_MODEL"] == "deepseek-v4-pro"
 
 
-def test_lmstudio_embeddings_config_maps_to_openai_compatible_env(tmp_path):
-    """LM Studio embeddings use the OpenAI-compatible env contract."""
+def test_config_file_adapter_fields_do_not_enable_model_routing(tmp_path):
+    """Old config-file adapter fields no longer configure the runtime route."""
 
     config_path = tmp_path / "config.json"
     config_path.write_text(
         json.dumps(
             {
-                "embeddings": {
-                    "enabled": True,
-                    "provider": "lmstudio",
-                    "baseURL": "http://127.0.0.1:1234/v1",
-                    "apiKey": "local-placeholder",
-                    "model": "Qwen/Qwen3-Embedding-0.6B",
+                "model": {
+                    "provider": "moonbridge",
+                    "bridge": {
+                        "enabled": True,
+                        "baseURL": "http://127.0.0.1:38440/v1",
+                        "model": "bridge",
+                    },
                 }
             }
         )
@@ -103,31 +104,33 @@ def test_lmstudio_embeddings_config_maps_to_openai_compatible_env(tmp_path):
 
     env = load_model_runtime_env({"KODEKS_CONFIG_PATH": str(config_path)})
 
-    assert env["KODEKS_EMBEDDINGS_ENABLED"] == "true"
-    assert env["KODEKS_EMBEDDINGS_PROVIDER"] == "lmstudio"
-    assert env["KODEKS_OPENAI_COMPAT_BASE_URL"] == "http://127.0.0.1:1234/v1"
-    assert env["KODEKS_OPENAI_COMPAT_API_KEY"] == "local-placeholder"
-    assert env["KODEKS_OPENAI_COMPAT_EMBED_MODEL"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert "KODEKS_MODEL_PROVIDER" not in env
+    assert "KODEKS_BRIDGE_ENABLED" not in env
+    assert "KODEKS_BRIDGE_BASE_URL" not in env
+    assert resolve_model_client_options(env) is None
 
 
 @pytest.mark.parametrize(
     ("env", "expected"),
     [
-        ({"DEEPSEEK_API_KEY": "sk-old"}, "KODEKS_CHAT_COMPLETIONS_API_KEY"),
+        ({"DEEPSEEK_API_KEY": "sk-old"}, "DEEPSEEK_API_KEY is unsupported"),
         (
             {"KODEKS_BRIDGE_DEEPSEEK_BASE_URL": "https://old.test/v1"},
-            "KODEKS_CHAT_COMPLETIONS_BASE_URL",
+            "KODEKS_BRIDGE_DEEPSEEK_BASE_URL is unsupported",
         ),
         (
             {"MOONBRIDGE_DEEPSEEK_MODEL": "old-model"},
-            "KODEKS_CHAT_COMPLETIONS_MODEL",
+            "MOONBRIDGE_DEEPSEEK_MODEL is unsupported",
         ),
-        ({"MOONBRIDGE_API_KEY": "moon-old"}, "KODEKS_BRIDGE_API_KEY"),
-        ({"KODEKS_MODEL_PROVIDER": "deepseek"}, 'Use "moonbridge" instead'),
+        ({"MOONBRIDGE_API_KEY": "moon-old"}, "MOONBRIDGE_API_KEY is unsupported"),
+        (
+            {"KODEKS_MODEL_PROVIDER": "deepseek"},
+            "MoonBridge remains an internal adapter",
+        ),
     ],
 )
-def test_removed_aliases_fail_with_migration_guidance(env, expected):
-    """Deprecated model env names do not silently change runtime behavior."""
+def test_unsupported_aliases_fail_with_supported_config_guidance(env, expected):
+    """Unsupported model env names do not silently change runtime behavior."""
 
     with pytest.raises(ModelConfigurationError) as error:
         resolve_model_client_options(env)
@@ -135,12 +138,12 @@ def test_removed_aliases_fail_with_migration_guidance(env, expected):
     assert expected in str(error.value)
 
 
-def test_direct_openai_provider_is_removed():
-    """Direct OpenAI/Responses model routing no longer participates in runtime config."""
+def test_direct_openai_provider_is_outside_product_boundary():
+    """Direct OpenAI/Responses model routing is not part of the product boundary."""
 
     with pytest.raises(ModelConfigurationError) as error:
         resolve_model_client_options({"KODEKS_MODEL_PROVIDER": "openai"})
 
-    assert "Direct OpenAI/Responses model providers have been removed" in str(
+    assert "outside the Kodeks product boundary" in str(
         error.value
     )

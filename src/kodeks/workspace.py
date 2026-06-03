@@ -54,7 +54,7 @@ class ShellCommandTimeoutError(RuntimeError):
 
 @dataclass(frozen=True)
 class ShellResult:
-    """Shell execution result that matches the TypeScript API shape."""
+    """Shell execution result returned by the approval-aware harness."""
 
     command: str
     exit_code: int | None
@@ -228,7 +228,7 @@ def run_approved_command(
 
 
 def parse_command_args(command: str) -> list[str] | None:
-    """Parse shell-like argv using the TypeScript workspace parser rules."""
+    """Parse shell-like argv without invoking a shell."""
 
     args: list[str] = []
     current = ""

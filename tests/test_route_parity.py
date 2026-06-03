@@ -6,69 +6,6 @@ from kodeks.app import create_app
 from kodeks.storage import KodeksDatabase, current_timestamp
 
 
-class FakeAgentsSdkResult:
-    """Minimal fake Agents SDK stream result for route-level tests."""
-
-    def __init__(self, events, final_output="route final", last_response_id="resp_route"):
-        self.events = events
-        self.final_output = final_output
-        self.last_response_id = last_response_id
-        self.interruptions = []
-
-    async def stream_events(self):
-        """Yield fake SDK events without opening a network connection."""
-
-        for event in self.events:
-            yield event
-
-
-class FakeAgentsSdkRunner:
-    """Capture FastAPI route calls into the Python Agents SDK adapter."""
-
-    def __init__(self):
-        self.calls = []
-
-    def run_streamed(self, starting_agent, input, **kwargs):
-        """Record one route-level SDK run and return deterministic text deltas."""
-
-        self.calls.append(
-            {
-                "agent": starting_agent,
-                "input": input,
-                "kwargs": kwargs,
-            }
-        )
-        return FakeAgentsSdkResult(
-            [
-                {
-                    "type": "raw_model_stream_event",
-                    "data": {"type": "output_text_delta", "delta": "route"},
-                },
-                {
-                    "type": "raw_model_stream_event",
-                    "data": {"type": "output_text_delta", "delta": " sdk"},
-                },
-            ]
-        )
-
-
-class FakeApprovalAgentsSdkRunner:
-    """Return one SDK approval interruption for route-level parity tests."""
-
-    def run_streamed(self, starting_agent, input, **kwargs):
-        """Return a stream result that asks Kodeks to pause for approval."""
-
-        return FakeAgentsSdkResult(
-            [
-                {
-                    "type": "run_item_stream_event",
-                    "name": "tool_approval_requested",
-                    "item": {"rawItem": {"call_id": "call_shell"}},
-                }
-            ]
-        )
-
-
 def test_sessions_list_includes_active_plan_and_get_transcript(tmp_path, monkeypatch):
     """Session routes expose activePlan and transcript shapes used by Next."""
 
@@ -263,7 +200,7 @@ def test_bridge_preflight_preserves_provider_labels_and_missing_states(
     assert missing.json()["status"] == "unavailable"
     assert missing.json()["provider"] == "auto"
     assert missing.json()["code"] == "model_configuration_error"
-    assert "Direct OpenAI/Responses model providers have been removed" in missing.json()["reason"]
+    assert "outside the Kodeks product boundary" in missing.json()["reason"]
 
 
 def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
@@ -298,57 +235,3 @@ def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
     assert body["status"] == "unavailable"
     assert body["code"] == "moonbridge_upstream_unreachable"
     assert body["upstreamBaseURL"] == "http://local.test/v1"
-
-
-def test_chat_routes_use_default_agents_sdk_runner(tmp_path, monkeypatch):
-    """Chat stream and UI routes can use the Python Agents SDK diagnostics branch."""
-
-    runner = FakeAgentsSdkRunner()
-    monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
-    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setenv("KODEKS_FORCE_AGENTS_SDK_RUNTIME", "true")
-    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
-    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "sk-test")
-    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "deepseek-v4-pro")
-    client = TestClient(create_app(agents_runner=runner))
-
-    stream = client.post(
-        "/api/chat/stream", json={"input": "hello", "session_id": "sess_stream"}
-    )
-    ui = client.post(
-        "/api/chat/ui", json={"input": "hello", "session_id": "sess_ui"}
-    )
-
-    assert stream.status_code == 200
-    assert "event: text_delta" in stream.text
-    assert '"delta":"route"' in stream.text
-    assert '"delta":" sdk"' in stream.text
-    assert '"response_id":"resp_route"' in stream.text
-    assert ui.status_code == 200
-    assert "event: text-delta" in ui.text
-    assert '"delta":"route"' in ui.text
-    assert "event: finish" in ui.text
-    assert len(runner.calls) == 2
-    assert runner.calls[0]["agent"].name == "Kodeks Build Agent"
-    assert runner.calls[0]["input"][0]["role"] == "user"
-
-
-def test_chat_route_pauses_on_agents_sdk_approval_interruption(tmp_path, monkeypatch):
-    """Agents SDK approval interruptions remain runtime pause events."""
-
-    monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
-    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
-    monkeypatch.setenv("KODEKS_FORCE_AGENTS_SDK_RUNTIME", "true")
-    monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
-    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "sk-test")
-    monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_MODEL", "deepseek-v4-pro")
-    client = TestClient(create_app(agents_runner=FakeApprovalAgentsSdkRunner()))
-
-    response = client.post(
-        "/api/chat/stream", json={"input": "run it", "session_id": "sess_approval"}
-    )
-
-    assert response.status_code == 200
-    assert "event: approval_required" in response.text
-    assert '"approval_id":"call_shell"' in response.text
-    assert "event: assistant_completed" not in response.text

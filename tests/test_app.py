@@ -12,7 +12,7 @@ def test_health_route():
 
 
 def test_python_runtime_serves_static_ui():
-    """FastAPI serves a minimal browser UI without the Next.js shell."""
+    """FastAPI serves the local coding-agent browser UI."""
 
     client = TestClient(create_app())
 
@@ -26,7 +26,7 @@ def test_python_runtime_serves_static_ui():
 
 
 def test_cors_preflight_does_not_allow_old_next_shell_by_default():
-    """FastAPI no longer keeps old Next.js dev origins as defaults."""
+    """External browser origins must opt in explicitly."""
 
     client = TestClient(create_app())
 

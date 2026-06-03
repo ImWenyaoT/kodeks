@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
+from kodeks.harness import select_harness_pattern
 from kodeks.plans import build_plan_artifact_content
 from kodeks.runtime import (
     build_plan_artifact_content as runtime_build_plan_artifact_content,
@@ -155,46 +156,6 @@ def _plan_events(body, env):
     ]
 
 
-class FakeAgentsSdkResult:
-    """Minimal streaming result used to test the Python Agents SDK branch."""
-
-    def __init__(
-        self,
-        events,
-        final_output="Hello from SDK",
-        last_response_id="resp_agents",
-        interruptions=None,
-    ):
-        self.events = events
-        self.final_output = final_output
-        self.last_response_id = last_response_id
-        self.interruptions = interruptions or []
-
-    async def stream_events(self):
-        """Yield fake SDK stream events in order."""
-
-        for event in self.events:
-            yield event
-
-
-class FakeAgentsSdkRunner:
-    """Captures the SDK runner call while returning deterministic stream events."""
-
-    def __init__(self, events):
-        self.events = events
-        self.agent = None
-        self.input = None
-        self.kwargs = None
-
-    def run_streamed(self, starting_agent, input, **kwargs):
-        """Return a fake stream result and record the runner invocation."""
-
-        self.agent = starting_agent
-        self.input = input
-        self.kwargs = kwargs
-        return FakeAgentsSdkResult(self.events)
-
-
 @pytest.mark.asyncio
 async def test_python_chat_loop_streams_text_tools_and_persists_session(tmp_path):
     """Injected Responses events drive the Python loop without external models."""
@@ -246,68 +207,48 @@ async def test_python_chat_loop_streams_text_tools_and_persists_session(tmp_path
         assert transcript[2].content["toolCallId"] == "call_read"
         assert "hello from workspace" in transcript[2].content["text"]
         assert transcript[3].content == "Done."
+        audit_events = [
+            row["event_type"]
+            for row in database.connection.execute(
+                "SELECT event_type FROM audit_log ORDER BY rowid ASC"
+            ).fetchall()
+        ]
+        assert audit_events == [
+            "turn_started",
+            "harness_pattern_selected",
+            "tool_called",
+            "tool_result",
+            "turn_completed",
+        ]
     finally:
         database.close()
 
 
 @pytest.mark.asyncio
-async def test_python_chat_loop_can_use_agents_sdk_diagnostics(tmp_path):
-    """The diagnostics flag routes through the Agents SDK adapter."""
+async def test_python_chat_loop_records_session_fork_parent(tmp_path):
+    """A new chat session can checkpoint its parent session id for forked work."""
 
-    runner = FakeAgentsSdkRunner(
-        [
-            {
-                "type": "raw_model_stream_event",
-                "data": {"type": "output_text_delta", "delta": "Hello"},
-            },
-            {
-                "type": "raw_model_stream_event",
-                "data": {"type": "output_text_delta", "delta": " from SDK"},
-            },
-        ]
-    )
     database = KodeksDatabase(":memory:")
     try:
         events = [
             event
             async for event in run_python_chat_turn(
-                {"input": "hello", "session_id": "sess_agents"},
+                {
+                    "input": "try a different plan",
+                    "session_id": "sess_fork",
+                    "parentSessionId": "sess_parent",
+                },
                 database,
                 str(tmp_path),
-                {
-                    "KODEKS_FORCE_AGENTS_SDK_RUNTIME": "true",
-                    "KODEKS_MODEL_PROVIDER": "moonbridge",
-                    "KODEKS_CHAT_COMPLETIONS_API_KEY": "sk-test",
-                    "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
-                },
-                None,
-                runner,
+                {},
+                _capture_only_events([]),
             )
         ]
 
-        assert [event["type"] for event in events] == [
-            "session_created",
-            "text_delta",
-            "text_delta",
-            "response_completed",
-        ]
-        assert events[1]["delta"] == "Hello"
-        assert events[2]["delta"] == " from SDK"
-        assert events[3]["response_id"] == "resp_agents"
-        assert runner.agent.name == "Kodeks Build Agent"
-        assert runner.input == [
-            {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": "hello"}],
-            }
-        ]
-        assert runner.kwargs["max_turns"] == 12
-        assert runner.kwargs["previous_response_id"] is None
-        transcript = database.sessions.get_transcript("sess_agents")
-        assert [message.role for message in transcript] == ["user", "assistant"]
-        assert transcript[1].content == "Hello from SDK"
-        assert transcript[1].agent_event == {"responseId": "resp_agents"}
+        session = database.sessions.get_session("sess_fork")
+        assert events[0] == {"type": "session_created", "session_id": "sess_fork"}
+        assert session is not None
+        assert session.parent_session_id == "sess_parent"
     finally:
         database.close()
 
@@ -338,7 +279,7 @@ async def test_python_chat_loop_rejects_direct_responses_provider(
         ]
         assert events[1]["code"] == "model_configuration_error"
         assert (
-            "Direct OpenAI/Responses model providers have been removed"
+            "outside the Kodeks product boundary"
             in events[1]["message"]
         )
     finally:
@@ -374,7 +315,6 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
         "kodeks.responses_runtime.fetch_chat_completions_stream",
         fake_fetch_chat_completions_stream,
     )
-    runner = FakeAgentsSdkRunner([])
     database = KodeksDatabase(":memory:")
     try:
         events = [
@@ -394,7 +334,6 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
                     "KODEKS_CHAT_COMPLETIONS_MODEL": "deepseek-v4-pro",
                 },
                 None,
-                runner,
             )
         ]
 
@@ -404,7 +343,6 @@ async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
             "response_completed",
         ]
         assert events[1]["delta"] == "Bridge"
-        assert runner.agent is None
     finally:
         database.close()
 
@@ -747,6 +685,50 @@ async def test_python_chat_loop_injects_selected_files_before_model(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_python_chat_loop_injects_harness_pattern_and_audit(tmp_path):
+    """Runtime context records why a bounded harness pattern was selected."""
+
+    seen_bodies = []
+
+    def responses_events(body, env):
+        seen_bodies.append(body)
+        return [{"type": "response.completed", "response": {"id": "resp_harness"}}]
+
+    database = KodeksDatabase(":memory:")
+    try:
+        _events = [
+            event
+            async for event in run_python_chat_turn(
+                {
+                    "input": "Verify every technical claim against the codebase.",
+                    "session_id": "sess_harness",
+                    "mode": "plan",
+                },
+                database,
+                str(tmp_path),
+                {},
+                responses_events,
+            )
+        ]
+        payload = json.loads(
+            database.connection.execute(
+                "SELECT payload_json FROM audit_log WHERE event_type = 'harness_pattern_selected'"
+            ).fetchone()["payload_json"]
+        )
+
+        assert payload["pattern"] == "adversarial_verify"
+        assert "self_preferential_bias" in payload["failureModes"]
+        assert "Harness pattern for this turn: adversarial_verify." in seen_bodies[0][
+            "instructions"
+        ]
+        assert "claim, evidence, risk, confidence, and nextAction" in seen_bodies[0][
+            "instructions"
+        ]
+    finally:
+        database.close()
+
+
+@pytest.mark.asyncio
 async def test_python_chat_loop_emits_approval_required(tmp_path):
     """Dangerous tool calls surface approval_required events and audit records."""
 
@@ -775,7 +757,7 @@ async def test_python_chat_loop_emits_approval_required(tmp_path):
         )
         assert (
             database.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
-            == 1
+            == 5
         )
         assert [
             message.role for message in database.sessions.get_transcript("sess_py")
@@ -807,7 +789,7 @@ def test_python_chat_routes_stream_runtime_and_ui_payloads(tmp_path, monkeypatch
     assert "event: finish" in ui.text
 
 
-def test_build_plan_artifact_content_matches_typescript_parser_shape():
+def test_build_plan_artifact_content_matches_harness_parser_shape():
     """Plan extraction keeps title, summary, steps, and checkbox status stable."""
 
     assert runtime_build_plan_artifact_content is build_plan_artifact_content
@@ -833,4 +815,35 @@ def test_build_plan_artifact_content_matches_typescript_parser_shape():
                 "details": None,
             },
         ],
+    }
+
+
+def test_harness_pattern_selection_keeps_workflows_bounded():
+    """Harness pattern selection maps complex asks to a small fixed set."""
+
+    loop = select_harness_pattern(
+        "This test fails maybe 1 in 50 runs; don't stop until one theory works.",
+        "act",
+    )
+    verify = select_harness_pattern(
+        "Verify every technical claim against the codebase.", "plan"
+    )
+    tournament = select_harness_pattern(
+        "I need a name for this CLI tool; run a tournament for the top 3.", "plan"
+    )
+    fanout = select_harness_pattern(
+        "Use a workflow to rename our User model to Account everywhere.", "plan"
+    )
+
+    assert loop.pattern == "loop_until_done"
+    assert verify.pattern == "adversarial_verify"
+    assert tournament.pattern == "tournament"
+    assert fanout.pattern == "fanout_synthesize"
+    assert "Subagents are read-only" in loop.approval_boundary
+    assert set(loop.subagent_contract) == {
+        "claim",
+        "evidence",
+        "risk",
+        "confidence",
+        "nextAction",
     }

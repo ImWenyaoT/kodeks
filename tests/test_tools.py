@@ -34,8 +34,6 @@ def test_tool_registry_definitions_and_read_only_filter(tmp_path):
             "read_memory_artifact",
             "spawn_explore_agent",
             "list_mcp_servers",
-            "list_skills",
-            "read_skill",
         ]
         assert [
             definition["name"] for definition in registry.definitions(read_only_only=True)
@@ -46,8 +44,6 @@ def test_tool_registry_definitions_and_read_only_filter(tmp_path):
             "read_memory_artifact",
             "spawn_explore_agent",
             "list_mcp_servers",
-            "list_skills",
-            "read_skill",
         ]
         assert registry.has("read_file") is True
         assert registry.has("glob") is False
@@ -130,7 +126,7 @@ def test_tool_registry_records_shell_approval_requests(tmp_path):
 
 
 def test_tool_registry_memory_and_subagent_tools(tmp_path):
-    """Memory and explore tools preserve the TS MVP output contract."""
+    """Memory and explore tools preserve the harness output contract."""
 
     db = KodeksDatabase(":memory:")
     try:
@@ -150,6 +146,12 @@ def test_tool_registry_memory_and_subagent_tools(tmp_path):
             ToolExecutionContext("s1", "call_2"),
         )
         subagent_output = json.loads(subagent.output)
+        audit_events = [
+            row["event_type"]
+            for row in db.connection.execute(
+                "SELECT event_type FROM audit_log ORDER BY rowid ASC"
+            ).fetchall()
+        ]
 
         assert json.loads(remembered.output)["scope"] == "project"
         assert json.loads(recalled.output)["memories"][0]["sourceSessionId"] == "s1"
@@ -157,19 +159,31 @@ def test_tool_registry_memory_and_subagent_tools(tmp_path):
             "Kodeks plan mode is read only."
         )
         assert subagent_output["status"] == "completed"
+        assert subagent_output["allowedTools"] == [
+            "read_file",
+            "grep",
+            "recall_memory",
+            "read_memory_artifact",
+        ]
+        assert subagent_output["parentSessionId"] == "s1"
+        assert subagent_output["contract"]["claim"] == (
+            "Read-only workspace exploration completed."
+        )
+        assert subagent_output["contract"]["confidence"] in {"low", "medium"}
+        assert subagent_output["quarantine"] == {
+            "readOnly": True,
+            "canMutateWorkspace": False,
+            "canRequestApproval": False,
+        }
         assert db.subagents.get_run(subagent_output["runId"])["parentSessionId"] == "s1"
+        assert audit_events == ["subagent_started", "subagent_completed"]
     finally:
         db.close()
 
 
-def test_tool_registry_lists_mcp_manifests_and_skills(tmp_path):
-    """MCP and skill tools read local configuration without external calls."""
+def test_tool_registry_lists_mcp_manifests(tmp_path):
+    """MCP tool reads local configuration without opening network clients."""
 
-    skills_root = tmp_path / "skills"
-    (skills_root / "frontend").mkdir(parents=True)
-    (skills_root / "frontend" / "SKILL.md").write_text(
-        "# Frontend Builder\n\nUse for UI work."
-    )
     db = KodeksDatabase(":memory:")
     try:
         registry = build_default_tool_registry(
@@ -187,17 +201,12 @@ def test_tool_registry_lists_mcp_manifests_and_skills(tmp_path):
                             }
                         ]
                     ),
-                    "KODEKS_SKILLS_PATHS": str(skills_root),
                 },
             )
         )
 
         mcp = registry.execute("list_mcp_servers", {})
-        listed = registry.execute("list_skills", {"query": "front"})
-        read = registry.execute("read_skill", {"name": "frontend"})
 
         assert json.loads(mcp.output)["servers"][0]["label"] == "deepwiki"
-        assert json.loads(listed.output)["skills"][0]["title"] == "Frontend Builder"
-        assert "Use for UI work." in json.loads(read.output)["content"]
     finally:
         db.close()

@@ -50,9 +50,27 @@ async def handle_output_item(
         "tool_arguments": tool_arguments,
         "session_id": session_id,
     }
+    database.audit_log.record(
+        session_id,
+        "tool_called",
+        {
+            "toolCallId": tool_call_id,
+            "toolName": tool_name,
+            "arguments": tool_arguments,
+        },
+    )
     if not registry.has(tool_name):
         output = f"Unknown tool requested by model: {tool_name}"
         tool_state.halt_tool_loop = True
+        database.audit_log.record(
+            session_id,
+            "tool_failed",
+            {
+                "toolCallId": tool_call_id,
+                "toolName": tool_name,
+                "reason": output,
+            },
+        )
         yield {
             "type": "tool_result",
             "tool_call_id": tool_call_id,
@@ -99,6 +117,15 @@ async def handle_output_item(
         "tool_output": tool_output,
         "session_id": session_id,
     }
+    database.audit_log.record(
+        session_id,
+        "tool_result",
+        {
+            "toolCallId": tool_call_id,
+            "toolName": tool_name,
+            "status": mapped_status,
+        },
+    )
     if mapped_status == "approval_required":
         tool_state.waiting_for_approval = True
         yield {

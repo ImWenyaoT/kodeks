@@ -66,8 +66,8 @@ def test_dangerous_command_policy_matches_shell_approval_boundary():
     assert not is_dangerous_command("git status")
 
 
-def test_shell_parser_matches_typescript_workspace_rules():
-    """Python command parsing preserves the TS argv contract."""
+def test_shell_parser_matches_workspace_policy_rules():
+    """Command parsing preserves the no-shell argv contract."""
 
     assert parse_command_args('python -c "print(1)"') == [
         "python",
@@ -99,7 +99,7 @@ def test_safe_shell_commands_execute_without_shell_interpretation(tmp_path):
 
 
 def test_approved_shell_parse_failure_and_utf8_truncation(tmp_path):
-    """Approved commands keep TS parse-failure and UTF-8 truncation behavior."""
+    """Approved commands keep parse-failure and UTF-8 truncation behavior."""
 
     failed = run_approved_command('python -c "print(1)', str(tmp_path))
     truncated = run_approved_command(

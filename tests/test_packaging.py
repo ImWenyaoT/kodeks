@@ -40,7 +40,6 @@ def test_in_tree_wheel_contains_runtime_assets_and_entrypoints(tmp_path):
     assert "kodeks-smoke = kodeks.smoke:main" in entry_points
     assert "Requires-Dist: httpx2>=2.3.0" in metadata
     assert "Requires-Dist: openai>=2.0.0" in metadata
-    assert "Requires-Dist: openai-agents>=0.6.0" in metadata
     assert "kodeks/static/index.html,sha256=" in record
     assert "kodeks/py.typed,sha256=" in record
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from .types import ToolArguments, ToolExecutionResult, ToolRegistryServices
@@ -37,13 +36,13 @@ def read_memory_layers(value: object) -> list[str]:
     """Read optional memory layer filters from model-provided JSON."""
 
     if not isinstance(value, list):
-        return ["atom", "scenario", "artifact"]
+        return ["atom", "artifact"]
     layers = [
         item
         for item in value
-        if item in {"atom", "scenario", "artifact"} and isinstance(item, str)
+        if item in {"atom", "artifact"} and isinstance(item, str)
     ]
-    return layers or ["atom", "scenario", "artifact"]
+    return layers or ["atom", "artifact"]
 
 
 def read_mcp_server_manifests(
@@ -106,50 +105,6 @@ def split_csv(value: str | None) -> list[str]:
     if value is None:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def discover_skills(services: ToolRegistryServices) -> list[dict[str, str]]:
-    """Discover SKILL.md files from configured roots."""
-
-    skills: list[dict[str, str]] = []
-    for root in skill_roots(services):
-        if not root.is_dir():
-            continue
-        for child in sorted(root.iterdir(), key=lambda item: item.name):
-            skill_path = child / "SKILL.md"
-            if not child.is_dir() or not skill_path.is_file():
-                continue
-            content = skill_path.read_text()
-            skills.append(
-                {
-                    "name": child.name,
-                    "title": read_markdown_title(content) or child.name,
-                    "path": str(skill_path),
-                }
-            )
-    return skills
-
-
-def skill_roots(services: ToolRegistryServices) -> list[Path]:
-    """Resolve skill roots from env or the workspace-local default."""
-
-    environment = runtime_environment(services)
-    configured = split_csv(environment.get("KODEKS_SKILLS_PATHS"))
-    roots = (
-        configured
-        if configured
-        else [str(Path(services.workspace.root_path()) / ".kodeks" / "skills")]
-    )
-    return [Path(os.path.expanduser(root)).resolve() for root in roots]
-
-
-def read_markdown_title(content: str) -> str | None:
-    """Read the first markdown heading as a skill title."""
-
-    for line in content.splitlines():
-        if line.startswith("# "):
-            return line[2:].strip()
-    return None
 
 
 def completed_output(payload: dict[str, Any]) -> ToolExecutionResult:
