@@ -18,4 +18,9 @@ describe("parseRuntimeEvent", () => {
   it("returns null for invalid JSON", () => {
     expect(parseRuntimeEvent("{not json")).toBeNull();
   });
+  // 验证 default 分支：真正未识别的 type 会落入 unknown 兜底
+  it("maps an unrecognized type to the unknown fallback", () => {
+    const e = parseRuntimeEvent('{"type":"some_future_event","x":1}');
+    expect(e).toEqual({ type: "unknown", name: "some_future_event", raw: { type: "some_future_event", x: 1 } });
+  });
 });
