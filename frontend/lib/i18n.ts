@@ -32,6 +32,10 @@ export type Copy = {
   runtime: string;
   bridge: string;
   approvals: string;
+  /** 审批通过按钮文案。 */
+  approve: string;
+  /** 审批拒绝按钮文案。 */
+  reject: string;
   activity: string;
   /** 中心对话转录区的无障碍标签（区别于「运行事件」）。 */
   transcript: string;
@@ -97,6 +101,8 @@ export const copy: Record<Language, Copy> = {
     runtime: "运行设置",
     bridge: "MoonBridge",
     approvals: "审批",
+    approve: "批准",
+    reject: "拒绝",
     activity: "运行事件",
     transcript: "对话",
     collapseWorkspace: "收起工作区",
@@ -150,6 +156,8 @@ export const copy: Record<Language, Copy> = {
     runtime: "Runtime",
     bridge: "MoonBridge",
     approvals: "Approvals",
+    approve: "Approve",
+    reject: "Reject",
     activity: "Runtime events",
     transcript: "Conversation",
     collapseWorkspace: "Collapse workspace",

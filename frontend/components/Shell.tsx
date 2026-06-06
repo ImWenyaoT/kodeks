@@ -41,6 +41,8 @@ import { FilePicker } from "@/components/workspace/FilePicker";
 import { RuntimeSettings } from "@/components/tools/RuntimeSettings";
 import { AppearanceControls } from "@/components/tools/AppearanceControls";
 import { BridgeStatus } from "@/components/tools/BridgeStatus";
+import { RuntimeEvents } from "@/components/tools/RuntimeEvents";
+import { ApprovalList } from "@/components/tools/ApprovalList";
 import { useSessions } from "@/hooks/useSessions";
 import {
   Sheet,
@@ -112,18 +114,6 @@ function PanelSection({
 }
 
 /**
- * 占位用的虚线空状态块。功能内容到位前给用户清晰的“此处将有内容”提示。
- * @param children 占位说明文字。
- */
-function Placeholder({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-/**
  * 左侧工作区面板的内容（展开态）。
  * 含主操作“新会话”以及“最近会话（SessionList）/ 文件搜索”分区。
  * 在此持有单一 useSessions 实例，使「新会话」按钮与列表共享同一份数据与动作：
@@ -185,13 +175,13 @@ function ToolsPanelBody() {
       </PanelSection>
 
       <PanelSection title={t.runtimeEvents} icon={Activity}>
-        {/* Phase 4: Runtime events —— 运行事件流 */}
-        <Placeholder>{t.activity}</Placeholder>
+        {/* Phase 4: Runtime events —— 运行事件流 + 概要（Task 4.8） */}
+        <RuntimeEvents />
       </PanelSection>
 
       <PanelSection title={t.approvals} icon={ShieldCheck}>
-        {/* Phase 4: Approvals —— 工具调用审批队列 */}
-        <Placeholder>{t.approvals}</Placeholder>
+        {/* Phase 4: Approvals —— 工具调用审批队列（Task 4.8） */}
+        <ApprovalList />
       </PanelSection>
     </>
   );

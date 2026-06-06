@@ -57,6 +57,8 @@ export interface ChatState extends Settings {
   pushRuntime: (text: string) => void;
   /** 追加一条待审批项。 */
   pushApproval: (approval: Approval) => void;
+  /** 按 approvalId 移除一条待审批项（决策后调用）；不可变过滤，新建数组引用。 */
+  removeApproval: (approvalId: string) => void;
   /** 浅合并设置（mode/model/providerId/reasoning），未提供字段保持不变。 */
   setSettings: (partial: Partial<Settings>) => void;
   /** 重置运行态（messages/sessionId/runtimeEvents/approvals/selectedFiles/isRunning），保留 settings。 */
@@ -126,6 +128,12 @@ export const useChatStore = create<ChatState>((set) => ({
 
   pushApproval: (approval) =>
     set((state) => ({ approvals: [...state.approvals, approval] })),
+
+  removeApproval: (approvalId) =>
+    set((state) => ({
+      // 不可变过滤：剔除被决策的审批项，新建数组引用以触发订阅者重渲染。
+      approvals: state.approvals.filter((a) => a.approvalId !== approvalId),
+    })),
 
   setSettings: (partial) => set(() => ({ ...partial })),
 

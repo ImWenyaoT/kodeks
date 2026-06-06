@@ -116,6 +116,29 @@ describe("chat-store", () => {
     ]);
   });
 
+  // removeApproval 按 approvalId 移除目标项，保留其余项并新建数组引用。
+  it("removeApproval filters out the decided approval immutably", () => {
+    useChatStore.getState().pushApproval({ approvalId: "a1", message: "first?" });
+    useChatStore.getState().pushApproval({ approvalId: "a2", message: "second?" });
+    const before = useChatStore.getState().approvals;
+
+    useChatStore.getState().removeApproval("a1");
+
+    const after = useChatStore.getState().approvals;
+    expect(after).toEqual([{ approvalId: "a2", message: "second?" }]);
+    // 不可变更新：引用必须改变，订阅者才会重新渲染。
+    expect(after).not.toBe(before);
+  });
+
+  // removeApproval 对不存在的 id 应为无操作（不抛错、不改动列表内容）。
+  it("removeApproval is a no-op for an unknown id", () => {
+    useChatStore.getState().pushApproval({ approvalId: "a1", message: "only?" });
+    useChatStore.getState().removeApproval("does-not-exist");
+    expect(useChatStore.getState().approvals).toEqual([
+      { approvalId: "a1", message: "only?" },
+    ]);
+  });
+
   // setRunning / setSession 基本读写。
   it("setRunning and setSession update primitive state", () => {
     useChatStore.getState().setRunning(true);
