@@ -27,7 +27,7 @@ LLM harness：
 
 ## 功能亮点
 
-- FastAPI 服务的浏览器 UI。
+- 浏览器 UI 由 Next.js static export 构建，并由 FastAPI 服务。
 - 基于 Server-Sent Events 的流式对话。
 - DeepSeek 通过 MoonBridge 的 OpenAI-compatible Chat Completions adapter 路由。
 - 受 workspace policy 约束的文件工具，并阻止内部路径访问。
@@ -182,6 +182,38 @@ UV_CACHE_DIR=.uv-cache uv run python evals/run_local.py --live-provider
 eval suite 会调用用户实际使用的 FastAPI routes，并用 deterministic model fakes 对
 event trace 打分。评分维度是 harness 六项：状态管理、流程控制、人工审批、可观测性、
 多 Agent 和协议集成。结果写入 `evals/results/latest.json`，该文件不会进入 Git。
+
+### 前端
+
+浏览器 UI 源码放在 `frontend/`，是一个 Next.js（TypeScript + Tailwind +
+shadcn/ui）应用。它的 static export 会构建进 `src/kodeks/static/`，该目录会进入
+Git 并由 FastAPI 服务。**Node/npm 只在开发前端时才需要；运行 kodeks
+（`uv run kodeks-server`）不需要 Node**，因为构建产物已经进入 Git，由
+`src/kodeks/static/` 直接 serve。
+
+本地 UI 开发用两个 shell。一个跑后端：
+
+```bash
+uv run kodeks-server --reload
+```
+
+另一个跑 Next dev server，它会把 `/api`（以及 `/health`、`/v1`）proxy 到 `:8000`
+上的后端：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+改完前端后重新构建随包发布的 UI：
+
+```bash
+./scripts/build-frontend.sh
+```
+
+这会执行 `next build` static export，并把 `frontend/out/` 同步进
+`src/kodeks/static/`。请把重新生成的 `src/kodeks/static/` 和前端源码一起提交。
 
 ## 安全模型
 

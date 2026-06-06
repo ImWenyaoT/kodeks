@@ -32,7 +32,7 @@ permissions, state, protocol shape, and evaluation.
 
 ## Highlights
 
-- FastAPI-served browser UI.
+- Browser UI built as a Next.js static export and served by FastAPI.
 - Streaming chat over Server-Sent Events.
 - DeepSeek routing through MoonBridge's OpenAI-compatible Chat Completions adapter.
 - Workspace-scoped file tools with internal path blocking.
@@ -196,6 +196,39 @@ fakes, then grades event traces by harness dimensions: state management, flow
 control, human approval, observability, multi-agent behavior, and protocol
 integration. Results are written to `evals/results/latest.json`, which is
 ignored by Git.
+
+### Frontend
+
+The browser UI source lives in `frontend/` and is a Next.js (TypeScript +
+Tailwind + shadcn/ui) app. Its static export is built into `src/kodeks/static/`,
+which is committed and served by FastAPI. **Node/npm is only needed to develop
+the frontend; running kodeks (`uv run kodeks-server`) needs no Node**, because
+the built assets are committed and served from `src/kodeks/static/`.
+
+Local UI development uses two shells. Run the backend in one:
+
+```bash
+uv run kodeks-server --reload
+```
+
+Run the Next dev server in another; it proxies `/api` (and `/health`, `/v1`) to
+the backend on `:8000`:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Rebuild the shipped UI after changing the frontend:
+
+```bash
+./scripts/build-frontend.sh
+```
+
+This runs the `next build` static export and syncs `frontend/out/` into
+`src/kodeks/static/`. Commit the regenerated `src/kodeks/static/` along with the
+frontend source.
 
 ## Safety Model
 
