@@ -36,6 +36,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Transcript } from "@/components/chat/Transcript";
 import { Composer } from "@/components/chat/Composer";
+import { SessionList } from "@/components/workspace/SessionList";
+import { useSessions } from "@/hooks/useSessions";
 import {
   Sheet,
   SheetContent,
@@ -119,16 +121,21 @@ function Placeholder({ children }: { children: ReactNode }) {
 
 /**
  * 左侧工作区面板的内容（展开态）。
- * 含主操作“新会话”以及“最近会话 / 文件搜索”两个占位分区。
+ * 含主操作“新会话”以及“最近会话（SessionList）/ 文件搜索”分区。
+ * 在此持有单一 useSessions 实例，使「新会话」按钮与列表共享同一份数据与动作：
+ * 新建会话后列表自动刷新，选择列表项后亦在同一上下文中生效。
  */
 function WorkspacePanelBody() {
   const { t } = useI18n();
+  // 单一来源：newSession 给顶部主操作，整个 api 透传给 SessionList 复用。
+  const sessions = useSessions();
   return (
     <>
       <div className="px-3 pt-3">
         {/* 主操作：新会话。HIG：高度 44px（h-11）保证触控目标。可见文字已命名按钮，无需 aria-label。 */}
         <Button
           type="button"
+          onClick={sessions.newSession}
           className="h-11 w-full justify-start gap-2 rounded-xl"
         >
           <Plus className="size-4" aria-hidden="true" />
@@ -137,8 +144,8 @@ function WorkspacePanelBody() {
       </div>
 
       <PanelSection title={t.recentSessions} icon={History}>
-        {/* Phase 4: SessionList —— 最近会话列表 */}
-        <Placeholder>{t.noSessions}</Placeholder>
+        {/* Phase 4: SessionList —— 最近会话列表（共享上方 useSessions 实例）。 */}
+        <SessionList api={sessions} />
       </PanelSection>
 
       <PanelSection title={t.fileSearch} icon={Search}>
