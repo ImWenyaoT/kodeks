@@ -34,6 +34,7 @@ import {
 import { useI18n } from "@/components/providers/I18nProvider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Transcript } from "@/components/chat/Transcript";
 import {
   Sheet,
   SheetContent,
@@ -278,16 +279,11 @@ export function Shell() {
             </h1>
           </header>
 
-          {/* 转录区：空占位，撑满中部并可滚动。 */}
-          <section
-            aria-label={t.transcript}
-            className="flex-1 overflow-y-auto py-4"
-          >
-            {/* Phase 4: Transcript + Composer */}
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">{t.composer}</p>
-            </div>
-          </section>
+          {/* 转录区（Task 4.2）：Transcript 自带 role="log" + aria-live 等
+              live region 属性与 aria-label，故此处不再额外包裹 <section>，
+              避免重复的无障碍标签。Composer 仍为占位（Task 4.3）。 */}
+          <Transcript />
+          {/* Phase 4: Composer（Task 4.3） */}
 
           {/* 底部 Composer 占位区。safe-b：刘海/手势条安全区内边距。 */}
           <div className="safe-b sticky bottom-0 bg-gradient-to-t from-background via-background to-transparent pt-2 pb-4">
