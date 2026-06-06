@@ -57,6 +57,8 @@ export type Copy = {
   unavailable: string;
   notRequired: string;
   bridgeMessage: string;
+  /** MoonBridge 重新预检按钮的无障碍标签。 */
+  refresh: string;
   session: string;
   autoSession: string;
   runtimeEvents: string;
@@ -117,6 +119,7 @@ export const copy: Record<Language, Copy> = {
     unavailable: "Bridge 不可用",
     notRequired: "无需 Bridge",
     bridgeMessage: "正在确认当前 provider 的状态...",
+    refresh: "重新预检",
     session: "会话",
     autoSession: "自动会话",
     runtimeEvents: "运行事件",
@@ -169,6 +172,7 @@ export const copy: Record<Language, Copy> = {
     unavailable: "Bridge unavailable",
     notRequired: "Bridge not needed",
     bridgeMessage: "Checking the current provider status...",
+    refresh: "Refresh preflight",
     session: "Session",
     autoSession: "auto session",
     runtimeEvents: "Runtime events",

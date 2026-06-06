@@ -40,6 +40,7 @@ import { SessionList } from "@/components/workspace/SessionList";
 import { FilePicker } from "@/components/workspace/FilePicker";
 import { RuntimeSettings } from "@/components/tools/RuntimeSettings";
 import { AppearanceControls } from "@/components/tools/AppearanceControls";
+import { BridgeStatus } from "@/components/tools/BridgeStatus";
 import { useSessions } from "@/hooks/useSessions";
 import {
   Sheet,
@@ -169,8 +170,8 @@ function ToolsPanelBody() {
   return (
     <>
       <PanelSection title={t.bridge} icon={Wrench}>
-        {/* Phase 4: MoonBridge 状态与预检 */}
-        <Placeholder>{t.bridgeMessage}</Placeholder>
+        {/* Phase 4: MoonBridge 状态与预检（Task 4.7） */}
+        <BridgeStatus />
       </PanelSection>
 
       <PanelSection title={t.appearance} icon={Palette}>
