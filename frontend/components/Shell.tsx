@@ -35,6 +35,7 @@ import { useI18n } from "@/components/providers/I18nProvider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Transcript } from "@/components/chat/Transcript";
+import { Composer } from "@/components/chat/Composer";
 import {
   Sheet,
   SheetContent,
@@ -281,18 +282,13 @@ export function Shell() {
 
           {/* 转录区（Task 4.2）：Transcript 自带 role="log" + aria-live 等
               live region 属性与 aria-label，故此处不再额外包裹 <section>，
-              避免重复的无障碍标签。Composer 仍为占位（Task 4.3）。 */}
+              避免重复的无障碍标签。 */}
           <Transcript />
-          {/* Phase 4: Composer（Task 4.3） */}
 
-          {/* 底部 Composer 占位区。safe-b：刘海/手势条安全区内边距。 */}
+          {/* 底部 Composer（Task 4.3）。safe-b：刘海/手势条安全区内边距——
+              本壳层已统一处理底部安全区，Composer 内部不再重复施加。 */}
           <div className="safe-b sticky bottom-0 bg-gradient-to-t from-background via-background to-transparent pt-2 pb-4">
-            <div
-              aria-hidden="true"
-              className="flex min-h-14 items-center rounded-2xl border border-border bg-card px-4 text-sm text-muted-foreground shadow-sm"
-            >
-              {t.composer}
-            </div>
+            <Composer />
           </div>
         </div>
       </main>
