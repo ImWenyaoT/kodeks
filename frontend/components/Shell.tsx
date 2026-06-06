@@ -38,6 +38,8 @@ import { Transcript } from "@/components/chat/Transcript";
 import { Composer } from "@/components/chat/Composer";
 import { SessionList } from "@/components/workspace/SessionList";
 import { FilePicker } from "@/components/workspace/FilePicker";
+import { RuntimeSettings } from "@/components/tools/RuntimeSettings";
+import { AppearanceControls } from "@/components/tools/AppearanceControls";
 import { useSessions } from "@/hooks/useSessions";
 import {
   Sheet,
@@ -173,12 +175,12 @@ function ToolsPanelBody() {
 
       <PanelSection title={t.appearance} icon={Palette}>
         {/* Phase 4: Appearance —— 主题/语言切换 */}
-        <Placeholder>{t.system}</Placeholder>
+        <AppearanceControls />
       </PanelSection>
 
       <PanelSection title={t.runtime} icon={SlidersHorizontal}>
         {/* Phase 4: Runtime —— provider / model / reasoning 设置 */}
-        <Placeholder>{t.notConfigured}</Placeholder>
+        <RuntimeSettings />
       </PanelSection>
 
       <PanelSection title={t.runtimeEvents} icon={Activity}>
