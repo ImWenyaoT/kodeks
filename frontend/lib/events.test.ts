@@ -13,7 +13,8 @@ describe("parseRuntimeEvent", () => {
   });
   it("falls back to unknown for unrecognized type", () => {
     const e = parseRuntimeEvent('{"type":"memory_recalled","x":1}');
-    expect(e.type).toBe("memory_recalled");
+    expect(e).not.toBeNull();
+    expect(e!.type).toBe("memory_recalled");
   });
   it("returns null for invalid JSON", () => {
     expect(parseRuntimeEvent("{not json")).toBeNull();
