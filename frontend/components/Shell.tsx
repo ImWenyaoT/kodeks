@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Transcript } from "@/components/chat/Transcript";
 import { Composer } from "@/components/chat/Composer";
 import { SessionList } from "@/components/workspace/SessionList";
+import { FilePicker } from "@/components/workspace/FilePicker";
 import { useSessions } from "@/hooks/useSessions";
 import {
   Sheet,
@@ -149,8 +150,8 @@ function WorkspacePanelBody() {
       </PanelSection>
 
       <PanelSection title={t.fileSearch} icon={Search}>
-        {/* Phase 4: FileSearch —— workspace 文件搜索 + 选择 */}
-        <Placeholder>{t.fileDescription}</Placeholder>
+        {/* Phase 4: FileSearch —— workspace 文件搜索 + 选择（Task 4.5） */}
+        <FilePicker />
       </PanelSection>
     </>
   );
