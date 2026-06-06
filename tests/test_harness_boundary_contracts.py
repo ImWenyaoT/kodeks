@@ -42,14 +42,14 @@ def test_root_agents_instructions_are_not_part_of_repository():
 def test_fastapi_route_surface_matches_harness_boundary():
     """FastAPI exposes the local coding-agent harness routes."""
 
+    app = create_app()
     route_surface = {
         (method, route.path)
-        for route in create_app().routes
+        for route in app.routes
         for method in getattr(route, "methods", set())
     }
 
     expected_routes = {
-        ("GET", "/"),
         ("GET", "/health"),
         ("GET", "/api/models"),
         ("GET", "/api/sessions"),
@@ -68,6 +68,9 @@ def test_fastapi_route_surface_matches_harness_boundary():
         ("POST", "/api/chat/ui"),
     }
     assert expected_routes <= route_surface
+    # The root SPA shell is served by a StaticFiles mount (not a GET handler),
+    # so it is exposed as a named mount rather than a ("GET", "/") route.
+    assert any(getattr(route, "name", None) == "static" for route in app.routes)
 
 
 def test_audit_event_types_match_harness_observability_boundary():

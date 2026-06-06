@@ -12,7 +12,7 @@ def test_health_route():
 
 
 def test_python_runtime_serves_static_ui():
-    """FastAPI serves the local coding-agent browser UI."""
+    """FastAPI serves the built Next static export as the browser UI."""
 
     client = TestClient(create_app())
 
@@ -20,9 +20,8 @@ def test_python_runtime_serves_static_ui():
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Python runtime UI" in response.text
-    assert 'id="composer"' in response.text
-    assert "/api/chat/stream" in response.text
+    # The built Next export references its asset bundles under /_next/.
+    assert "/_next/" in response.text
 
 
 def test_cors_preflight_does_not_allow_old_next_shell_by_default():

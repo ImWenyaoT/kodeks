@@ -10,7 +10,8 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .api.approval_routes import register_approval_routes
 from .api.bridge_routes import (
@@ -34,14 +35,6 @@ def _cors_origins(env: Mapping[str, str]) -> list[str]:
     if raw is not None:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
     return []
-
-
-def _static_index_html() -> str:
-    """Read the Python-served browser shell for local interactive use."""
-
-    return (Path(__file__).with_name("static") / "index.html").read_text(
-        encoding="utf-8"
-    )
 
 
 def create_app(
@@ -81,12 +74,6 @@ def create_app(
         current = KodeksDatabase(db_path)
         state["database"] = current
         return current
-
-    @app.get("/")
-    def index() -> HTMLResponse:
-        """Serve the minimal Python-native Kodeks UI."""
-
-        return HTMLResponse(_static_index_html())
 
     @app.get("/favicon.ico")
     def favicon() -> Response:
@@ -132,6 +119,12 @@ def create_app(
         resolve_workspace_root=resolve_workspace_root,
         responses_event_factory=responses_event_factory,
     )
+
+    # Mount the built frontend LAST so the API routes above take precedence and
+    # the static mount only serves the SPA shell (index.html via html=True) plus
+    # the _next/ asset bundles as a catch-all.
+    static_dir = Path(__file__).with_name("static")
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
     return app
 
