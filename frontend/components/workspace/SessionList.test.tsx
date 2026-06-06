@@ -124,6 +124,40 @@ describe("SessionList", () => {
     });
   });
 
+  // 加载失败：getSessions reject → 渲染 role="alert" 错误态（t.sessionLoadError）。
+  it("shows a role=alert error when getSessions rejects", async () => {
+    getSessionsMock.mockRejectedValue(new Error("network down"));
+    renderList();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(copy.en.sessionLoadError);
+  });
+
+  // 加载中：通过注入的 api 句柄强制 loading 态 → 渲染 t.loadingSessions 文案。
+  // 注：组件内部仍会实例化 useSessions（即便注入 api 也会取其句柄做回退），
+  // 其挂载 effect 会调用 mock 的 getSessions，故需给它一个会 resolve 的返回避免崩溃。
+  it("shows the loading state while sessions are loading", () => {
+    getSessionsMock.mockResolvedValue([]);
+    render(
+      <ThemeProvider>
+        <I18nProvider>
+          <SessionList
+            api={{
+              sessions: [],
+              loading: true,
+              error: false,
+              reload: vi.fn().mockResolvedValue(undefined),
+              select: vi.fn().mockResolvedValue(undefined),
+              newSession: vi.fn(),
+            }}
+          />
+        </I18nProvider>
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText(copy.en.loadingSessions)).toBeInTheDocument();
+  });
+
   // axe：渲染结果（含一行会话）零无障碍违规。
   it("has no axe violations", async () => {
     getSessionsMock.mockResolvedValue([

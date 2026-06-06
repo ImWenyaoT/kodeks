@@ -169,6 +169,20 @@ describe("FilePicker", () => {
     expect(screen.queryByText(t.noFilesSelected)).not.toBeInTheDocument();
   });
 
+  // 出错：getWorkspaceFiles reject → 展开后渲染 role="alert" 错误态。
+  it("shows a role=alert error when getWorkspaceFiles rejects", async () => {
+    getWorkspaceFilesMock.mockReset();
+    getWorkspaceFilesMock.mockRejectedValue(new Error("fs down"));
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(getToggle());
+
+    // 错误态以 role="alert" 即时播报（文案复用 t.noFileMatches 作兜底）。
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(t.noFileMatches);
+  });
+
   // axe：picker 展开（含文件列表）零无障碍违规。
   it("has no axe violations with the picker open", async () => {
     const user = userEvent.setup();

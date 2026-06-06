@@ -135,6 +135,45 @@ describe("ApprovalList", () => {
     expect(useChatStore.getState().approvals).toHaveLength(0);
   });
 
+  // busy-guard：决策飞行中（promise 未 resolve）应禁用本卡片的批准/拒绝按钮，
+  // 决策 settle 后审批被移除、按钮随卡片消失。
+  it("disables the approve/reject buttons while a decision is in flight", async () => {
+    // 用一个手动可控的 deferred promise 卡住 decideApproval，模拟飞行中状态。
+    let resolveDecision!: (value: { result?: unknown }) => void;
+    decideApprovalMock.mockReset();
+    decideApprovalMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDecision = resolve as (value: { result?: unknown }) => void;
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderList();
+
+    const approveBtn = screen.getByRole("button", {
+      name: `${t.approve}: Run \`rm -rf build\`?`,
+    });
+    const rejectBtn = screen.getByRole("button", {
+      name: `${t.reject}: Run \`rm -rf build\`?`,
+    });
+
+    // 点击批准：进入 deciding 态，但 promise 仍未 resolve。
+    await user.click(approveBtn);
+
+    // 飞行中：两个按钮都应被禁用（busy → disabled）。
+    await waitFor(() => expect(approveBtn).toBeDisabled());
+    expect(rejectBtn).toBeDisabled();
+    // 审批尚未移除（decide 的 removeApproval 在 resolve 之后才执行）。
+    expect(useChatStore.getState().approvals).toHaveLength(1);
+
+    // resolve 决策：审批被移除，卡片连同按钮一并卸载。
+    resolveDecision({ result: undefined });
+    await waitFor(() => expect(useChatStore.getState().approvals).toHaveLength(0));
+    expect(
+      screen.queryByRole("button", { name: `${t.approve}: Run \`rm -rf build\`?` }),
+    ).not.toBeInTheDocument();
+  });
+
   // 容器暴露 aria-live + aria-label（修复审计「approvals not announced」）。
   it("exposes an aria-live container labelled by the approvals heading", () => {
     renderList();

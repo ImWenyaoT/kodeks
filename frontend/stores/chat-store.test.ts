@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 describe("chat-store", () => {
-  // 用例 1：appendMessage 返回新消息 id，appendDelta 按 id 累积流式文本。
+  // appendMessage 返回新消息 id，appendDelta 按 id 累积流式文本。
   it("appendMessage + appendDelta accumulate streaming text", () => {
     const id = useChatStore.getState().appendMessage("assistant", "");
     expect(typeof id).toBe("string");
@@ -37,7 +37,7 @@ describe("chat-store", () => {
     expect(useChatStore.getState().messages).toHaveLength(2);
   });
 
-  // 用例 2：toggleFile 添加/移除路径，且每次都会生成全新的 Set 引用。
+  // toggleFile 添加/移除路径，且每次都会生成全新的 Set 引用。
   it("toggleFile adds then removes a path and replaces the Set reference", () => {
     const before = useChatStore.getState().selectedFiles;
     expect(before.has("a.ts")).toBe(false);
@@ -54,7 +54,7 @@ describe("chat-store", () => {
     expect(afterRemove).not.toBe(afterAdd);
   });
 
-  // 用例 3：reset 清空 messages/sessionId 等运行态，但保留已改动的 settings。
+  // reset 清空 messages/sessionId 等运行态，但保留已改动的 settings。
   it("reset clears runtime state but keeps settings", () => {
     useChatStore.getState().appendMessage("user", "hello");
     useChatStore.getState().setSession("sess-1");

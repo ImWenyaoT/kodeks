@@ -72,6 +72,92 @@ describe("useChatStream", () => {
     expect(useChatStore.getState().isRunning).toBe(false);
   });
 
+  it("pushes an approval when an approval_required frame arrives", async () => {
+    const body = streamFrom([
+      'event: approval_required\ndata: {"type":"approval_required","approval_id":"ap-9","tool_call_id":"tc-9","message":"Run `rm -rf build`?"}\n\n',
+    ]);
+    vi.mocked(openChatStream).mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const { result } = renderHook(() => useChatStream(), { wrapper });
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    // approval_required 帧应被分派到 pushApproval，落入 store.approvals。
+    expect(useChatStore.getState().approvals).toEqual([
+      { approvalId: "ap-9", message: "Run `rm -rf build`?" },
+    ]);
+    expect(useChatStore.getState().isRunning).toBe(false);
+  });
+
+  it("renders localized runtime-failure text and pushes a runtime event on an error frame", async () => {
+    const body = streamFrom([
+      'event: error\ndata: {"type":"error","message":"boom","code":"E_BOOM"}\n\n',
+    ]);
+    vi.mocked(openChatStream).mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const { result } = renderHook(() => useChatStream(), { wrapper });
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    // jsdom 默认语言为 en，故助手气泡应含英文版 runtimeFailed 文案（来自 t.runtimeFailed）。
+    const messages = useChatStore.getState().messages;
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    expect(lastAssistant?.text).toContain("Runtime failed: boom");
+    // error 帧携带 code，运行事件流应推入该 code。
+    expect(useChatStore.getState().runtimeEvents).toContain("E_BOOM");
+    expect(useChatStore.getState().isRunning).toBe(false);
+  });
+
+  it("pushes a runtime marker for tool_call (default-branch) frames", async () => {
+    const body = streamFrom([
+      'event: tool_call\ndata: {"type":"tool_call","tool_call_id":"tc-1","tool_name":"shell"}\n\n',
+    ]);
+    vi.mocked(openChatStream).mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const { result } = renderHook(() => useChatStream(), { wrapper });
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    // tool_call 走 default 分支，用 type 作为紧凑运行事件标记。
+    expect(useChatStore.getState().runtimeEvents).toContain("tool_call");
+    expect(useChatStore.getState().isRunning).toBe(false);
+  });
+
+  it("handles a non-2xx response without throwing and surfaces a runtime error", async () => {
+    // res.ok=false：send() 内部抛出 "chat failed with HTTP ..." 并被 catch 接住。
+    vi.mocked(openChatStream).mockResolvedValue(
+      new Response("nope", { status: 500 }),
+    );
+
+    const { result } = renderHook(() => useChatStream(), { wrapper });
+    // 不应有异常逃逸出 send()。
+    await act(async () => {
+      await expect(result.current.send("hi")).resolves.toBeUndefined();
+    });
+
+    // catch 分支推一条通用 "error" 运行事件，并把本地化失败文案落到助手气泡。
+    expect(useChatStore.getState().runtimeEvents).toContain("error");
+    const messages = useChatStore.getState().messages;
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    expect(lastAssistant?.text).toContain("Runtime failed:");
+    expect(lastAssistant?.text).toContain("chat failed with HTTP 500");
+    // 运行态复位（finally 分支）。
+    expect(useChatStore.getState().isRunning).toBe(false);
+  });
+
   it("passes an AbortSignal to openChatStream so stop() can abort", async () => {
     const body = streamFrom([
       'event: text_delta\ndata: {"type":"text_delta","delta":"x"}\n\n',
