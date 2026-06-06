@@ -87,6 +87,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const initial: LanguagePreference = isPreference(stored)
       ? stored
       : "system";
+    // 此处的同步 setState 是刻意为之、且无法用惰性初始化替代：首屏（SSR / 静态导出
+    // 与首帧 client）必须以默认值渲染才能保证 hydration 一致；localStorage 只能在
+    // 挂载后读取，读到后再校正才是正确做法。故对被规则标记的调用针对性禁用。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreferenceState(initial);
     setLang(resolvePreference(initial));
   }, []);

@@ -57,24 +57,38 @@ export function useSessions(): SessionsApi {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // 拉取列表：进入 loading、清空错误；成功写入数据，失败置错误态。
+  // 拉取列表的核心实现：成功写入数据并清错误，失败置错误态，结束后退出 loading。
+  // 所有 setState 都在 promise 回调中执行（非 effect 同步体），挂载首拉则复用初始的
+  // loading=true / error=false。
+  const fetchSessions = useCallback(
+    () =>
+      getSessions()
+        .then((list) => {
+          setSessions(list);
+          setError(false);
+        })
+        .catch(() => {
+          setError(true);
+        })
+        .finally(() => {
+          setLoading(false);
+        }),
+    [],
+  );
+
+  // 手动重拉：显式进入 loading、清错误后再拉取（供 reload / newSession 复用）。
   const reload = useCallback(async () => {
     setLoading(true);
     setError(false);
-    try {
-      const list = await getSessions();
-      setSessions(list);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await fetchSessions();
+  }, [fetchSessions]);
 
-  // 挂载即加载一次。reload 引用稳定（useCallback 无依赖），不会重复触发。
+  // 挂载即加载一次。初始 loading 已为 true、error 已为 false，故首拉直接复用
+  // fetchSessions；其内部 setState 仅在 promise 回调中触发，不在 effect 同步体内，
+  // 规避 react-hooks/set-state-in-effect。fetchSessions 引用稳定（无依赖），不会重复触发。
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void fetchSessions();
+  }, [fetchSessions]);
 
   // 选择会话：拉详情 → 重置 store（保留设置）→ 绑定会话 id → 逐条重建转录。
   const select = useCallback(async (id: string) => {
