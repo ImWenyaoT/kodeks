@@ -68,6 +68,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     useState<LanguagePreference>("system");
   const [lang, setLang] = useState<Language>("en");
 
+  // 同步 <html lang>：layout 以静态 lang="en" 作 SSR 默认，挂载/切换后由此 effect
+  // 在客户端校正为实际生效语言，使屏幕阅读器按正确语言朗读（守卫 document 以兼容 SSR）。
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   // 仅在浏览器侧（挂载后）读取持久化偏好并解析语言。
   useEffect(() => {
     if (typeof window === "undefined") return;
