@@ -45,6 +45,10 @@ export type Copy = {
   /** 右侧工具面板收起/展开切换的无障碍标签。 */
   collapseTools: string;
   expandTools: string;
+  /** 左侧工作区 landmark 的无障碍标签。 */
+  workspace: string;
+  /** MoonBridge 明细行「上游」标签。 */
+  upstream: string;
   mode: string;
   act: string;
   plan: string;
@@ -67,7 +71,6 @@ export type Copy = {
   autoSession: string;
   runtimeEvents: string;
   notConfigured: string;
-  requestFailed: string;
   /** 运行失败的格式化文案。 */
   runtimeFailed: (message: string) => string;
   /** 推理强度选项标签。 */
@@ -109,7 +112,9 @@ export const copy: Record<Language, Copy> = {
     expandWorkspace: "展开工作区",
     collapseTools: "收起工具面板",
     expandTools: "展开工具面板",
-    mode: "代码解释器",
+    workspace: "工作区",
+    upstream: "上游",
+    mode: "模式",
     act: "执行",
     plan: "计划",
     provider: "模型服务",
@@ -130,7 +135,6 @@ export const copy: Record<Language, Copy> = {
     autoSession: "自动会话",
     runtimeEvents: "运行事件",
     notConfigured: "未配置",
-    requestFailed: "请求失败。请确认本地 Python runtime 仍在运行。",
     runtimeFailed: (message) => `运行失败：${message}`,
     reasoningOptions: { low: "低", medium: "中", high: "高", xhigh: "极高" },
   },
@@ -164,7 +168,9 @@ export const copy: Record<Language, Copy> = {
     expandWorkspace: "Expand workspace",
     collapseTools: "Collapse tools",
     expandTools: "Expand tools",
-    mode: "Code Interpreter",
+    workspace: "Workspace",
+    upstream: "Upstream",
+    mode: "Mode",
     act: "Act",
     plan: "Plan",
     provider: "Provider",
@@ -185,7 +191,6 @@ export const copy: Record<Language, Copy> = {
     autoSession: "auto session",
     runtimeEvents: "Runtime events",
     notConfigured: "Not configured",
-    requestFailed: "Request failed. Confirm the local Python runtime is still running.",
     runtimeFailed: (message) => `Runtime failed: ${message}`,
     reasoningOptions: { low: "Low", medium: "Medium", high: "High", xhigh: "X-high" },
   },

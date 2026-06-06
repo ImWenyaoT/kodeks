@@ -3,6 +3,7 @@
 // 与事件类型粘合在一起。对外暴露 { send, stop, isRunning }。
 import { useCallback, useRef } from "react";
 import { useChatStore } from "@/stores/chat-store";
+import { useI18n } from "@/components/providers/I18nProvider";
 import { openChatStream, type ChatStreamBody } from "@/lib/api";
 import { readSse } from "@/lib/sse";
 import { parseRuntimeEvent, type RuntimeEvent } from "@/lib/events";
@@ -23,6 +24,9 @@ export interface ChatStreamApi {
  * runtime 事件分派到对应的 store action；stop 通过 AbortController 中断请求。
  */
 export function useChatStream(): ChatStreamApi {
+  // 本 hook 渲染在 <I18nProvider> 之内（page.tsx），故可读取当前语言文案，
+  // 用于把运行失败提示本地化（中文用户看到译文而非英文字面量）。
+  const { t } = useI18n();
   // 订阅 isRunning，使消费组件能据此切换发送/停止按钮等 UI。
   const isRunning = useChatStore((s) => s.isRunning);
   // 保存当前 turn 的 AbortController，供 stop() 中断；turn 结束后清空。
@@ -65,7 +69,7 @@ export function useChatStream(): ChatStreamApi {
           break;
         case "error":
           // 把错误同时呈现在助手气泡（便于用户看到）与运行事件流（携带 code）。
-          s.appendDelta(assistantId, `\nRuntime failed: ${ev.message}`);
+          s.appendDelta(assistantId, `\n${t.runtimeFailed(ev.message)}`);
           s.pushRuntime(ev.code ?? "error");
           break;
         case "unknown":
@@ -102,14 +106,14 @@ export function useChatStream(): ChatStreamApi {
         useChatStore.getState().pushRuntime("error");
         useChatStore
           .getState()
-          .appendDelta(assistantId, `\nRuntime failed: ${message}`);
+          .appendDelta(assistantId, `\n${t.runtimeFailed(message)}`);
       }
       controllerRef.current = null;
     } finally {
       // 无论成功、失败还是中断，都复位运行态。
       useChatStore.getState().setRunning(false);
     }
-  }, []);
+  }, [t]);
 
   // 中断当前 turn：触发请求的 AbortError 并立即退出运行态。
   const stop = useCallback(() => {

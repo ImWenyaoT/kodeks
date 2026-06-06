@@ -128,7 +128,7 @@ export function BridgeStatus() {
       <dl className="mt-3 border-t border-border/60 pt-2">
         <DetailRow label={t.provider} value={provider} />
         <DetailRow label={t.bridge} value={bridge} />
-        <DetailRow label="Upstream" value={upstream} />
+        <DetailRow label={t.upstream} value={upstream} />
         <DetailRow label={t.model} value={modelValue} />
       </dl>
     </div>

@@ -25,7 +25,7 @@ describe("api client", () => {
               ],
               primary: "a",
             }),
-            { status: 200 },
+            { status: 200, headers: { "Content-Type": "application/json" } },
           ),
       ),
     );
@@ -46,7 +46,10 @@ describe("api client", () => {
     // 用 fetch mock 捕获请求的 url 与 init，断言方法、路径与 JSON body。
     const fetchMock = vi.fn(
       async () =>
-        new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+        new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const res = await bridgePreflight("m");
@@ -65,7 +68,10 @@ describe("api client", () => {
     // 同样捕获 url 与 init，断言路径携带 id、body 为 {"decision":"approve"}。
     const fetchMock = vi.fn(
       async () =>
-        new Response(JSON.stringify({ approval: {} }), { status: 200 }),
+        new Response(JSON.stringify({ approval: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
     vi.stubGlobal("fetch", fetchMock);
     await decideApproval("a1", "approve");

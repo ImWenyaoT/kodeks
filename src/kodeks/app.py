@@ -122,9 +122,14 @@ def create_app(
 
     # Mount the built frontend LAST so the API routes above take precedence and
     # the static mount only serves the SPA shell (index.html via html=True) plus
-    # the _next/ asset bundles as a catch-all.
+    # the _next/ asset bundles as a catch-all. Guard with is_dir() so a fresh
+    # checkout without a built bundle still imports and serves /api + /health
+    # instead of crashing on StaticFiles' default check_dir=True.
     static_dir = Path(__file__).with_name("static")
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    if static_dir.is_dir():
+        app.mount(
+            "/", StaticFiles(directory=str(static_dir), html=True), name="static"
+        )
 
     return app
 

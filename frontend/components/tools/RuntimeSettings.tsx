@@ -10,7 +10,7 @@
 //      “segmented controls lack aria-label” 的发现）。
 //   - mode 用 ToggleGroup（单选），整组通过 aria-label 命名其用途；
 //     当前值由 primitive 的 pressed/selected 态传达，不靠颜色单一信号。
-//   - 触控目标：Select trigger 与 ToggleGroupItem 高度 ≥ 40px（h-10）。
+//   - 触控目标：Select trigger 与 ToggleGroupItem 高度 ≥ 44px（h-11）。
 //
 // Base UI 选型说明：
 //   - Select.Root 为受控用法：value=string、onValueChange(value)；传入 items 后
@@ -89,7 +89,7 @@ function LabeledSelect({
         <SelectTrigger
           id={triggerId}
           aria-label={label}
-          className="h-10 w-full"
+          className="h-11 w-full"
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -207,10 +207,10 @@ export function RuntimeSettings() {
           spacing={0}
           className="w-full"
         >
-          <ToggleGroupItem value="act" className="h-10 flex-1">
+          <ToggleGroupItem value="act" className="h-11 flex-1">
             {t.act}
           </ToggleGroupItem>
-          <ToggleGroupItem value="plan" className="h-10 flex-1">
+          <ToggleGroupItem value="plan" className="h-11 flex-1">
             {t.plan}
           </ToggleGroupItem>
         </ToggleGroup>

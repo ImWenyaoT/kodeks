@@ -93,6 +93,7 @@ export function Composer() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t.composer}
+          aria-label={t.composer}
           rows={1}
           // 去掉 Textarea 自带边框/底色，让其融入外层卡片；field-sizing 自动增高。
           className="max-h-48 min-h-11 flex-1 resize-none border-0 bg-transparent py-2.5 shadow-none focus-visible:border-0 focus-visible:ring-0"

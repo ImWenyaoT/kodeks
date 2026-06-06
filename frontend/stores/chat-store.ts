@@ -69,15 +69,16 @@ export interface ChatState extends Settings {
 let seq = 0;
 const nextId = (): string => `m${++seq}`;
 
-// 运行态的初始值（不含 settings）。reset 时复用此对象的拷贝以保持 settings。
-const initialRuntime = {
+// 运行态的工厂函数（不含 settings）：初始 state 与 reset 共用同一份字段定义，
+// 每次调用都新建独立的 Set/数组引用，避免初始 state 与 reset 后共享同一引用。
+const freshRuntime = () => ({
   messages: [] as ChatMessage[],
   sessionId: "",
   selectedFiles: new Set<string>(),
   isRunning: false,
   runtimeEvents: [] as string[],
   approvals: [] as Approval[],
-};
+});
 
 // settings 的默认值。
 const defaultSettings: Settings = {
@@ -93,7 +94,7 @@ const defaultSettings: Settings = {
  * 在组件内可用 useChatStore(selector) 进行细粒度订阅。
  */
 export const useChatStore = create<ChatState>((set) => ({
-  ...initialRuntime,
+  ...freshRuntime(),
   ...defaultSettings,
 
   appendMessage: (role, text) => {
@@ -137,13 +138,5 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setSettings: (partial) => set(() => ({ ...partial })),
 
-  reset: () =>
-    set({
-      messages: [],
-      sessionId: "",
-      selectedFiles: new Set<string>(),
-      isRunning: false,
-      runtimeEvents: [],
-      approvals: [],
-    }),
+  reset: () => set(freshRuntime()),
 }));

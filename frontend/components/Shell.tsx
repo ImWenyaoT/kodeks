@@ -204,7 +204,7 @@ export function Shell() {
     <div className="flex h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       {/* ───────── 左：工作区（aside）。小屏(<lg)隐藏，由会话本身的中心区承载。 ───────── */}
       <aside
-        aria-label={t.recentSessions}
+        aria-label={t.workspace}
         className={cn(
           "hidden h-full shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200 ease-out lg:flex",
           leftOpen ? "w-72" : "w-16",
@@ -248,7 +248,7 @@ export function Shell() {
         ) : (
           // 收起态：窄轨道，仅图标按钮（每个都带 sr-only 文字与 aria-label）。
           <nav
-            aria-label={t.recentSessions}
+            aria-label={t.workspace}
             className="flex flex-1 flex-col items-center gap-1 py-2"
           >
             <RailButton

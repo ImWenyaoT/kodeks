@@ -4,7 +4,9 @@
 // 以及 stop 会传入可中断的 AbortSignal）。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { useChatStore } from "@/stores/chat-store";
+import { I18nProvider } from "@/components/providers/I18nProvider";
 
 // 对 API 模块做 mock：仅替换 openChatStream，其余导出保持真实实现。
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -29,6 +31,12 @@ function streamFrom(frames: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+// useChatStream 现会读取 useI18n（用于本地化运行失败提示），故必须在 I18nProvider
+// 内渲染；renderHook 通过 wrapper 提供 Provider 上下文。
+function wrapper({ children }: { children: ReactNode }) {
+  return <I18nProvider>{children}</I18nProvider>;
+}
+
 beforeEach(() => {
   // 每个测试前重置 store 运行态，并设置一个合法 model 以保证请求体有效。
   useChatStore.getState().reset();
@@ -50,7 +58,7 @@ describe("useChatStream", () => {
       new Response(body, { status: 200 }),
     );
 
-    const { result } = renderHook(() => useChatStream());
+    const { result } = renderHook(() => useChatStream(), { wrapper });
     await act(async () => {
       await result.current.send("hi");
     });
@@ -72,7 +80,7 @@ describe("useChatStream", () => {
       new Response(body, { status: 200 }),
     );
 
-    const { result } = renderHook(() => useChatStream());
+    const { result } = renderHook(() => useChatStream(), { wrapper });
     await act(async () => {
       await result.current.send("hi");
     });

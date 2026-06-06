@@ -7,6 +7,8 @@
 /**
  * 发起一次 fetch 请求并解析 JSON。
  * 非 2xx 响应会抛出错误（携带路径与 HTTP 状态码），调用方需自行处理。
+ * 当状态为 2xx 但 Content-Type 不是 JSON（如 SPA 静态导出回退到 text/html）时，
+ * 显式抛出可读错误，避免 res.json() 抛出含义模糊的 SyntaxError。
  */
 export async function requestJson<T = unknown>(
   path: string,
@@ -14,6 +16,11 @@ export async function requestJson<T = unknown>(
 ): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) throw new Error(`${path} failed with HTTP ${res.status}`);
+  // Content-Type 大小写不敏感校验：非 JSON 响应（例如 index.html 回退）直接抛出。
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`${path} returned non-JSON (HTTP ${res.status})`);
+  }
   return res.json() as Promise<T>;
 }
 

@@ -8,7 +8,7 @@
 //   - 两组均为单选 ToggleGroup，整组通过 aria-label 命名其用途
 //     （主题组 = appearance+theme 语义、语言组 = 语言）；当前值由 primitive 的
 //     pressed/selected 态传达，不依赖颜色单一信号。
-//   - 每个 ToggleGroupItem 高度 ≥ 40px（h-10），可见焦点由 primitive 提供。
+//   - 每个 ToggleGroupItem 高度 ≥ 44px（h-11），可见焦点由 primitive 提供。
 //
 // Base UI 选型说明：ToggleGroup 的 value 为字符串数组（单选即长度 1），
 // onValueChange 回调亦给出数组——取首元素写回各自的状态源。
@@ -68,7 +68,7 @@ function ToggleRow({
         className="w-full"
       >
         {options.map((o) => (
-          <ToggleGroupItem key={o.value} value={o.value} className="h-10 flex-1">
+          <ToggleGroupItem key={o.value} value={o.value} className="h-11 flex-1">
             {o.label}
           </ToggleGroupItem>
         ))}
@@ -83,9 +83,8 @@ function ToggleRow({
  * 的 attribute="class" 配套）；语言切换接 useI18n（preference/setPreference）。
  */
 export function AppearanceControls() {
-  const { t } = useI18n();
+  const { t, preference, setPreference } = useI18n();
   const { theme, setTheme } = useTheme();
-  const { preference, setPreference } = useI18n();
 
   // 主题三档：值与 next-themes 约定一致（light/dark/system）。
   const themeOptions = [

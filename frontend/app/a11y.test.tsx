@@ -160,10 +160,10 @@ describe("Full-page accessibility (assembled Shell)", () => {
     const mains = screen.getAllByRole("main");
     expect(mains).toHaveLength(1);
 
-    // 两个 <aside>（complementary）：左=最近会话、右=调试，命名互不相同。
+    // 两个 <aside>（complementary）：左=工作区、右=调试，命名互不相同。
     const asides = screen.getAllByRole("complementary");
     const asideNames = asides.map((el) => el.getAttribute("aria-label"));
-    expect(asideNames).toContain(t.recentSessions);
+    expect(asideNames).toContain(t.workspace);
     expect(asideNames).toContain(t.debug);
     // 无重复/冲突的 landmark 名：同类型 landmark 的 aria-label 应彼此唯一。
     expect(new Set(asideNames).size).toBe(asideNames.length);
