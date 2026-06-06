@@ -6,6 +6,7 @@ from kodeks.tools.registry import (
 )
 from kodeks.tools.schemas import (
     default_tool_definitions,
+    tool_definitions_by_name,
 )
 from kodeks.tools.types import (
     ToolExecutionContext,
@@ -24,6 +25,9 @@ def test_tool_registry_definitions_and_read_only_filter(tmp_path):
         )
 
         assert registry.definitions() == default_tool_definitions()
+        assert set(tool_definitions_by_name()) == {
+            definition["name"] for definition in default_tool_definitions()
+        }
         assert [definition["name"] for definition in registry.definitions()] == [
             "read_file",
             "write_file",

@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-import httpx2
+import httpx
 from fastapi.testclient import TestClient
 
 from .app import create_app
@@ -45,14 +45,14 @@ class SmokeResponse(Protocol):
 def run_smoke_checks(
     base_url: str,
     *,
-    client: httpx2.Client | None = None,
+    client: httpx.Client | None = None,
     include_live_provider: bool = False,
     model: str = "moonbridge",
 ) -> list[SmokeResult]:
     """Run Kodeks HTTP smoke checks against one runtime base URL."""
 
     close_client = client is None
-    active_client = client or httpx2.Client(base_url=_normalized_base_url(base_url))
+    active_client = client or httpx.Client(base_url=_normalized_base_url(base_url))
     try:
         checks = [
             ("health", lambda: _check_health(active_client)),
@@ -156,12 +156,12 @@ def _run_check(name: str, check: Callable[[], SmokeResult]) -> SmokeResult:
 
     try:
         result = check()
-    except httpx2.HTTPError as exc:
+    except httpx.HTTPError as exc:
         return SmokeResult(name, False, str(exc))
     return result
 
 
-def _check_health(client: httpx2.Client) -> SmokeResult:
+def _check_health(client: httpx.Client) -> SmokeResult:
     """Verify the runtime health endpoint is served by Python."""
 
     response = client.get("/health")
@@ -183,7 +183,7 @@ def _check_testclient_health(client: TestClient) -> SmokeResult:
     return SmokeResult("health", ok, _response_message(response))
 
 
-def _check_models(client: httpx2.Client) -> SmokeResult:
+def _check_models(client: httpx.Client) -> SmokeResult:
     """Verify the secret-free model catalog keeps its public shape."""
 
     response = client.get("/api/models")
@@ -199,7 +199,7 @@ def _check_testclient_models(client: TestClient) -> SmokeResult:
     return SmokeResult("models", ok, _response_message(response))
 
 
-def _check_chat_stream(client: httpx2.Client) -> SmokeResult:
+def _check_chat_stream(client: httpx.Client) -> SmokeResult:
     """Verify the Python chat route returns SSE without provider side effects."""
 
     response = client.post(
@@ -229,7 +229,7 @@ def _check_testclient_chat_stream(client: TestClient) -> SmokeResult:
     return SmokeResult("chat_stream", ok, _response_message(response))
 
 
-def _check_bridge_preflight(client: httpx2.Client, model: str) -> SmokeResult:
+def _check_bridge_preflight(client: httpx.Client, model: str) -> SmokeResult:
     """Verify bridge preflight returns one known status without using secrets."""
 
     response = client.post("/api/bridge/preflight", json={"model": model})
@@ -249,7 +249,7 @@ def _check_testclient_bridge_preflight(client: TestClient, model: str) -> SmokeR
     return SmokeResult("bridge_preflight", ok, _response_message(response))
 
 
-def _check_live_responses(client: httpx2.Client, model: str) -> SmokeResult:
+def _check_live_responses(client: httpx.Client, model: str) -> SmokeResult:
     """Verify the live Responses-compatible route when provider secrets exist."""
 
     response = client.post(

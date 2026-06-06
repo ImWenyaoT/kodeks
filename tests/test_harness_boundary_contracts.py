@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
 from kodeks.config import DEFAULT_DEEPSEEK_MODEL
+from kodeks.contracts import AUDIT_EVENT_TYPES
 from kodeks.providers.bridge import to_deepseek_chat_request
 from kodeks.tools.schemas import default_tool_definitions
 
@@ -69,6 +70,26 @@ def test_fastapi_route_surface_matches_harness_boundary():
     assert expected_routes <= route_surface
 
 
+def test_audit_event_types_match_harness_observability_boundary():
+    """Audit events are a fixed harness contract, not ad hoc strings."""
+
+    assert set(AUDIT_EVENT_TYPES) == {
+        "turn_started",
+        "harness_pattern_selected",
+        "memory_recalled",
+        "tool_called",
+        "tool_failed",
+        "tool_result",
+        "approval_required",
+        "approval_rejected",
+        "approval_executed",
+        "plan_checkpointed",
+        "subagent_started",
+        "subagent_completed",
+        "turn_completed",
+    }
+
+
 def test_ci_runs_python_harness_validation_and_smoke():
     """CI includes the validation gates for the harness runtime."""
 
@@ -92,7 +113,7 @@ def test_uv_lock_tracks_runtime_dependency_graph():
     assert packages["kodeks"]["source"] == {"editable": "."}
     assert {dependency["name"] for dependency in packages["kodeks"]["dependencies"]} >= {
         "fastapi",
-        "httpx2",
+        "httpx",
         "openai",
         "pydantic",
         "uvicorn",
@@ -245,6 +266,7 @@ def test_models_route_keeps_secret_free_deepseek_contract(tmp_path, monkeypatch)
     refs = [model["ref"] for model in body["models"]]
     assert refs == [
         f"deepseek/{DEFAULT_DEEPSEEK_MODEL}",
+        "deepseek/deepseek-v4-flash",
     ]
     assert "local-secret" not in response.text
     assert "deepseek-secret" not in response.text
@@ -256,7 +278,7 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_deepseek(
 ):
     """DeepSeek resolves to MoonBridge without exposing adapter controls."""
 
-    async def fake_reachable(_base_url):
+    async def fake_reachable(_base_url, _api_key):
         """Return a deterministic successful upstream probe for contract tests."""
 
         return None
@@ -280,6 +302,7 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_deepseek(
         )
     )
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(config_path))
+    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setattr("kodeks.app._check_chat_completions_upstream", fake_reachable)
     client = TestClient(create_app())
 
@@ -295,16 +318,31 @@ def test_bridge_preflight_keeps_moonbridge_implicit_for_deepseek(
     assert body["upstreamBaseURL"] == "https://api.deepseek.com"
     assert body["upstreamModel"] == "deepseek-v4-pro"
 
+    flash_response = client.post(
+        "/api/bridge/preflight", json={"model": "deepseek/deepseek-v4-flash"}
+    )
+
+    assert flash_response.status_code == 200
+    assert flash_response.json()["status"] == "ready"
+    assert flash_response.json()["upstreamModel"] == "deepseek-v4-flash"
+
 
 def test_chat_routes_emit_config_errors_without_side_effects(tmp_path, monkeypatch):
     """Chat routes expose missing model configuration as runtime events."""
 
     monkeypatch.setenv("KODEKS_DB_PATH", str(tmp_path / "kodeks.sqlite3"))
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
     for key in [
         "KODEKS_CHAT_COMPLETIONS_API_KEY",
         "KODEKS_CHAT_COMPLETIONS_BASE_URL",
         "KODEKS_CHAT_COMPLETIONS_MODEL",
+        "API_KEY",
+        "BASE_URL",
+        "MODEL",
+        "DEEPSEEK_API_KEY",
+        "DEEPSEEK_BASE_URL",
+        "DEEPSEEK_MODEL",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
     ]:

@@ -21,6 +21,9 @@ and protocol integration.
 - Tool calls and tool outputs remain paired in transcript replay; successful
   tool results continue the same chat turn, while approval-required and unknown
   tool results pause or halt locally.
+- Cross-layer contracts use typed names or small Protocols where practical:
+  tool schemas, tool statuses, audit event names, and tool-loop replay records
+  should not rely on positional indexes or ad hoc strings.
 - Shell commands are parsed into argv without shell interpretation; unmatched
   quotes fail before execution and dangerous shell metacharacters require
   approval.

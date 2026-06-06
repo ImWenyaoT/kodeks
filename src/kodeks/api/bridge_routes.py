@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-import httpx2
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -26,7 +26,7 @@ from ..providers.bridge import (
 )
 
 JsonBodyReader = Callable[[Request], Awaitable[dict[str, Any]]]
-UpstreamChecker = Callable[[str], Awaitable[dict[str, str] | None]]
+UpstreamChecker = Callable[[str, str | None], Awaitable[dict[str, str] | None]]
 
 
 def register_bridge_routes(
@@ -62,7 +62,7 @@ def register_bridge_routes(
                 "status": "unavailable",
                 "provider": requested_provider,
                 "code": "model_provider_missing",
-                "reason": "No DeepSeek provider is configured. Set KODEKS_CHAT_COMPLETIONS_* for the MoonBridge route.",
+                "reason": "No OpenAI-compatible Chat Completions provider is configured. Set API_KEY or DEEPSEEK_API_KEY for the MoonBridge route.",
                 "checkedAt": checked_at,
             }
         upstream = read_chat_completions_config(model_env)
@@ -86,7 +86,9 @@ def register_bridge_routes(
                     f"{', '.join(missing)}."
                 ),
             }
-        upstream_error = await check_upstream(str(upstream["baseURL"]))
+        upstream_error = await check_upstream(
+            str(upstream["baseURL"]), read_chat_completions_api_key(model_env)
+        )
         if upstream_error is not None:
             return {
                 **base,
@@ -123,7 +125,7 @@ def register_bridge_routes(
             return JSONResponse(
                 {
                     "error": {
-                        "message": "KODEKS_CHAT_COMPLETIONS_API_KEY is required for the DeepSeek/MoonBridge route."
+                        "message": "API_KEY or DEEPSEEK_API_KEY is required for the MoonBridge Chat Completions route."
                     }
                 },
                 status_code=500,
@@ -158,13 +160,18 @@ def register_bridge_routes(
         return StreamingResponse(frames(), media_type="text/event-stream")
 
 
-async def check_chat_completions_upstream(base_url: str) -> dict[str, str] | None:
+async def check_chat_completions_upstream(
+    base_url: str, api_key: str | None
+) -> dict[str, str] | None:
     """Check that the configured Chat Completions upstream is reachable."""
 
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        async with httpx2.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f"{base_url.rstrip('/')}/models")
-    except httpx2.HTTPError as exc:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(
+                f"{base_url.rstrip('/')}/models", headers=headers
+            )
+    except httpx.HTTPError as exc:
         return {
             "code": "moonbridge_upstream_unreachable",
             "reason": (

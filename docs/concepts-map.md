@@ -20,8 +20,9 @@ dimensions to code ownership and eval coverage.
 - Keep the public product definition centered on memory, multi-session,
   subagent, plan mode, workspace tools, approvals, observability, and protocol
   adaptation.
-- Keep MoonBridge implicit. It is a protocol adapter that converts DeepSeek
-  Chat Completions into the Responses-shaped runtime path.
+- Keep MoonBridge implicit. It is a protocol adapter that converts
+  OpenAI-compatible Chat Completions into the Responses-shaped runtime path.
+  DeepSeek is the default upstream.
 - Do not add web search, provider dashboards, a plugin marketplace, or generic
   multi-agent orchestration.
 - Do not add arbitrary workflow scripts. Kodeks only selects from the fixed

@@ -2,7 +2,8 @@
 
 **kodeks** 是一个 local-first coding agent workbench。它的范围刻意保持很小：
 一个带 memory、multi-session、subagent exploration、plan mode、workspace tools、
-人工审批，以及 DeepSeek Chat Completions 协议适配的 coding agent。
+人工审批，以及 OpenAI-compatible Chat Completions 协议适配的 coding agent。
+DeepSeek 是默认 upstream。
 
 [English README](./README.md) · [架构说明](./docs/architecture.md) · [产品需求](./docs/PRD.md) · [概念映射](./docs/concepts-map.md)
 
@@ -19,8 +20,8 @@ LLM harness：
 - 人工审批：危险 shell execution 需要 durable decision 和 audit event。
 - 可观测性：SSE runtime events、smoke checks、eval traces 和 audit logs。
 - 多 Agent：read-only subagent exploration 和可持久化 summary。
-- 协议集成：Responses-shaped runtime contract，以及 MoonBridge 到 DeepSeek Chat
-  Completions 的转换。
+- 协议集成：Responses-shaped runtime contract，以及 MoonBridge 到
+  OpenAI-compatible Chat Completions 的转换。
 
 设计中心是 harness 理解：上下文组装、工具、权限、状态、协议形态和评测。
 
@@ -28,7 +29,7 @@ LLM harness：
 
 - FastAPI 服务的浏览器 UI。
 - 基于 Server-Sent Events 的流式对话。
-- DeepSeek chat 通过 MoonBridge 路由。
+- DeepSeek 通过 MoonBridge 的 OpenAI-compatible Chat Completions adapter 路由。
 - 受 workspace policy 约束的文件工具，并阻止内部路径访问。
 - 带 timeout 和危险命令检测的 shell harness。
 - 基于 SQLite 的 sessions、transcripts、memories、approvals、subagent runs、
@@ -63,11 +64,21 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
 
 必需：
 
-- 一个 DeepSeek Chat Completions API key，通过 MoonBridge 接入。
+- 一个 OpenAI-compatible Chat Completions API key，通过 MoonBridge 接入。
+  DeepSeek 是默认 upstream。
 
-本地使用时，把模型配置放到 workspace 外的用户配置文件：
+本地开发最简单的方式是项目根目录 `.env`：
 
-- 默认：`~/.kodeks/config.json`
+```dotenv
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
+```
+
+结构化模型配置也可以放到项目本地配置或用户级配置里：
+
+- 项目本地：`.kodeks/config.json`
+- 用户级 fallback：`~/.kodeks/config.json`
 - 用 `KODEKS_CONFIG_DIR` 覆盖配置目录
 - 用 `KODEKS_CONFIG_PATH` 覆盖精确配置文件
 
@@ -83,13 +94,24 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
 }
 ```
 
-环境变量也可以用于开发和部署 secret。显式环境变量会覆盖用户配置文件。
+配置优先级是：
+
+1. 显式进程环境变量
+2. 项目 `.env`
+3. 结构化配置文件
+
+除非设置了 `KODEKS_CONFIG_DIR` 或 `KODEKS_CONFIG_PATH`，项目本地配置会先于
+用户级 fallback 被读取。
 
 常用选项：
 
+- `API_KEY` 或 `DEEPSEEK_API_KEY`
+- `BASE_URL` 或 `DEEPSEEK_BASE_URL`，默认是 `https://api.deepseek.com`
+- `MODEL` 或 `DEEPSEEK_MODEL`，默认是 `deepseek-v4-pro`；内置 DeepSeek catalog
+  包含 `deepseek-v4-pro` 和 `deepseek-v4-flash`
 - `KODEKS_CHAT_COMPLETIONS_API_KEY`
-- `KODEKS_CHAT_COMPLETIONS_BASE_URL`，默认是 `https://api.deepseek.com`
-- `KODEKS_CHAT_COMPLETIONS_MODEL`，默认是 `deepseek-v4-pro`
+- `KODEKS_CHAT_COMPLETIONS_BASE_URL`
+- `KODEKS_CHAT_COMPLETIONS_MODEL`
 - `KODEKS_BRIDGE_ENABLED=true`
 - `KODEKS_BRIDGE_BASE_URL`，默认是 `http://127.0.0.1:38440/v1`
 - `KODEKS_BRIDGE_MODEL`，默认是 `bridge`
@@ -103,18 +125,20 @@ DeepSeek thinking mode 默认会通过 MoonBridge 启用，除非设置
 assistant tool-call 消息上保留 DeepSeek 的 `reasoning_content`，让后续 Chat
 Completions 请求保持所需上下文形态。
 
-运行时状态默认写入 `.kodeks/`，并且不会进入 Git。
+运行时状态默认写入 `.kodeks/`，并且不会进入 Git。本地 `.env` 也不会进入
+Git。需要结构化配置时，项目本地模型配置可以放在 `.kodeks/config.json`。
 
 ## MoonBridge
 
-MoonBridge 是内部协议适配层。Kodeks 保持 Responses-shaped runtime contract，同时把 DeepSeek Chat Completions 作为 upstream。
+MoonBridge 是内部协议适配层。Kodeks 保持 Responses-shaped runtime contract，
+同时把 OpenAI-compatible Chat Completions 作为 upstream。DeepSeek 是默认 upstream。
 
 这样启动 runtime：
 
 ```bash
-KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
-KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
-KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
+DEEPSEEK_API_KEY=sk-... \
+DEEPSEEK_BASE_URL=https://api.deepseek.com \
+DEEPSEEK_MODEL=deepseek-v4-pro \
 uv run kodeks-server --reload
 ```
 

@@ -19,6 +19,7 @@ from .providers.bridge import (
     to_deepseek_chat_request,
 )
 from .responses_tool_loop import (
+    ToolRegistryLike,
     ToolRoundState,
     append_tool_continuation_messages,
     handle_output_item,
@@ -41,7 +42,7 @@ async def run_responses_tool_loop(
     workspace_root: str,
     runtime_env: Mapping[str, str | None],
     session_id: str,
-    registry: Any,
+    registry: ToolRegistryLike,
     complete_assistant_turn: CompletionEventFactory,
     responses_event_factory: ResponsesEventFactory | None,
     max_tool_loop_turns: int,
@@ -106,6 +107,16 @@ async def run_responses_tool_loop(
                     or tool_state.halt_tool_loop
                 ):
                     break
+                if _looks_like_pseudo_tool_call(assistant_text):
+                    yield _error_event(
+                        (
+                            "Model returned tool-call text instead of a native "
+                            "function_call event."
+                        ),
+                        session_id,
+                        "model_returned_pseudo_tool_call",
+                    )
+                    return
                 response = event.get("response")
                 response_id = (
                     str(response.get("id"))
@@ -151,7 +162,7 @@ async def live_responses_events(
     )
     if model_options is None:
         raise ModelConfigurationError(
-            "A DeepSeek provider is required. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek MoonBridge route."
+            "An OpenAI-compatible Chat Completions provider is required. Set API_KEY or DEEPSEEK_API_KEY for the MoonBridge route."
         )
     if model_options["provider"] != "moonbridge":
         raise ModelConfigurationError("Unsupported model provider.")
@@ -164,7 +175,7 @@ async def live_responses_events(
         )
     api_key = read_chat_completions_api_key(model_env)
     if api_key is None:
-        raise ModelConfigurationError("KODEKS_CHAT_COMPLETIONS_API_KEY is required.")
+        raise ModelConfigurationError("API_KEY or DEEPSEEK_API_KEY is required.")
 
     request = {
         "model": body.get("model") or model_options["model"],
@@ -198,6 +209,13 @@ def _stream_error_message(event: Mapping[str, Any]) -> str:
 
     message = event.get("message")
     return str(message) if isinstance(message, str) and message else "Model stream failed."
+
+
+def _looks_like_pseudo_tool_call(text: str) -> bool:
+    """Return whether visible text contains a fake serialized tool call."""
+
+    lowered = text.lower()
+    return "<tool_call" in lowered or 'type="tool_calls"' in lowered
 
 
 def _error_event(

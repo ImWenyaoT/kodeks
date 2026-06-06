@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from ..storage import KodeksDatabase
 from ..workspace import WorkspaceService
 from .schemas import ToolDefinition
 
 ToolArguments = Mapping[str, Any]
-ToolExecutionStatus = str
+ToolExecutionStatus = Literal["completed", "failed", "approval_required"]
 
 
 @dataclass(frozen=True)

@@ -19,7 +19,7 @@ from .helpers import (
     runtime_environment,
     string_argument,
 )
-from .schemas import ToolDefinition, default_tool_definitions
+from .schemas import ToolDefinition, tool_definitions_by_name
 from .types import (
     RegisteredTool,
     ToolArguments,
@@ -66,29 +66,29 @@ class ToolRegistry:
 def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
     """Build the default Kodeks tool registry from local services."""
 
-    definitions = default_tool_definitions()
+    definitions = tool_definitions_by_name()
     return ToolRegistry(
         [
             RegisteredTool(
-                definitions[0],
+                definitions["read_file"],
                 True,
                 False,
                 lambda arguments, context: execute_read_file(arguments, services),
             ),
             RegisteredTool(
-                definitions[1],
+                definitions["write_file"],
                 False,
                 True,
                 lambda arguments, context: execute_write_file(arguments, services),
             ),
             RegisteredTool(
-                definitions[2],
+                definitions["grep"],
                 True,
                 False,
                 lambda arguments, context: execute_grep(arguments, services),
             ),
             RegisteredTool(
-                definitions[3],
+                definitions["run_shell"],
                 False,
                 True,
                 lambda arguments, context: execute_run_shell(
@@ -96,7 +96,7 @@ def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
                 ),
             ),
             RegisteredTool(
-                definitions[4],
+                definitions["remember_fact"],
                 False,
                 True,
                 lambda arguments, context: execute_remember_fact(
@@ -104,13 +104,13 @@ def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
                 ),
             ),
             RegisteredTool(
-                definitions[5],
+                definitions["recall_memory"],
                 True,
                 False,
                 lambda arguments, context: execute_recall_memory(arguments, services),
             ),
             RegisteredTool(
-                definitions[6],
+                definitions["read_memory_artifact"],
                 True,
                 False,
                 lambda arguments, context: execute_read_memory_artifact(
@@ -118,7 +118,7 @@ def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
                 ),
             ),
             RegisteredTool(
-                definitions[7],
+                definitions["spawn_explore_agent"],
                 True,
                 False,
                 lambda arguments, context: execute_spawn_explore_agent(
@@ -126,7 +126,7 @@ def build_default_tool_registry(services: ToolRegistryServices) -> ToolRegistry:
                 ),
             ),
             RegisteredTool(
-                definitions[8],
+                definitions["list_mcp_servers"],
                 True,
                 False,
                 lambda arguments, context: execute_list_mcp_servers(services),

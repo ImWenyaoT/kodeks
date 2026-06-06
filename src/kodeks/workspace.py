@@ -42,6 +42,12 @@ DANGEROUS_PATTERNS = [
         r"(^|[\s'\"`])(\.git|\.kodeks|\.venv|node_modules)(/|$)",
     ]
 ]
+SHELL_ONLY_SYNTAX = re.compile(r"[;&|`$<>]")
+SHELL_ONLY_ERROR = (
+    "run_shell executes commands without a shell; remove pipes, redirects, "
+    "command substitutions, variables, or control operators and call one "
+    "executable with plain arguments."
+)
 
 
 class WorkspacePathError(RuntimeError):
@@ -176,6 +182,8 @@ def run_command(
 ) -> ShellResult:
     """Run a safe parsed command without a shell, or request approval."""
 
+    if has_shell_only_syntax(command):
+        return unsupported_shell_syntax_result(command)
     if is_dangerous_command(command):
         return ShellResult(
             command=command,
@@ -200,6 +208,8 @@ def run_approved_command(
 ) -> ShellResult:
     """Run a command after approval has already been granted by a higher layer."""
 
+    if has_shell_only_syntax(command):
+        return unsupported_shell_syntax_result(command)
     args = parse_command_args(command)
     if args is None:
         return ShellResult(command, None, "", parse_failure_message, True, False, False)
@@ -256,7 +266,21 @@ def parse_command_args(command: str) -> list[str] | None:
     return args or None
 
 
+def has_shell_only_syntax(command: str) -> bool:
+    """Return whether a command needs a shell feature Kodeks does not execute."""
+
+    return SHELL_ONLY_SYNTAX.search(command) is not None
+
+
+def unsupported_shell_syntax_result(command: str) -> ShellResult:
+    """Return a non-approval failure for commands that need shell parsing."""
+
+    return ShellResult(command, None, "", SHELL_ONLY_ERROR, False, False, False)
+
+
 def _truncate(value: str, max_bytes: int) -> tuple[str, bool]:
+    """Truncate text to a byte budget while preserving UTF-8 boundaries."""
+
     encoded = value.encode()
     if len(encoded) <= max_bytes:
         return value, False

@@ -4,7 +4,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
-from kodeks.harness import select_harness_pattern
 from kodeks.plans import build_plan_artifact_content
 from kodeks.runtime import (
     build_plan_artifact_content as runtime_build_plan_artifact_content,
@@ -290,7 +289,7 @@ async def test_python_chat_loop_rejects_direct_responses_provider(
 async def test_python_chat_loop_routes_chat_completions_through_bridge_adapter(
     tmp_path, monkeypatch
 ):
-    """DeepSeek Chat Completions models use the Python bridge adapter."""
+    """Chat Completions models use the Python bridge adapter."""
 
     async def fake_fetch_chat_completions_stream(payload, api_key, env):
         """Yield a minimal upstream Chat Completions stream for bridge routing."""
@@ -685,50 +684,6 @@ async def test_python_chat_loop_injects_selected_files_before_model(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_python_chat_loop_injects_harness_pattern_and_audit(tmp_path):
-    """Runtime context records why a bounded harness pattern was selected."""
-
-    seen_bodies = []
-
-    def responses_events(body, env):
-        seen_bodies.append(body)
-        return [{"type": "response.completed", "response": {"id": "resp_harness"}}]
-
-    database = KodeksDatabase(":memory:")
-    try:
-        _events = [
-            event
-            async for event in run_python_chat_turn(
-                {
-                    "input": "Verify every technical claim against the codebase.",
-                    "session_id": "sess_harness",
-                    "mode": "plan",
-                },
-                database,
-                str(tmp_path),
-                {},
-                responses_events,
-            )
-        ]
-        payload = json.loads(
-            database.connection.execute(
-                "SELECT payload_json FROM audit_log WHERE event_type = 'harness_pattern_selected'"
-            ).fetchone()["payload_json"]
-        )
-
-        assert payload["pattern"] == "adversarial_verify"
-        assert "self_preferential_bias" in payload["failureModes"]
-        assert "Harness pattern for this turn: adversarial_verify." in seen_bodies[0][
-            "instructions"
-        ]
-        assert "claim, evidence, risk, confidence, and nextAction" in seen_bodies[0][
-            "instructions"
-        ]
-    finally:
-        database.close()
-
-
-@pytest.mark.asyncio
 async def test_python_chat_loop_emits_approval_required(tmp_path):
     """Dangerous tool calls surface approval_required events and audit records."""
 
@@ -815,35 +770,4 @@ def test_build_plan_artifact_content_matches_harness_parser_shape():
                 "details": None,
             },
         ],
-    }
-
-
-def test_harness_pattern_selection_keeps_workflows_bounded():
-    """Harness pattern selection maps complex asks to a small fixed set."""
-
-    loop = select_harness_pattern(
-        "This test fails maybe 1 in 50 runs; don't stop until one theory works.",
-        "act",
-    )
-    verify = select_harness_pattern(
-        "Verify every technical claim against the codebase.", "plan"
-    )
-    tournament = select_harness_pattern(
-        "I need a name for this CLI tool; run a tournament for the top 3.", "plan"
-    )
-    fanout = select_harness_pattern(
-        "Use a workflow to rename our User model to Account everywhere.", "plan"
-    )
-
-    assert loop.pattern == "loop_until_done"
-    assert verify.pattern == "adversarial_verify"
-    assert tournament.pattern == "tournament"
-    assert fanout.pattern == "fanout_synthesize"
-    assert "Subagents are read-only" in loop.approval_boundary
-    assert set(loop.subagent_contract) == {
-        "claim",
-        "evidence",
-        "risk",
-        "confidence",
-        "nextAction",
     }

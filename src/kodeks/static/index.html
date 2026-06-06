@@ -1724,12 +1724,24 @@
 
       // Sends an approval decision back to the Python runtime.
       async function decideApproval(id, decision) {
-        await requestJson(`/api/approvals/${id}`, {
+        const response = await requestJson(`/api/approvals/${id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ decision }),
         });
         appendRuntime(`approval ${decision}: ${id}`);
+        const summary = formatApprovalResult(response);
+        if (summary) appendMessage("runtime", summary);
+      }
+
+      // Formats approval execution output for the transcript.
+      function formatApprovalResult(response) {
+        if (!response || !response.result) return "";
+        const result = response.result;
+        const lines = [`approval result: exit ${result.exitCode ?? "n/a"}`];
+        if (result.stdout) lines.push(`stdout:\n${result.stdout}`);
+        if (result.stderr) lines.push(`stderr:\n${result.stderr}`);
+        return lines.join("\n");
       }
 
       // Reads an SSE stream and parses JSON data frames incrementally.

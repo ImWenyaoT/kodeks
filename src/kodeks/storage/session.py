@@ -5,7 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..contracts import StoredApproval, StoredMessage, StoredPlanArtifact, StoredSession
+from ..contracts import (
+    AuditEventType,
+    StoredApproval,
+    StoredMessage,
+    StoredPlanArtifact,
+    StoredSession,
+)
 from .utils import (
     HasConnection,
     current_timestamp,
@@ -324,7 +330,9 @@ class AuditLogRepository:
     def __init__(self, database: HasConnection) -> None:
         self.database = database
 
-    def record(self, session_id: str | None, event_type: str, payload: Any) -> None:
+    def record(
+        self, session_id: str | None, event_type: AuditEventType, payload: Any
+    ) -> None:
         """Append one audit log entry."""
 
         self.database.connection.execute(

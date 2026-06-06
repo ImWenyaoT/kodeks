@@ -47,17 +47,13 @@ Thumbs.db
 *.orig
 *.rej
 
-# Generated or exploratory documentation.
-# Keep product docs and Superpowers specs synced for handoff.
+# Documentation policy.
+# Keep committed docs explicit; local notes and generated drafts stay ignored.
 docs/*
 !docs/PRD.md
 !docs/architecture.md
 !docs/concepts-map.md
-!docs/MODERNIZATION.md
 !docs/refactor-parity.md
-!docs/2026-05-24-agent-feedback-retrospective.md
-!docs/superpowers/
-!docs/superpowers/**
 
 # Root-level design exports and scratch HTML prototypes.
 /*.html

@@ -5,18 +5,56 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal, Protocol, TypedDict
 
 from .storage import KodeksDatabase
-from .tools.types import ToolExecutionContext
+from .tools.types import (
+    ToolArguments,
+    ToolExecutionContext,
+    ToolExecutionResult,
+    ToolExecutionStatus,
+)
+
+RuntimeToolStatus = Literal["ok", "approval_required", "error"]
+
+
+class ToolRegistryLike(Protocol):
+    """Small registry interface required by the Responses tool loop."""
+
+    def has(self, tool_name: str) -> bool:
+        """Return whether a tool is locally registered."""
+
+    def execute(
+        self,
+        tool_name: str,
+        arguments: ToolArguments,
+        context: ToolExecutionContext | None = None,
+    ) -> ToolExecutionResult:
+        """Execute one registered local tool."""
+
+
+class ToolCallRecord(TypedDict):
+    """Persisted assistant tool-call record used for continuation replay."""
+
+    id: str
+    name: str
+    args: dict[str, Any]
+
+
+class ToolMessageRecord(TypedDict):
+    """Persisted tool output record used for continuation replay."""
+
+    toolCallId: str
+    name: str
+    output: str
 
 
 @dataclass
 class ToolRoundState:
     """Track tool calls that decide whether the current model turn continues."""
 
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
-    tool_messages: list[dict[str, str]] = field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = field(default_factory=list)
+    tool_messages: list[ToolMessageRecord] = field(default_factory=list)
     reasoning_content: str | None = None
     waiting_for_approval: bool = False
     halt_tool_loop: bool = False
@@ -24,7 +62,7 @@ class ToolRoundState:
 
 async def handle_output_item(
     item: object,
-    registry: Any,
+    registry: ToolRegistryLike,
     database: KodeksDatabase,
     workspace_root: str,
     runtime_env: Mapping[str, str | None],
@@ -142,8 +180,8 @@ def append_tool_continuation_messages(
     session_id: str,
     assistant_text: str,
     reasoning_content: str | None,
-    tool_calls: list[dict[str, Any]],
-    tool_messages: list[dict[str, str]],
+    tool_calls: list[ToolCallRecord],
+    tool_messages: list[ToolMessageRecord],
 ) -> None:
     """Persist assistant tool-call and tool output messages for continuation."""
 
@@ -203,7 +241,7 @@ def _parse_tool_arguments(value: object) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _map_tool_status(status: str) -> str:
+def _map_tool_status(status: ToolExecutionStatus) -> RuntimeToolStatus:
     """Map registry statuses into the runtime event status contract."""
 
     if status == "completed":

@@ -9,6 +9,37 @@ from pydantic import BaseModel, ConfigDict, Field
 ConfiguredModelApi = Literal["responses", "chat-completions"]
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh"]
 SessionMode = Literal["act", "plan"]
+AuditEventType = Literal[
+    "turn_started",
+    "harness_pattern_selected",
+    "memory_recalled",
+    "tool_called",
+    "tool_failed",
+    "tool_result",
+    "approval_required",
+    "approval_rejected",
+    "approval_executed",
+    "plan_checkpointed",
+    "subagent_started",
+    "subagent_completed",
+    "turn_completed",
+]
+
+AUDIT_EVENT_TYPES: tuple[AuditEventType, ...] = (
+    "turn_started",
+    "harness_pattern_selected",
+    "memory_recalled",
+    "tool_called",
+    "tool_failed",
+    "tool_result",
+    "approval_required",
+    "approval_rejected",
+    "approval_executed",
+    "plan_checkpointed",
+    "subagent_started",
+    "subagent_completed",
+    "turn_completed",
+)
 
 
 class ConfiguredModelOption(BaseModel):

@@ -2,15 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TypedDict
 
-ToolDefinition = dict[str, Any]
+
+class ToolParameterSchema(TypedDict, total=False):
+    """Minimal JSON schema shape accepted by model-facing function tools."""
+
+    type: str
+    properties: dict[str, ToolParameterSchema]
+    required: list[str]
+    items: ToolParameterSchema
+    enum: list[str]
+
+
+class ToolDefinition(TypedDict):
+    """Provider-facing function tool definition."""
+
+    name: str
+    description: str
+    parameters: ToolParameterSchema
 
 
 def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinition]:
     """Return model-facing tool schemas in the same order as the registry."""
 
-    definitions = [
+    definitions: list[ToolDefinition] = [
         {
             "name": "read_file",
             "description": "Read a UTF-8 text file from the authorized workspace.",
@@ -46,7 +62,11 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
         },
         {
             "name": "run_shell",
-            "description": "Run a safe command in the workspace or request approval for dangerous commands.",
+            "description": (
+                "Run one workspace command as plain argv without a shell. Do not use "
+                "pipes, redirects, variables, command substitution, semicolons, or "
+                "control operators; dangerous commands request approval."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
@@ -119,3 +139,9 @@ def default_tool_definitions(read_only_only: bool = False) -> list[ToolDefinitio
         "list_mcp_servers",
     }
     return [definition for definition in definitions if definition["name"] in read_only_names]
+
+
+def tool_definitions_by_name() -> dict[str, ToolDefinition]:
+    """Return default tool schemas keyed by public tool name."""
+
+    return {str(definition["name"]): definition for definition in default_tool_definitions()}

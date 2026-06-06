@@ -3,7 +3,7 @@
 **kodeks** is a local-first coding agent workbench. Its scope is intentionally
 small: a coding agent with memory, multi-session state, subagent exploration,
 plan mode, workspace tools, human approval, and a protocol adapter for
-DeepSeek Chat Completions.
+OpenAI-compatible Chat Completions, with DeepSeek as the default upstream.
 
 [中文 README](./README.zh-CN.md) · [Architecture](./docs/architecture.md) · [Product requirements](./docs/PRD.md) · [Concept map](./docs/concepts-map.md)
 
@@ -25,7 +25,7 @@ LLM:
 - multi-agent shape through read-only subagent exploration and persisted
   summaries;
 - protocol integration through a Responses-shaped runtime contract and
-  MoonBridge conversion to DeepSeek Chat Completions.
+  MoonBridge conversion to OpenAI-compatible Chat Completions.
 
 The design center is harness understanding: context assembly, tools,
 permissions, state, protocol shape, and evaluation.
@@ -34,7 +34,7 @@ permissions, state, protocol shape, and evaluation.
 
 - FastAPI-served browser UI.
 - Streaming chat over Server-Sent Events.
-- DeepSeek chat routing through MoonBridge.
+- DeepSeek routing through MoonBridge's OpenAI-compatible Chat Completions adapter.
 - Workspace-scoped file tools with internal path blocking.
 - Shell execution harness with timeout and dangerous command detection.
 - SQLite-backed sessions, transcripts, memories, approvals, subagent runs, plan
@@ -70,12 +70,22 @@ curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
 
 Required:
 
-- A DeepSeek Chat Completions API key, routed through MoonBridge.
+- An OpenAI-compatible Chat Completions API key, routed through MoonBridge.
+  DeepSeek is the default upstream.
 
-For local use, put model configuration in the user config file outside the
-workspace:
+For local development, the simplest path is a project `.env` file:
 
-- Default: `~/.kodeks/config.json`
+```dotenv
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
+```
+
+Structured model configuration can also live in either a project-local config
+or a user-level config:
+
+- Project-local: `.kodeks/config.json`
+- User-level fallback: `~/.kodeks/config.json`
 - Override the directory with `KODEKS_CONFIG_DIR`
 - Override the exact file with `KODEKS_CONFIG_PATH`
 
@@ -91,14 +101,24 @@ workspace:
 }
 ```
 
-Environment variables also work for development and deployment secrets.
-Explicit environment variables override the user config file.
+Configuration precedence is:
+
+1. Explicit process environment variables
+2. Project `.env`
+3. Structured config files
+
+Project-local config is read before the user-level fallback unless
+`KODEKS_CONFIG_DIR` or `KODEKS_CONFIG_PATH` is set.
 
 Common options:
 
+- `API_KEY` or `DEEPSEEK_API_KEY`
+- `BASE_URL` or `DEEPSEEK_BASE_URL`, defaulting to `https://api.deepseek.com`
+- `MODEL` or `DEEPSEEK_MODEL`, defaulting to `deepseek-v4-pro`; the built-in
+  DeepSeek catalog includes `deepseek-v4-pro` and `deepseek-v4-flash`
 - `KODEKS_CHAT_COMPLETIONS_API_KEY`
-- `KODEKS_CHAT_COMPLETIONS_BASE_URL`, defaulting to `https://api.deepseek.com`
-- `KODEKS_CHAT_COMPLETIONS_MODEL`, defaulting to `deepseek-v4-pro`
+- `KODEKS_CHAT_COMPLETIONS_BASE_URL`
+- `KODEKS_CHAT_COMPLETIONS_MODEL`
 - `KODEKS_BRIDGE_ENABLED=true`
 - `KODEKS_BRIDGE_BASE_URL`, defaulting to `http://127.0.0.1:38440/v1`
 - `KODEKS_BRIDGE_MODEL`, defaulting to `bridge`
@@ -115,19 +135,21 @@ messages so subsequent Chat Completions requests keep the required context
 shape.
 
 Runtime state is written under `.kodeks/` by default and is intentionally
-ignored by Git.
+ignored by Git. Local `.env` files are also ignored by Git. Project-local model
+config can live in `.kodeks/config.json` when structured config is useful.
 
 ## MoonBridge
 
 MoonBridge is an internal protocol adapter. Kodeks keeps a Responses-shaped
-runtime contract while routing DeepSeek Chat Completions upstream.
+runtime contract while routing an OpenAI-compatible Chat Completions upstream.
+The default upstream is DeepSeek.
 
 Start the runtime with:
 
 ```bash
-KODEKS_CHAT_COMPLETIONS_API_KEY=sk-... \
-KODEKS_CHAT_COMPLETIONS_BASE_URL=https://api.deepseek.com \
-KODEKS_CHAT_COMPLETIONS_MODEL=deepseek-v4-pro \
+DEEPSEEK_API_KEY=sk-... \
+DEEPSEEK_BASE_URL=https://api.deepseek.com \
+DEEPSEEK_MODEL=deepseek-v4-pro \
 uv run kodeks-server --reload
 ```
 

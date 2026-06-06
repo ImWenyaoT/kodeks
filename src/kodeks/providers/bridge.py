@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import Any
 
-import httpx2
+import httpx
 
 from ..config import read_chat_completions_base_url
 
@@ -17,24 +17,25 @@ def to_deepseek_chat_request(
     """Convert a Responses-like request into a Chat Completions request."""
 
     core = to_core_request(request)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": tool.get(
+                    "parameters", {"type": "object", "properties": {}}
+                ),
+            },
+        }
+        for tool in core["tools"]
+    ]
     return {
         "model": model or str(core.get("model") or "bridge"),
         "messages": [
             _to_deepseek_chat_message(message) for message in core["messages"]
         ],
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool.get("description", ""),
-                    "parameters": tool.get(
-                        "parameters", {"type": "object", "properties": {}}
-                    ),
-                },
-            }
-            for tool in core["tools"]
-        ],
+        **({"tools": tools, "tool_choice": "auto"} if tools else {}),
         **_to_deepseek_thinking_options(str(core.get("reasoningEffort") or "high")),
         "stream": True,
     }
@@ -55,10 +56,11 @@ def to_core_request(request: Mapping[str, Any]) -> dict[str, Any]:
             mapped = _input_item_to_message(item)
             if mapped is not None:
                 messages.append(mapped)
+    messages = _merge_assistant_tool_call_messages(messages)
     tools = [
         tool
-        for tool in request.get("tools", [])
-        if isinstance(tool, dict) and tool.get("type") == "function"
+        for raw_tool in request.get("tools", [])
+        if (tool := _normalize_function_tool(raw_tool)) is not None
     ]
     reasoning = request.get("reasoning")
     effort = reasoning.get("effort") if isinstance(reasoning, dict) else None
@@ -70,6 +72,65 @@ def to_core_request(request: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_function_tool(value: object) -> dict[str, Any] | None:
+    """Normalize Responses-style or Kodeks-style function tool definitions."""
+
+    if not isinstance(value, dict):
+        return None
+    if value.get("type") == "function":
+        function = value.get("function")
+        if isinstance(function, dict):
+            name = function.get("name")
+            description = function.get("description")
+            parameters = function.get("parameters")
+        else:
+            name = value.get("name")
+            description = value.get("description")
+            parameters = value.get("parameters")
+    elif value.get("type") is None and isinstance(value.get("name"), str):
+        name = value.get("name")
+        description = value.get("description")
+        parameters = value.get("parameters")
+    else:
+        return None
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return {
+        "name": name,
+        "description": description if isinstance(description, str) else "",
+        "parameters": parameters
+        if isinstance(parameters, dict)
+        else {"type": "object", "properties": {}},
+    }
+
+
+def _merge_assistant_tool_call_messages(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge adjacent Responses function calls into one Chat Completions message."""
+
+    merged: list[dict[str, Any]] = []
+    for message in messages:
+        tool_calls = message.get("toolCalls")
+        previous = merged[-1] if merged else None
+        if (
+            message.get("role") == "assistant"
+            and isinstance(tool_calls, list)
+            and tool_calls
+            and previous is not None
+            and previous.get("role") == "assistant"
+            and isinstance(previous.get("toolCalls"), list)
+        ):
+            previous["toolCalls"] = [*previous["toolCalls"], *tool_calls]
+            if not previous.get("reasoningContent") and isinstance(
+                message.get("reasoningContent"), str
+            ):
+                previous["reasoningContent"] = message["reasoningContent"]
+            continue
+        merged.append(message)
+    return merged
+
+
 async def fetch_chat_completions_stream(
     payload: Mapping[str, Any],
     api_key: str,
@@ -78,7 +139,7 @@ async def fetch_chat_completions_stream(
     """Call an upstream Chat Completions endpoint and yield parsed SSE chunks."""
 
     base_url = read_chat_completions_base_url(env).rstrip("/")
-    async with httpx2.AsyncClient(timeout=None) as client:
+    async with httpx.AsyncClient(timeout=None) as client:
         async with client.stream(
             "POST",
             f"{base_url}/chat/completions",
@@ -90,9 +151,14 @@ async def fetch_chat_completions_stream(
             json=payload,
         ) as response:
             if response.status_code >= 400:
+                body = (await response.aread()).decode(errors="ignore")[:500]
+                suffix = f": {body}" if body else ""
                 yield {
                     "error": {
-                        "message": f"DeepSeek request failed: {response.status_code} {response.reason_phrase}"
+                        "message": (
+                            "Chat Completions request failed: "
+                            f"{response.status_code} {response.reason_phrase}{suffix}"
+                        )
                     }
                 }
                 return

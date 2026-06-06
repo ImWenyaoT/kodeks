@@ -10,6 +10,7 @@ from kodeks.storage import ApprovalAlreadyResolvedError, KodeksDatabase
 from kodeks.workspace import (
     WorkspacePathError,
     WorkspaceService,
+    has_shell_only_syntax,
     is_dangerous_command,
     parse_command_args,
     run_approved_command,
@@ -95,7 +96,24 @@ def test_safe_shell_commands_execute_without_shell_interpretation(tmp_path):
     assert result.approval_required is False
     assert result.exit_code == 0
     assert result.stdout.strip() == str(tmp_path)
-    assert rejected.approval_required is True
+    assert rejected.approval_required is False
+    assert rejected.exit_code is None
+    assert "without a shell" in rejected.stderr
+
+
+def test_shell_only_syntax_is_not_an_approval_request(tmp_path):
+    """Unsupported shell syntax returns a retryable tool result without approval."""
+
+    direct = run_command("pytest -q 2>&1", str(tmp_path))
+    approved = run_approved_command("pytest -q 2>&1", str(tmp_path))
+
+    assert has_shell_only_syntax("pytest -q 2>&1") is True
+    assert direct.approval_required is False
+    assert approved.approval_required is False
+    assert direct.exit_code is None
+    assert approved.exit_code is None
+    assert "without a shell" in direct.stderr
+    assert "without a shell" in approved.stderr
 
 
 def test_approved_shell_parse_failure_and_utf8_truncation(tmp_path):

@@ -13,6 +13,10 @@ RuntimeEnv = Mapping[str, str | None]
 DEFAULT_CHAT_COMPLETIONS_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_MODEL_REF = f"deepseek/{DEFAULT_DEEPSEEK_MODEL}"
+DEFAULT_DEEPSEEK_MODEL_OPTIONS = (
+    ("deepseek-v4-pro", "DeepSeek V4 Pro"),
+    ("deepseek-v4-flash", "DeepSeek V4 Flash"),
+)
 DEFAULT_BRIDGE_API_KEY = "bridge"
 DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:38440/v1"
 DEFAULT_BRIDGE_MODEL = "bridge"
@@ -21,9 +25,6 @@ LOCAL_ENDPOINT_API_KEY = "not-needed"
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
 
 UNSUPPORTED_MODEL_ENV_KEYS = {
-    "DEEPSEEK_API_KEY",
-    "DEEPSEEK_BASE_URL",
-    "DEEPSEEK_MODEL",
     "DEEPSEEK_REASONING_EFFORT",
     "KODEKS_BRIDGE_DEEPSEEK_API_KEY",
     "KODEKS_BRIDGE_DEEPSEEK_BASE_URL",
@@ -87,33 +88,18 @@ def configured_deepseek_models(
 def with_default_model_catalog(
     catalog: ConfiguredModelCatalog, env: RuntimeEnv
 ) -> ConfiguredModelCatalog:
-    """Add the default DeepSeek option and keep the catalog secret-free."""
+    """Add default DeepSeek options and keep the catalog secret-free."""
 
-    default_option = ConfiguredModelOption(
-        ref=DEFAULT_DEEPSEEK_MODEL_REF,
-        providerId="deepseek",
-        providerName="DeepSeek",
-        modelId=DEFAULT_DEEPSEEK_MODEL,
-        modelName=DEFAULT_DEEPSEEK_MODEL,
-        api="chat-completions",
-        requiresBridge=True,
-        baseURL=env.get("KODEKS_CHAT_COMPLETIONS_BASE_URL")
-        or DEFAULT_CHAT_COMPLETIONS_BASE_URL,
-        configured=bool(env.get("KODEKS_CHAT_COMPLETIONS_API_KEY"))
-        or is_local_http_url(
-            env.get("KODEKS_CHAT_COMPLETIONS_BASE_URL")
-            or DEFAULT_CHAT_COMPLETIONS_BASE_URL
-        ),
-    )
+    default_options = [
+        _create_default_deepseek_option(model_id, model_name, env)
+        for model_id, model_name in DEFAULT_DEEPSEEK_MODEL_OPTIONS
+    ]
+    default_refs = {model.ref for model in default_options}
     return ConfiguredModelCatalog(
         primary=DEFAULT_DEEPSEEK_MODEL_REF,
         models=[
-            default_option,
-            *[
-                model
-                for model in catalog.models
-                if model.ref != DEFAULT_DEEPSEEK_MODEL_REF
-            ],
+            *default_options,
+            *[model for model in catalog.models if model.ref not in default_refs],
         ],
     )
 
@@ -148,7 +134,7 @@ def read_chat_completions_api_key(env: RuntimeEnv) -> str | None:
 
 
 def read_chat_completions_base_url(env: RuntimeEnv) -> str:
-    """Read the DeepSeek-first Chat Completions base URL."""
+    """Read the OpenAI-compatible Chat Completions base URL."""
 
     return (
         env.get("KODEKS_CHAT_COMPLETIONS_BASE_URL") or DEFAULT_CHAT_COMPLETIONS_BASE_URL
@@ -156,7 +142,7 @@ def read_chat_completions_base_url(env: RuntimeEnv) -> str:
 
 
 def read_chat_completions_model(env: RuntimeEnv) -> str:
-    """Read the DeepSeek-first Chat Completions model id."""
+    """Read the OpenAI-compatible Chat Completions model id."""
 
     return env.get("KODEKS_CHAT_COMPLETIONS_MODEL") or DEFAULT_DEEPSEEK_MODEL
 
@@ -214,6 +200,31 @@ def _write_deepseek_provider(
     endpoint = {**provider, "model": provider.get("model") or model_id}
     values["KODEKS_MODEL_PROVIDER"] = "moonbridge"
     _write_endpoint(values, "KODEKS_CHAT_COMPLETIONS", endpoint)
+
+
+def _create_default_deepseek_option(
+    model_id: str, model_name: str, env: RuntimeEnv
+) -> ConfiguredModelOption:
+    """Create one built-in DeepSeek model option from env-style config."""
+
+    base_url = (
+        env.get("KODEKS_CHAT_COMPLETIONS_BASE_URL")
+        or DEFAULT_CHAT_COMPLETIONS_BASE_URL
+    )
+    configured = bool(env.get("KODEKS_CHAT_COMPLETIONS_API_KEY")) or is_local_http_url(
+        base_url
+    )
+    return ConfiguredModelOption(
+        ref=f"deepseek/{model_id}",
+        providerId="deepseek",
+        providerName="DeepSeek",
+        modelId=model_id,
+        modelName=model_name,
+        api="chat-completions",
+        requiresBridge=True,
+        baseURL=base_url,
+        configured=configured,
+    )
 
 
 def _find_deepseek_provider(
@@ -349,7 +360,7 @@ def _resolve_provider_override(value: object) -> Literal["moonbridge"] | None:
         return "moonbridge"
     if value in {"openai", "responses"}:
         raise ModelConfigurationError(
-            "Direct OpenAI/Responses model providers are outside the Kodeks product boundary. Configure DeepSeek Chat Completions through MoonBridge."
+            "Direct Responses model providers are outside the Kodeks product boundary. Configure an OpenAI-compatible Chat Completions endpoint through MoonBridge."
         )
     if isinstance(value, str) and value in UNSUPPORTED_PROVIDER_VALUES:
         raise ModelConfigurationError(
@@ -369,14 +380,14 @@ def _resolve_configured_provider(
         return "moonbridge"
     if value in {"openai", "responses"}:
         raise ModelConfigurationError(
-            "Direct OpenAI/Responses model providers are outside the Kodeks product boundary. Configure DeepSeek Chat Completions through MoonBridge."
+            "Direct Responses model providers are outside the Kodeks product boundary. Configure an OpenAI-compatible Chat Completions endpoint through MoonBridge."
         )
     if value in UNSUPPORTED_PROVIDER_VALUES:
         raise ModelConfigurationError(
             f'KODEKS_MODEL_PROVIDER="{value}" is unsupported. Use a deepseek/<model> ref; MoonBridge remains an internal adapter.'
         )
     raise ModelConfigurationError(
-        f'Unsupported KODEKS_MODEL_PROVIDER="{value}". Use "moonbridge" for the DeepSeek Chat Completions route.'
+        f'Unsupported KODEKS_MODEL_PROVIDER="{value}". Use "moonbridge" for the Chat Completions route.'
     )
 
 
@@ -386,7 +397,7 @@ def _assert_no_deprecated_model_env(env: RuntimeEnv) -> None:
     for key in UNSUPPORTED_MODEL_ENV_KEYS:
         if env.get(key) is not None:
             raise ModelConfigurationError(
-                f"{key} is unsupported. Configure KODEKS_CHAT_COMPLETIONS_* for the DeepSeek Chat Completions route."
+                f"{key} is unsupported. Configure API_KEY or DEEPSEEK_API_KEY for the MoonBridge Chat Completions route."
             )
 
 

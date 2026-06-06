@@ -132,7 +132,10 @@ async def run_python_chat_turn(
     except ModelConfigurationError as exc:
         code = (
             "model_provider_missing"
-            if str(exc).startswith(("A model provider is required.", "A DeepSeek provider is required."))
+            if str(exc).startswith((
+                "A model provider is required.",
+                "An OpenAI-compatible Chat Completions provider is required.",
+            ))
             else exc.code
         )
         yield _error_event(str(exc), session_id, code)

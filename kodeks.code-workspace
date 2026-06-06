@@ -8,5 +8,19 @@
       "name": "oss",
       "path": "../oss"
     }
-  ]
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder:kodeks}/.venv/bin/python",
+    "python.analysis.extraPaths": [
+      "${workspaceFolder:kodeks}/src"
+    ],
+    "python.analysis.exclude": [
+      "**/.mypy_cache/**",
+      "**/.pytest_cache/**",
+      "**/.ruff_cache/**",
+      "**/.uv-cache/**",
+      "**/.venv/**",
+      "**/dist/**"
+    ]
+  }
 }

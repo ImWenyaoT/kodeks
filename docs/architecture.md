@@ -22,7 +22,7 @@ Kodeks 的产品边界是带 memory、multi-session、subagent 和 plan mode 的
 - 支持 plan mode，并在 plan mode 下过滤会修改 workspace 的工具。
 - 支持受控 subagent exploration，并保存 parent session、read-only tool surface 和可审计 summary。
 - 按固定小集合选择 harness pattern：`single_turn`、`fanout_synthesize`、`adversarial_verify`、`loop_until_done` 或 `tournament`。
-- 支持通过 MoonBridge 路由 DeepSeek Chat Completions。
+- 支持通过 MoonBridge 路由 OpenAI-compatible Chat Completions；DeepSeek 是默认 upstream。
 - 支持 MCP server manifest discovery，作为协议集成入口。
 
 Web search、重复的 stream 协议、provider dashboard 和大型 plugin surface 不属于 Kodeks 的产品范围。项目应该把 memory、multi-session、subagent、plan mode、workspace tools、approval 和协议适配这些主线能力做深，而不是扩成泛用 agent 平台。
@@ -35,7 +35,7 @@ Web search、重复的 stream 协议、provider dashboard 和大型 plugin surfa
 2. 浏览器把用户输入 POST 到 Python `/api/chat/stream`。
 3. `src/kodeks/app.py` 的 FastAPI route 接收请求并打开同一 SSE stream contract。
 4. `src/kodeks/runtime.py` 创建 runtime context，包括 workspace、model options、storage repositories、memory、plan artifact、harness pattern 和 tool services。
-5. `src/kodeks/providers/bridge.py` 把 Responses-shaped 请求转换成 DeepSeek Chat Completions。
+5. `src/kodeks/providers/bridge.py` 把 Responses-shaped 请求转换成 OpenAI-compatible Chat Completions。
 6. `src/kodeks/tools/`、`src/kodeks/workspace.py`、`src/kodeks/storage/` 执行工具、workspace policy、approval 和 transcript 写入。
 7. UI 直接渲染 Kodeks SSE events。
 
@@ -69,7 +69,7 @@ UI
 4. `src/kodeks/runtime.py`：看一轮 chat turn 如何准备 session、memory、tools 和 SSE events。
 5. `src/kodeks/harness.py`：看固定 harness pattern 如何对抗半途而废、自证偏见和目标漂移。
 6. `src/kodeks/responses_runtime.py`：看 Responses-shaped event stream 和工具续跑循环。
-7. `src/kodeks/providers/bridge.py`：看 DeepSeek Chat Completions 如何适配 Responses-shaped stream。
+7. `src/kodeks/providers/bridge.py`：看 OpenAI-compatible Chat Completions 如何适配 Responses-shaped stream。
 8. `src/kodeks/contracts.py`：看 Pydantic wire contracts。
 9. `src/kodeks/tools/`、`src/kodeks/workspace.py`、`src/kodeks/storage/`：看工具、安全边界和持久化。
 
@@ -77,11 +77,11 @@ UI
 
 前端和用户真正需要理解的 provider surface 是一类：
 
-- `moonbridge`：本地 Responses-compatible bridge，用来接 DeepSeek Chat Completions endpoint。
+- `moonbridge`：本地 Responses-compatible bridge，用来接 OpenAI-compatible Chat Completions endpoint。DeepSeek 是默认 upstream。
 
-MoonBridge 的意义是让 Kodeks 内部继续使用一套 Responses-shaped event contract，同时兼容 DeepSeek Chat Completions endpoint。
+MoonBridge 的意义是让 Kodeks 内部继续使用一套 Responses-shaped event contract，同时兼容 OpenAI-compatible Chat Completions endpoint。
 
-`src/kodeks/config.py` 保持小，只负责定位并读取用户配置；`src/kodeks/model_config.py` 负责解释 DeepSeek 配置、创建 MoonBridge client options。Python runtime 对外提供 `deepseek/deepseek-v4-pro` 这个模型 ref，MoonBridge 是内部适配层。
+`src/kodeks/config.py` 保持小，只负责定位并读取用户配置；`src/kodeks/model_config.py` 负责解释 DeepSeek 配置、创建 MoonBridge client options。Python runtime 对外提供 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-v4-flash` 两个模型 ref，MoonBridge 是内部适配层。
 
 ## Memory 边界
 
@@ -142,4 +142,4 @@ uv run kodeks-server --reload
 - 大型 plugin marketplace。
 - 用户可见的 `bridge` provider naming。
 
-系统可以概括成：一个 web app、一个 runtime event contract、一个 tool registry、一个 storage boundary、一个 approval boundary、一套 memory/subagent/plan-mode 状态模型，一个固定 harness pattern selector，以及一个 DeepSeek/MoonBridge 协议适配层。
+系统可以概括成：一个 web app、一个 runtime event contract、一个 tool registry、一个 storage boundary、一个 approval boundary、一套 memory/subagent/plan-mode 状态模型，一个固定 harness pattern selector，以及一个 Chat Completions/MoonBridge 协议适配层。

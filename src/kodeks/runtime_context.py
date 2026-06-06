@@ -46,6 +46,7 @@ def build_runtime_instructions(
         "Reply in the user's language.",
         "Do not reveal hidden reasoning.",
         "Use function tools for workspace facts; do not write tool-call JSON in visible text.",
+        "run_shell executes one command as plain argv without a shell; do not use pipes, redirects, variables, command substitution, semicolons, or control operators.",
     ]
     if mode == "plan":
         lines.append("Plan mode is read-only; use only read-only tools.")

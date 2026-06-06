@@ -36,7 +36,47 @@ def test_bridge_maps_responses_request_to_chat_completions():
         {"role": "user", "content": "hi"},
     ]
     assert payload["thinking"] == {"type": "disabled"}
+    assert payload["tool_choice"] == "auto"
     assert payload["tools"][0]["function"]["name"] == "read_file"
+
+
+def test_bridge_maps_kodeks_tool_definitions_to_chat_completions():
+    """Bare Kodeks tool definitions are converted to Chat Completions tools."""
+
+    payload = to_deepseek_chat_request(
+        {
+            "model": "bridge",
+            "input": "read the file",
+            "tools": [
+                {
+                    "name": "read_file",
+                    "description": "Read a workspace file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                        "required": ["path"],
+                    },
+                }
+            ],
+        },
+        model="deepseek-v4-pro",
+    )
+
+    assert payload["tool_choice"] == "auto"
+    assert payload["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read a workspace file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        }
+    ]
 
 
 def test_bridge_filters_hosted_openai_tools_from_chat_completions():
@@ -120,6 +160,62 @@ def test_bridge_maps_core_replay_items_for_tool_continuation():
     ]
     assert payload["thinking"] == {"type": "enabled"}
     assert payload["reasoning_effort"] == "max"
+
+
+def test_bridge_merges_multiple_replay_function_calls_into_one_assistant_message():
+    """Multiple Responses function_call items replay as one assistant tool-call turn."""
+
+    payload = to_deepseek_chat_request(
+        {
+            "model": "bridge",
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Inspect files"}],
+                },
+                {
+                    "type": "function_call",
+                    "call_id": "call_read_test",
+                    "name": "read_file",
+                    "reasoning_content": "Need both files.",
+                    "arguments": '{"path":"tests/test_text_tools.py"}',
+                },
+                {
+                    "type": "function_call",
+                    "call_id": "call_read_src",
+                    "name": "read_file",
+                    "reasoning_content": "Need both files.",
+                    "arguments": '{"path":"src/text_tools.py"}',
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_read_test",
+                    "output": '{"ok":true}',
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_read_src",
+                    "output": '{"ok":true}',
+                },
+            ],
+            "tools": [],
+        },
+        model="deepseek-v4-pro",
+    )
+
+    assert [message["role"] for message in payload["messages"]] == [
+        "user",
+        "assistant",
+        "tool",
+        "tool",
+    ]
+    assistant = payload["messages"][1]
+    assert assistant["reasoning_content"] == "Need both files."
+    assert [tool_call["id"] for tool_call in assistant["tool_calls"]] == [
+        "call_read_test",
+        "call_read_src",
+    ]
 
 
 @pytest.mark.asyncio

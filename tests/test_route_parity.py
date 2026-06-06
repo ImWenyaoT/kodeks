@@ -180,15 +180,49 @@ def test_approval_routes_execute_once_and_record_audit(tmp_path, monkeypatch):
     assert json.loads(rows[1]["payload_json"])["stdout"] == "ok"
 
 
+def test_approval_routes_do_not_shell_parse_approved_commands(tmp_path, monkeypatch):
+    """Approval execution refuses shell-only syntax instead of misrunning argv."""
+
+    db_path = tmp_path / "kodeks.sqlite3"
+    monkeypatch.setenv("KODEKS_DB_PATH", str(db_path))
+    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
+    database = KodeksDatabase(str(db_path))
+    try:
+        approval = database.approvals.create_approval(
+            command={"command": "pytest -q 2>&1"},
+            reason="needs approval",
+            session_id="sess_approval",
+            tool_call_id="call_shell_syntax",
+        )
+    finally:
+        database.close()
+
+    response = TestClient(create_app()).post(
+        f"/api/approvals/{approval.id}", json={"decision": "approve"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["approval"]["status"] == "executed"
+    assert response.json()["result"]["exitCode"] is None
+    assert "without a shell" in response.json()["result"]["stderr"]
+
+
 def test_bridge_preflight_preserves_provider_labels_and_missing_states(
     tmp_path, monkeypatch
 ):
-    """Bridge preflight reports DeepSeek/MoonBridge missing states."""
+    """Bridge preflight reports MoonBridge missing states."""
 
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.delenv("KODEKS_CHAT_COMPLETIONS_API_KEY", raising=False)
     monkeypatch.delenv("KODEKS_CHAT_COMPLETIONS_BASE_URL", raising=False)
     monkeypatch.delenv("KODEKS_CHAT_COMPLETIONS_MODEL", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("BASE_URL", raising=False)
+    monkeypatch.delenv("MODEL", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_BASE_URL", raising=False)
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
@@ -208,7 +242,7 @@ def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
 ):
     """Bridge preflight reports live upstream failures instead of false ready."""
 
-    async def fake_unreachable(_base_url):
+    async def fake_unreachable(_base_url, _api_key):
         """Return a deterministic failed upstream probe for route assertions."""
 
         return {
@@ -217,6 +251,7 @@ def test_bridge_preflight_reports_unreachable_chat_completions_upstream(
         }
 
     monkeypatch.setenv("KODEKS_CONFIG_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.setenv("KODEKS_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setenv("KODEKS_MODEL_PROVIDER", "moonbridge")
     monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_API_KEY", "local-placeholder")
     monkeypatch.setenv("KODEKS_CHAT_COMPLETIONS_BASE_URL", "http://local.test/v1")
