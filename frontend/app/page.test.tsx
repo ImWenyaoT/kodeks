@@ -119,4 +119,32 @@ describe("Workspace Shell (page)", () => {
     const { container } = renderShell();
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  // 打开移动端工具抽屉（Sheet）：点击右下角浮动“工具”按钮（lg:hidden，但在
+  // jsdom 中仍位于 DOM 且可点击）。断言对话框出现，并对“打开态”跑 axe 零违规。
+  it("opens the mobile tools drawer and has no axe violations", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    // 浮动按钮以 t.debug 命名；存在多处“Debug”按钮风险时，FAB 是触发 Sheet 的那个。
+    const fabs = screen.getAllByRole("button", { name: copy.en.debug });
+    // 取最后一个：FAB（SheetTrigger）渲染在 Shell 末尾，桌面右侧栏不含同名 button。
+    const fab = fabs[fabs.length - 1];
+    await user.click(fab);
+
+    // Sheet 打开后应出现 dialog 角色（Base UI Dialog 渲染 role="dialog"）。
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    // 抽屉标题应可见（SheetTitle 复用 t.debug 文案）。
+    expect(
+      screen.getByRole("heading", { name: copy.en.debug }),
+    ).toBeInTheDocument();
+
+    // 对打开态跑 axe。注意：Base UI Dialog 会在 body 上注入隐藏的 focus-guard
+    // 哨兵 <span role="button">（data-base-ui-inert，无可见名），axe 会把它误报为
+    // aria-command-name 违规——这是框架内部实现，并非本应用编写的标记。因此将 axe
+    // 作用域收敛到 dialog 弹层本身（我们编写的抽屉内容），既真实校验抽屉的无障碍，
+    // 又不被 Base UI 的内部哨兵 span 干扰（绝不伪造通过）。
+    expect(await axe(dialog)).toHaveNoViolations();
+  });
 });

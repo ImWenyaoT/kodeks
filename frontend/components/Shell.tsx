@@ -124,10 +124,9 @@ function WorkspacePanelBody() {
   return (
     <>
       <div className="px-3 pt-3">
-        {/* 主操作：新会话。HIG：高度 44px（h-11）保证触控目标。 */}
+        {/* 主操作：新会话。HIG：高度 44px（h-11）保证触控目标。可见文字已命名按钮，无需 aria-label。 */}
         <Button
           type="button"
-          aria-label={t.newSession}
           className="h-11 w-full justify-start gap-2 rounded-xl"
         >
           <Plus className="size-4" aria-hidden="true" />
@@ -222,9 +221,9 @@ export function Shell() {
             type="button"
             variant="ghost"
             onClick={() => setLeftOpen((v) => !v)}
-            aria-label={leftOpen ? "收起工作区 / Collapse workspace" : "展开工作区 / Expand workspace"}
+            aria-label={leftOpen ? t.collapseWorkspace : t.expandWorkspace}
             aria-expanded={leftOpen}
-            title={leftOpen ? "收起工作区 / Collapse workspace" : "展开工作区 / Expand workspace"}
+            title={leftOpen ? t.collapseWorkspace : t.expandWorkspace}
             className="size-11 rounded-xl text-muted-foreground hover:text-foreground"
           >
             {leftOpen ? (
@@ -233,7 +232,7 @@ export function Shell() {
               <PanelLeftOpen className="size-5" aria-hidden="true" />
             )}
             <span className="sr-only">
-              {leftOpen ? "收起工作区 / Collapse workspace" : "展开工作区 / Expand workspace"}
+              {leftOpen ? t.collapseWorkspace : t.expandWorkspace}
             </span>
           </Button>
         </div>
@@ -281,7 +280,7 @@ export function Shell() {
 
           {/* 转录区：空占位，撑满中部并可滚动。 */}
           <section
-            aria-label={t.activity}
+            aria-label={t.transcript}
             className="flex-1 overflow-y-auto py-4"
           >
             {/* Phase 4: Transcript + Composer */}
@@ -321,9 +320,9 @@ export function Shell() {
             type="button"
             variant="ghost"
             onClick={() => setRightOpen((v) => !v)}
-            aria-label={rightOpen ? "收起工具 / Collapse tools" : "展开工具 / Expand tools"}
+            aria-label={rightOpen ? t.collapseTools : t.expandTools}
             aria-expanded={rightOpen}
-            title={rightOpen ? "收起工具 / Collapse tools" : "展开工具 / Expand tools"}
+            title={rightOpen ? t.collapseTools : t.expandTools}
             className="size-11 rounded-xl text-muted-foreground hover:text-foreground"
           >
             {rightOpen ? (
@@ -332,7 +331,7 @@ export function Shell() {
               <PanelRightOpen className="size-5" aria-hidden="true" />
             )}
             <span className="sr-only">
-              {rightOpen ? "收起工具 / Collapse tools" : "展开工具 / Expand tools"}
+              {rightOpen ? t.collapseTools : t.expandTools}
             </span>
           </Button>
           {rightOpen && (

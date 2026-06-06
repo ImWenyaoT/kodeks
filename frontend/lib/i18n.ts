@@ -33,6 +33,14 @@ export type Copy = {
   bridge: string;
   approvals: string;
   activity: string;
+  /** 中心对话转录区的无障碍标签（区别于「运行事件」）。 */
+  transcript: string;
+  /** 左侧工作区收起/展开切换的无障碍标签。 */
+  collapseWorkspace: string;
+  expandWorkspace: string;
+  /** 右侧工具面板收起/展开切换的无障碍标签。 */
+  collapseTools: string;
+  expandTools: string;
   mode: string;
   act: string;
   plan: string;
@@ -88,6 +96,11 @@ export const copy: Record<Language, Copy> = {
     bridge: "MoonBridge",
     approvals: "审批",
     activity: "运行事件",
+    transcript: "对话",
+    collapseWorkspace: "收起工作区",
+    expandWorkspace: "展开工作区",
+    collapseTools: "收起工具面板",
+    expandTools: "展开工具面板",
     mode: "代码解释器",
     act: "执行",
     plan: "计划",
@@ -135,6 +148,11 @@ export const copy: Record<Language, Copy> = {
     bridge: "MoonBridge",
     approvals: "Approvals",
     activity: "Runtime events",
+    transcript: "Conversation",
+    collapseWorkspace: "Collapse workspace",
+    expandWorkspace: "Expand workspace",
+    collapseTools: "Collapse tools",
+    expandTools: "Expand tools",
     mode: "Code Interpreter",
     act: "Act",
     plan: "Plan",
