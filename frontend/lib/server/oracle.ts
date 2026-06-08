@@ -32,10 +32,25 @@ export function loadManifest(): OracleManifest {
   return JSON.parse(readFileSync(resolve(ORACLE_DIR, 'manifest.json'), 'utf8')) as OracleManifest
 }
 
+/** 声明式记忆 seed（setup.json.seedMemories 的单项，供 TS 重放复现召回条件）。 */
+export interface OracleSeedMemory {
+  scope: string
+  content: string
+  sourceSessionId?: string | null
+}
+
+/** 跨语言重放复现条件（setup.json：workspace 文件 / env / 记忆 seed）。 */
+export interface OracleSetup {
+  workspaceFiles: Record<string, string>
+  env: Record<string, string | null>
+  seedMemories: OracleSeedMemory[]
+}
+
 /** 单个场景的全部黄金数据。 */
 export interface OracleScenario {
   id: string
   request: Record<string, unknown>
+  setup: OracleSetup
   script: Record<string, unknown>[][]
   runtimeEvents: Record<string, unknown>[]
   runtimeSse: string
@@ -43,13 +58,14 @@ export interface OracleScenario {
   audit: { event_type: string; payload: unknown }[]
 }
 
-/** 读取单个场景的黄金数据。 */
+/** 读取单个场景的黄金数据（含 setup.json 重放复现条件）。 */
 export function loadScenario(id: string): OracleScenario {
   const dir = resolve(ORACLE_DIR, 'scenarios', id)
   const json = <T>(file: string): T => JSON.parse(readFileSync(resolve(dir, file), 'utf8')) as T
   return {
     id,
     request: json('request.json'),
+    setup: json('setup.json'),
     script: json('script.json'),
     runtimeEvents: json('runtime-events.json'),
     runtimeSse: readFileSync(resolve(dir, 'runtime.sse'), 'utf8'),

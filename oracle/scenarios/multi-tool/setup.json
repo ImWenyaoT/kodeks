@@ -1,0 +1,8 @@
+{
+  "workspaceFiles": {
+    "README.md": "first file\n",
+    "AGENTS.md": "second file\n"
+  },
+  "env": {},
+  "seedMemories": []
+}

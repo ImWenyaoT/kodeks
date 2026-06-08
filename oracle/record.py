@@ -242,15 +242,8 @@ class Scenario:
     body: dict[str, Any]
     env: dict[str, str | None] = field(default_factory=dict)
     workspace_files: dict[str, str] = field(default_factory=dict)
-    seed: Callable[[KodeksDatabase], None] | None = None
-
-
-def _seed_memory(database: KodeksDatabase) -> None:
-    """为 memory-recall 场景预置一条项目记忆。"""
-
-    database.memories.remember(
-        "project", "Kodeks uses plan mode for read-only planning.", "sess_memory"
-    )
+    # 声明式记忆预置：每项 {scope, content, sourceSessionId?}，录制时写库、也落 setup.json 供 TS 重放复现。
+    seed_memories: list[dict[str, Any]] = field(default_factory=list)
 
 
 SCENARIOS: list[Scenario] = [
@@ -284,7 +277,13 @@ SCENARIOS: list[Scenario] = [
         id="memory-recall",
         factory=_memory_recall_events,
         body={"input": "how should plan mode work?", "session_id": "sess_memory"},
-        seed=_seed_memory,
+        seed_memories=[
+            {
+                "scope": "project",
+                "content": "Kodeks uses plan mode for read-only planning.",
+                "sourceSessionId": "sess_memory",
+            }
+        ],
     ),
     Scenario(
         id="stream-error",
@@ -337,8 +336,12 @@ async def record_scenario(scenario: Scenario) -> dict[str, Any]:
     database = KodeksDatabase(":memory:")
     runtime_events: list[dict[str, Any]] = []
     try:
-        if scenario.seed is not None:
-            scenario.seed(database)
+        for memory in scenario.seed_memories:
+            database.memories.remember(
+                str(memory["scope"]),
+                str(memory["content"]),
+                memory.get("sourceSessionId"),
+            )
         async for event in run_python_chat_turn(
             scenario.body, database, str(workspace), scenario.env, capturing_factory
         ):
@@ -363,6 +366,15 @@ async def record_scenario(scenario: Scenario) -> dict[str, Any]:
 
     out_dir = SCENARIOS_DIR / scenario.id
     out_dir.mkdir(parents=True, exist_ok=True)
+    # setup.json：跨语言重放复现条件（workspace 文件 / env / 记忆 seed），供 TS oracle 重放重建场景。
+    _write_json(
+        out_dir / "setup.json",
+        {
+            "workspaceFiles": scenario.workspace_files,
+            "env": scenario.env,
+            "seedMemories": scenario.seed_memories,
+        },
+    )
     _write_json(out_dir / "script.json", script_rounds)
     _write_json(out_dir / "request.json", scenario.body)
     _write_json(out_dir / "runtime-events.json", runtime_events)

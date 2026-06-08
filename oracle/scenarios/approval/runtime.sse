@@ -8,8 +8,8 @@ event: tool_call
 data: {"type":"tool_call","tool_call_id":"call_shell","tool_name":"run_shell","tool_arguments":{"command":"rm -rf output"},"session_id":"sess_approval"}
 
 event: tool_result
-data: {"type":"tool_result","tool_call_id":"call_shell","tool_name":"run_shell","tool_status":"approval_required","tool_output":"{\"ok\":false,\"approvalRequired\":true,\"approvalId\":\"appr_22ca104ce7ad4205948fde3d2c4a0562\",\"status\":\"pending\",\"reason\":\"Command requires approval\",\"command\":\"rm -rf output\"}","session_id":"sess_approval"}
+data: {"type":"tool_result","tool_call_id":"call_shell","tool_name":"run_shell","tool_status":"approval_required","tool_output":"{\"ok\":false,\"approvalRequired\":true,\"approvalId\":\"appr_6000973a6c344ea6ac628c55e7b15e48\",\"status\":\"pending\",\"reason\":\"Command requires approval\",\"command\":\"rm -rf output\"}","session_id":"sess_approval"}
 
 event: approval_required
-data: {"type":"approval_required","approval_id":"appr_22ca104ce7ad4205948fde3d2c4a0562","tool_call_id":"call_shell","message":"Command requires approval","session_id":"sess_approval"}
+data: {"type":"approval_required","approval_id":"appr_6000973a6c344ea6ac628c55e7b15e48","tool_call_id":"call_shell","message":"Command requires approval","session_id":"sess_approval"}
 

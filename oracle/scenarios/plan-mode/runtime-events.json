@@ -12,7 +12,7 @@
     "type": "plan_artifact",
     "action": "created",
     "plan": {
-      "id": "plan_95fbeae4aa5e4b21aa464410fb9bc66b",
+      "id": "plan_e8ec386391314e92bcb18feb859539d0",
       "sessionId": "sess_plan",
       "title": "Storage plan",
       "summary": "Persist a plan artifact.",
@@ -31,9 +31,9 @@
         }
       ],
       "status": "active",
-      "sourceMessageId": "msg_ccc4d7e17b1e4ccca728f65becaf944d",
-      "createdAt": "2026-06-08T11:44:24.812924Z",
-      "updatedAt": "2026-06-08T11:44:24.812924Z"
+      "sourceMessageId": "msg_f668d6df10b242c0af752e448b5435fb",
+      "createdAt": "2026-06-08T12:39:04.785738Z",
+      "updatedAt": "2026-06-08T12:39:04.785738Z"
     },
     "session_id": "sess_plan"
   },

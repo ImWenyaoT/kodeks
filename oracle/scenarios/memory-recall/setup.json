@@ -1,0 +1,11 @@
+{
+  "workspaceFiles": {},
+  "env": {},
+  "seedMemories": [
+    {
+      "scope": "project",
+      "content": "Kodeks uses plan mode for read-only planning.",
+      "sourceSessionId": "sess_memory"
+    }
+  ]
+}

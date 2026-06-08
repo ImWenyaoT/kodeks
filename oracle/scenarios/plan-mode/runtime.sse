@@ -5,7 +5,7 @@ event: text_delta
 data: {"type":"text_delta","delta":"# Storage plan\n\nPersist a plan artifact.\n\n1. Add a plans table\n2. Restore it next turn","session_id":"sess_plan"}
 
 event: plan_artifact
-data: {"type":"plan_artifact","action":"created","plan":{"id":"plan_95fbeae4aa5e4b21aa464410fb9bc66b","sessionId":"sess_plan","title":"Storage plan","summary":"Persist a plan artifact.","steps":[{"id":"step_1","title":"Add a plans table","status":"pending","details":null},{"id":"step_2","title":"Restore it next turn","status":"pending","details":null}],"status":"active","sourceMessageId":"msg_ccc4d7e17b1e4ccca728f65becaf944d","createdAt":"2026-06-08T11:44:24.812924Z","updatedAt":"2026-06-08T11:44:24.812924Z"},"session_id":"sess_plan"}
+data: {"type":"plan_artifact","action":"created","plan":{"id":"plan_e8ec386391314e92bcb18feb859539d0","sessionId":"sess_plan","title":"Storage plan","summary":"Persist a plan artifact.","steps":[{"id":"step_1","title":"Add a plans table","status":"pending","details":null},{"id":"step_2","title":"Restore it next turn","status":"pending","details":null}],"status":"active","sourceMessageId":"msg_f668d6df10b242c0af752e448b5435fb","createdAt":"2026-06-08T12:39:04.785738Z","updatedAt":"2026-06-08T12:39:04.785738Z"},"session_id":"sess_plan"}
 
 event: response_completed
 data: {"type":"response_completed","response_id":"resp_plan","session_id":"sess_plan"}

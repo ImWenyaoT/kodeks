@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-06-08T11:44:24.817788Z",
-  "pythonCommit": "8a406b55f1d135979e516a23edfb36b394d02edb",
+  "recordedAt": "2026-06-08T12:39:04.790571Z",
+  "pythonCommit": "0a53b9dde55e589737013889d13cdf8ea3499845",
   "volatileFieldPaths": [
     "approval_required.approval_id",
     "memory_recalled.memory_ids",

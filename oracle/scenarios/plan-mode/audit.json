@@ -30,8 +30,8 @@
   {
     "event_type": "plan_checkpointed",
     "payload": {
-      "planId": "plan_95fbeae4aa5e4b21aa464410fb9bc66b",
-      "sourceMessageId": "msg_ccc4d7e17b1e4ccca728f65becaf944d"
+      "planId": "plan_e8ec386391314e92bcb18feb859539d0",
+      "sourceMessageId": "msg_f668d6df10b242c0af752e448b5435fb"
     }
   },
   {

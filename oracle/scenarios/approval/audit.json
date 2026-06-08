@@ -38,7 +38,7 @@
   {
     "event_type": "approval_required",
     "payload": {
-      "approvalId": "appr_22ca104ce7ad4205948fde3d2c4a0562",
+      "approvalId": "appr_6000973a6c344ea6ac628c55e7b15e48",
       "command": "rm -rf output"
     }
   },
