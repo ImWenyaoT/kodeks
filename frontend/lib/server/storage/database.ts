@@ -23,6 +23,12 @@ import { MemoryRepository, SubagentRepository } from './repositories/memory'
 export interface CreateDatabaseOptions {
   /** 内存 artifact 落盘后端；默认本地文件后端（落于 cwd 下的 .kodeks/memory-artifacts）。 */
   artifactStore?: ArtifactStore
+  /**
+   * Turso/libSQL 远端鉴权 token（M6）。
+   * 仅在连远端（libsql:// URL）时需要；本地 :memory: / file: URL 不传亦正常工作。
+   * 透传给 @libsql/client createClient({ url, authToken })，纯增量、不影响本地路径。
+   */
+  authToken?: string
 }
 
 /**
@@ -108,13 +114,19 @@ async function initializeSchema(connection: Client): Promise<void> {
 /**
  * 异步工厂：打开 libSQL 库、配 PRAGMA、建 schema、写版本标记，返回 KodeksDatabase。
  * @param url 数据库 URL：':memory:'（默认）/ 'file:...' / Turso libsql: URL。
- * @param options 可选项；artifactStore 不传时默认 LocalFileArtifactStore(process.cwd())。
+ * @param options 可选项；artifactStore 不传时默认 LocalFileArtifactStore(process.cwd())；
+ *   authToken 不传时不进 createClient（保持本地 file:/:memory: 语义不变）。
  */
 export async function createDatabase(
   url = ':memory:',
   options: CreateDatabaseOptions = {},
 ): Promise<KodeksDatabase> {
-  const connection = createClient({ url })
+  // 仅当显式传入 authToken 时才带上该字段；本地 url 无 token 仍按原样建客户端（纯增量）。
+  const connection = createClient(
+    options.authToken !== undefined
+      ? { url, authToken: options.authToken }
+      : { url },
+  )
   await configureConnection(connection)
   await initializeSchema(connection)
   const artifactStore = options.artifactStore ?? new LocalFileArtifactStore(process.cwd())

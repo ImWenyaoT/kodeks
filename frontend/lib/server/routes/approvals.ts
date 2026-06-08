@@ -11,6 +11,8 @@ import {
   type KodeksDatabase,
 } from '../storage'
 import { runApprovedCommand, ShellCommandTimeoutError } from '../workspace'
+import { type Executor } from '../execution'
+import { resolveExecutor } from './deps'
 
 /** 返回 strip 后的非空字符串，否则 null（移植 _string，approval_routes.py:104-107）。 */
 function string(value: unknown): string | null {
@@ -61,12 +63,15 @@ export async function getApproval(
  * approve → 取 pending；无可执行命令 → 400 {error:'Approval does not contain an executable command.'}；
  *   否则 approve → runApprovedCommand(workspaceRoot) → markExecuted → audit approval_executed → 200 {approval, result}。
  * 异常映射：NotFound 404 / AlreadyResolved 409 / ShellCommandTimeout 408（均 {detail}）。
+ * @param executor 命令执行后端（M6 可注入）；默认 resolveExecutor()——本地 LocalExecutor、
+ *   Vercel 上配齐 sandbox 鉴权时 SandboxExecutor。透传给 runApprovedCommand 实现透明替换。
  */
 export async function decideApproval(
   approvalId: string,
   body: Record<string, unknown>,
   database: KodeksDatabase,
   workspaceRoot: string,
+  executor: Executor = resolveExecutor(),
 ): Promise<NextResponse> {
   const decision = body.decision
   try {
@@ -95,7 +100,16 @@ export async function decideApproval(
       )
     }
     const approved = await database.approvals.approve(approvalId)
-    const result = await runApprovedCommand(command, workspaceRoot)
+    // 透传 executor：本地默认 LocalExecutor；Vercel 上为 SandboxExecutor。runApprovedCommand 的
+    // 后三个形参（timeoutMs/maxOutputBytes/parseFailureMessage）保持默认，仅末位 executor 注入。
+    const result = await runApprovedCommand(
+      command,
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      executor,
+    )
     const executed = await database.approvals.markExecuted(approvalId)
     await database.auditLog.record(approved.sessionId, 'approval_executed', {
       approvalId: approved.id,

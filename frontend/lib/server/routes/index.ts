@@ -3,7 +3,14 @@
 // app/api/**/route.ts 是薄包装，从这里取逻辑并接生产依赖（deps.ts）。
 
 // 生产依赖
-export { getDatabase, resolveWorkspaceRoot, readJsonBody } from './deps'
+export {
+  getDatabase,
+  readJsonBody,
+  resolveArtifactStore,
+  resolveExecutor,
+  resolveWorkspaceRoot,
+  shouldUseSandboxExecutor,
+} from './deps'
 
 // chat SSE
 export {

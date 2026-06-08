@@ -40,6 +40,13 @@ export {
   LocalFileArtifactStore,
 } from './artifact-store'
 
+// Vercel Blob artifact 后端（M6 云端）+ 纯逻辑工具
+export {
+  BlobArtifactStore,
+  blobPathnameForRef,
+  isBlobUrl,
+} from './blob-artifact-store'
+
 // 工具
 export {
   currentTimestamp,
