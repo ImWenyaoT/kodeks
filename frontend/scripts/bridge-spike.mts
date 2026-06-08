@@ -9,6 +9,9 @@
  * （--env-file 负责把 DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL 注入 process.env，代码不接触密钥明文）
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any --
+   探索性 M0 spike：刻意用 any 快速读取无类型的 Responses/DeepSeek JSON 以验证链路。
+   产品化版本在 M1 移入 frontend/lib/server/bridge/，届时改为 openai/zod 强类型。 */
 import OpenAI from 'openai'
 import { Agent, run, setDefaultOpenAIClient, setOpenAIAPI, setTracingDisabled } from '@openai/agents'
 

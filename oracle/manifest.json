@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-06-08T11:44:24.817788Z",
+  "pythonCommit": "8a406b55f1d135979e516a23edfb36b394d02edb",
+  "volatileFieldPaths": [
+    "approval_required.approval_id",
+    "memory_recalled.memory_ids",
+    "plan_artifact.plan.id",
+    "plan_artifact.plan.createdAt",
+    "plan_artifact.plan.updatedAt",
+    "plan_artifact.plan.sourceMessageId"
+  ],
+  "scenarios": [
+    {
+      "id": "text-only",
+      "rounds": 1,
+      "runtimeEvents": 4,
+      "uiFrames": 4,
+      "eventTypes": [
+        "session_created",
+        "text_delta",
+        "text_delta",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "single-tool",
+      "rounds": 2,
+      "runtimeEvents": 7,
+      "uiFrames": 7,
+      "eventTypes": [
+        "session_created",
+        "text_delta",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "text_delta",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "unknown-tool",
+      "rounds": 1,
+      "runtimeEvents": 5,
+      "uiFrames": 5,
+      "eventTypes": [
+        "session_created",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "error"
+      ]
+    },
+    {
+      "id": "approval",
+      "rounds": 1,
+      "runtimeEvents": 5,
+      "uiFrames": 5,
+      "eventTypes": [
+        "session_created",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "approval_required"
+      ]
+    },
+    {
+      "id": "plan-mode",
+      "rounds": 1,
+      "runtimeEvents": 4,
+      "uiFrames": 3,
+      "eventTypes": [
+        "session_created",
+        "text_delta",
+        "plan_artifact",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "memory-recall",
+      "rounds": 1,
+      "runtimeEvents": 4,
+      "uiFrames": 3,
+      "eventTypes": [
+        "session_created",
+        "memory_recalled",
+        "text_delta",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "stream-error",
+      "rounds": 1,
+      "runtimeEvents": 2,
+      "uiFrames": 2,
+      "eventTypes": [
+        "session_created",
+        "error"
+      ]
+    },
+    {
+      "id": "large-tool",
+      "rounds": 2,
+      "runtimeEvents": 5,
+      "uiFrames": 5,
+      "eventTypes": [
+        "session_created",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "multi-tool",
+      "rounds": 3,
+      "runtimeEvents": 10,
+      "uiFrames": 10,
+      "eventTypes": [
+        "session_created",
+        "text_delta",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "assistant_status",
+        "tool_call",
+        "tool_result",
+        "text_delta",
+        "response_completed"
+      ]
+    },
+    {
+      "id": "pseudo-tool-call",
+      "rounds": 1,
+      "runtimeEvents": 3,
+      "uiFrames": 3,
+      "eventTypes": [
+        "session_created",
+        "text_delta",
+        "error"
+      ]
+    }
+  ]
+}

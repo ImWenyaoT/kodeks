@@ -1,0 +1,12 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_error"
+  },
+  {
+    "type": "error",
+    "message": "upstream stream error",
+    "code": "runtime_error",
+    "session_id": "sess_error"
+  }
+]

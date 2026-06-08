@@ -1,0 +1,21 @@
+event: session
+data: {"type":"session","sessionId":"sess_tool"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Reading...","sessionId":"sess_tool"}
+
+event: status
+data: {"type":"status","message":"Using read_file","sessionId":"sess_tool"}
+
+event: tool-call
+data: {"type":"tool-call","toolCallId":"call_read","toolName":"read_file","args":{"path":"README.md"},"sessionId":"sess_tool"}
+
+event: tool-result
+data: {"type":"tool-result","toolCallId":"call_read","toolName":"read_file","result":"{\"ok\":true,\"path\":\"README.md\",\"content\":\"hello from workspace\\n\"}","status":"ok","sessionId":"sess_tool"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Done.","sessionId":"sess_tool"}
+
+event: finish
+data: {"type":"finish","responseId":"resp_final","sessionId":"sess_tool"}
+

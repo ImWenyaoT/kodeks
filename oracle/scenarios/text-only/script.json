@@ -1,0 +1,19 @@
+[
+  [
+    {
+      "type": "response.output_text.delta",
+      "delta": "你好，"
+    },
+    {
+      "type": "response.output_text.delta",
+      "delta": "world。"
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_text",
+        "status": "completed"
+      }
+    }
+  ]
+]

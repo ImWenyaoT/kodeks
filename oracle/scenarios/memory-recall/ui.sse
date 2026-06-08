@@ -1,0 +1,9 @@
+event: session
+data: {"type":"session","sessionId":"sess_memory"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Plan mode is read-only.","sessionId":"sess_memory"}
+
+event: finish
+data: {"type":"finish","responseId":"resp_memory","sessionId":"sess_memory"}
+

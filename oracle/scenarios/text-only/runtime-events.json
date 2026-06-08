@@ -1,0 +1,21 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_text"
+  },
+  {
+    "type": "text_delta",
+    "delta": "你好，",
+    "session_id": "sess_text"
+  },
+  {
+    "type": "text_delta",
+    "delta": "world。",
+    "session_id": "sess_text"
+  },
+  {
+    "type": "response_completed",
+    "response_id": "resp_text",
+    "session_id": "sess_text"
+  }
+]

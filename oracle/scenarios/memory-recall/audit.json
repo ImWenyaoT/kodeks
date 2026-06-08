@@ -1,0 +1,46 @@
+[
+  {
+    "event_type": "turn_started",
+    "payload": {
+      "mode": "act",
+      "resumed": true
+    }
+  },
+  {
+    "event_type": "harness_pattern_selected",
+    "payload": {
+      "pattern": "single_turn",
+      "reasons": [
+        "ordinary coding turn does not need extra agent compute"
+      ],
+      "failureModes": [],
+      "stopCondition": "stop when the requested turn is answered or a tool boundary requires approval",
+      "approvalBoundary": "Subagents are read-only by default; workspace mutation, shell risk, and memory rule changes return to the main agent or user approval.",
+      "subagentContract": {
+        "claim": "state the explored conclusion",
+        "evidence": "name files, memories, or tool outputs inspected",
+        "risk": "surface uncertainty or missing evidence",
+        "confidence": "low, medium, or high",
+        "nextAction": "recommend the next bounded action"
+      }
+    }
+  },
+  {
+    "event_type": "memory_recalled",
+    "payload": {
+      "memoryIds": [
+        "atom_99487c68486c45c29a7e980f85e5bb08"
+      ],
+      "layers": {
+        "atom": 1
+      }
+    }
+  },
+  {
+    "event_type": "turn_completed",
+    "payload": {
+      "responseId": "resp_memory",
+      "assistantBytes": 23
+    }
+  }
+]

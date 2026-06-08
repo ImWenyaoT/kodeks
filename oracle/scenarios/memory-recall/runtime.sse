@@ -1,0 +1,12 @@
+event: session_created
+data: {"type":"session_created","session_id":"sess_memory"}
+
+event: memory_recalled
+data: {"type":"memory_recalled","memory_ids":["atom_99487c68486c45c29a7e980f85e5bb08"],"memory_layers":{"atom":1},"session_id":"sess_memory"}
+
+event: text_delta
+data: {"type":"text_delta","delta":"Plan mode is read-only.","session_id":"sess_memory"}
+
+event: response_completed
+data: {"type":"response_completed","response_id":"resp_memory","session_id":"sess_memory"}
+

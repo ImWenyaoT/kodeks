@@ -1,0 +1,15 @@
+event: session_created
+data: {"type":"session_created","session_id":"sess_large"}
+
+event: assistant_status
+data: {"type":"assistant_status","message":"Using read_file","session_id":"sess_large"}
+
+event: tool_call
+data: {"type":"tool_call","tool_call_id":"call_large","tool_name":"read_file","tool_arguments":{"path":"large.txt"},"session_id":"sess_large"}
+
+event: tool_result
+data: {"type":"tool_result","tool_call_id":"call_large","tool_name":"read_file","tool_status":"ok","tool_output":"{\"ok\":true,\"offloaded\":true,\"refId\":\"memref_0976090668758342\",\"toolName\":\"read_file\",\"summary\":\"{\\\"ok\\\":true,\\\"path\\\":\\\"large.txt\\\",\\\"content\\\":\\\"memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory ar\",\"byteLength\":1723,\"message\":\"Large tool output was stored as a memory artifact. Use read_memory_artifact with refId to inspect the full output.\"}","session_id":"sess_large"}
+
+event: response_completed
+data: {"type":"response_completed","response_id":"resp_large","session_id":"sess_large"}
+

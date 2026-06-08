@@ -1,0 +1,29 @@
+[
+  [
+    {
+      "type": "response.output_item.done",
+      "item": {
+        "type": "function_call",
+        "call_id": "call_large",
+        "name": "read_file",
+        "arguments": "{\"path\": \"large.txt\"}"
+      }
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_large",
+        "status": "completed"
+      }
+    }
+  ],
+  [
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_large",
+        "status": "completed"
+      }
+    }
+  ]
+]

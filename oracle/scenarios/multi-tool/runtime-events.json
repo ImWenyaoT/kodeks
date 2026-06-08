@@ -1,0 +1,65 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Reading the first file...",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "assistant_status",
+    "message": "Using read_file",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "tool_call",
+    "tool_call_id": "call_a",
+    "tool_name": "read_file",
+    "tool_arguments": {
+      "path": "README.md"
+    },
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "tool_result",
+    "tool_call_id": "call_a",
+    "tool_name": "read_file",
+    "tool_status": "ok",
+    "tool_output": "{\"ok\":true,\"path\":\"README.md\",\"content\":\"first file\\n\"}",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "assistant_status",
+    "message": "Using read_file",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "tool_call",
+    "tool_call_id": "call_b",
+    "tool_name": "read_file",
+    "tool_arguments": {
+      "path": "AGENTS.md"
+    },
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "tool_result",
+    "tool_call_id": "call_b",
+    "tool_name": "read_file",
+    "tool_status": "ok",
+    "tool_output": "{\"ok\":true,\"path\":\"AGENTS.md\",\"content\":\"second file\\n\"}",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Read both files.",
+    "session_id": "sess_multi"
+  },
+  {
+    "type": "response_completed",
+    "response_id": "resp_multi_final",
+    "session_id": "sess_multi"
+  }
+]

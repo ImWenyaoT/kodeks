@@ -1,0 +1,9 @@
+event: session
+data: {"type":"session","sessionId":"sess_plan"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"# Storage plan\n\nPersist a plan artifact.\n\n1. Add a plans table\n2. Restore it next turn","sessionId":"sess_plan"}
+
+event: finish
+data: {"type":"finish","responseId":"resp_plan","sessionId":"sess_plan"}
+

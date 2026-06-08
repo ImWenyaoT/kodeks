@@ -1,0 +1,15 @@
+[
+  [
+    {
+      "type": "response.output_text.delta",
+      "delta": "Plan mode is read-only."
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_memory",
+        "status": "completed"
+      }
+    }
+  ]
+]
