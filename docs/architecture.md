@@ -1,5 +1,10 @@
 # Kodeks 架构说明
 
+> ⚠️ **本文档描述的是已退役的 Python/FastAPI 运行时(概念设计仍有参考价值)。** 当前运行时已迁移为
+> 单个 Next.js 全栈应用:HTTP 路由是 `frontend/app/api/**/route.ts`,运行时逻辑在 `frontend/lib/server/`
+> (bridge/storage/tools/agent/routes/wire),持久化用 libSQL。行为与本文所述 Python 版字节级一致
+> (由 [`oracle/`](../oracle/README.md) 钉死)。最新结构见 [README](../README.zh-CN.md)。
+
 Kodeks 是一个 local-first 的 coding agent workbench。HTTP API、chat runtime 和本地工具执行都由 Python/FastAPI 服务承载；浏览器 UI 是一个 Next.js static export，构建产物放在 `src/kodeks/static/`，由同一个 FastAPI 进程通过 `StaticFiles` mount 直接 serve。你可以先把它理解成：
 
 ```text
