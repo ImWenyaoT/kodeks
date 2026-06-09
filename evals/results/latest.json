@@ -1,0 +1,442 @@
+{
+  "summary": {
+    "passed": 13,
+    "failed": 0,
+    "total": 13,
+    "passRate": 1.0,
+    "concepts": {
+      "context_management": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "conversation_state_memory": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "harness_flow_control": {
+        "passed": 2,
+        "total": 2,
+        "passRate": 1.0
+      },
+      "harness_multi_agent": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "harness_observability": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "model_routing_moonbridge": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "multi_agent_subagent": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "planning": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "safety_approvals": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "streaming_ui_transport": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "tool_contracts": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      },
+      "tools_function_calling": {
+        "passed": 1,
+        "total": 1,
+        "passRate": 1.0
+      }
+    },
+    "lanes": {
+      "deterministic": {
+        "passed": 13,
+        "total": 13,
+        "passRate": 1.0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "read_file_tool_loop",
+      "lane": "deterministic",
+      "concept": "tools_function_calling",
+      "passed": true,
+      "failures": [],
+      "durationMs": 12.45,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Reading..."
+        },
+        {
+          "type": "assistant_status",
+          "message": "Using read_file"
+        },
+        {
+          "type": "tool_call",
+          "tool_name": "read_file"
+        },
+        {
+          "type": "tool_result",
+          "tool_name": "read_file",
+          "tool_status": "ok"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Read complete."
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "dangerous_shell_requires_approval",
+      "lane": "deterministic",
+      "concept": "safety_approvals",
+      "passed": true,
+      "failures": [],
+      "durationMs": 6.19,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "assistant_status",
+          "message": "Using run_shell"
+        },
+        {
+          "type": "tool_call",
+          "tool_name": "run_shell"
+        },
+        {
+          "type": "tool_result",
+          "tool_name": "run_shell",
+          "tool_status": "approval_required"
+        },
+        {
+          "type": "approval_required",
+          "message": "Command requires approval"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "unknown_tool_halts_locally",
+      "lane": "deterministic",
+      "concept": "tool_contracts",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.68,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "assistant_status",
+          "message": "Using missing_tool"
+        },
+        {
+          "type": "tool_call",
+          "tool_name": "missing_tool"
+        },
+        {
+          "type": "tool_result",
+          "tool_name": "missing_tool",
+          "tool_status": "error"
+        },
+        {
+          "type": "error",
+          "message": "Unknown tool requested by model: missing_tool",
+          "code": "model_requested_unknown_tool"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "large_tool_output_becomes_artifact",
+      "lane": "deterministic",
+      "concept": "context_management",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.29,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "assistant_status",
+          "message": "Using read_file"
+        },
+        {
+          "type": "tool_call",
+          "tool_name": "read_file"
+        },
+        {
+          "type": "tool_result",
+          "tool_name": "read_file",
+          "tool_status": "ok"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Artifact stored."
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "memory_recall_injected",
+      "lane": "deterministic",
+      "concept": "conversation_state_memory",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.03,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "memory_recalled"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Done."
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "plan_mode_creates_plan_artifact",
+      "lane": "deterministic",
+      "concept": "planning",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.2,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "# Eval plan\n\nAdd deterministic eval coverage.\n\n1. Add cases\n2. Run the benchmark"
+        },
+        {
+          "type": "plan_artifact"
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "subagent_explore_is_bounded",
+      "lane": "deterministic",
+      "concept": "multi_agent_subagent",
+      "passed": true,
+      "failures": [],
+      "durationMs": 5.16,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "assistant_status",
+          "message": "Using spawn_explore_agent"
+        },
+        {
+          "type": "tool_call",
+          "tool_name": "spawn_explore_agent"
+        },
+        {
+          "type": "tool_result",
+          "tool_name": "spawn_explore_agent",
+          "tool_status": "ok"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Subagent summary reviewed."
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "ui_transport_finish_event",
+      "lane": "deterministic",
+      "concept": "streaming_ui_transport",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.68,
+      "events": [
+        {
+          "type": "session"
+        },
+        {
+          "type": "text-delta",
+          "delta": "Done."
+        },
+        {
+          "type": "finish"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "bridge_preflight_missing_provider",
+      "lane": "deterministic",
+      "concept": "model_routing_moonbridge",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.0,
+      "events": [],
+      "statusCode": 200,
+      "responseJson": {
+        "status": "unavailable",
+        "provider": "auto",
+        "code": "model_provider_missing",
+        "reason": "No OpenAI-compatible Chat Completions provider is configured. Set API_KEY or DEEPSEEK_API_KEY for the MoonBridge route.",
+        "checkedAt": "2026-06-06T00:27:09.921810Z"
+      }
+    },
+    {
+      "id": "harness_loop_until_done_pattern",
+      "lane": "deterministic",
+      "concept": "harness_flow_control",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.53,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Done."
+        },
+        {
+          "type": "plan_artifact"
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "harness_adversarial_verify_pattern",
+      "lane": "deterministic",
+      "concept": "harness_observability",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.63,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Done."
+        },
+        {
+          "type": "plan_artifact"
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "harness_tournament_pattern",
+      "lane": "deterministic",
+      "concept": "harness_multi_agent",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.09,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Done."
+        },
+        {
+          "type": "plan_artifact"
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    },
+    {
+      "id": "harness_fanout_synthesize_pattern",
+      "lane": "deterministic",
+      "concept": "harness_flow_control",
+      "passed": true,
+      "failures": [],
+      "durationMs": 4.16,
+      "events": [
+        {
+          "type": "session_created"
+        },
+        {
+          "type": "text_delta",
+          "delta": "Done."
+        },
+        {
+          "type": "plan_artifact"
+        },
+        {
+          "type": "response_completed"
+        }
+      ],
+      "statusCode": 200,
+      "responseJson": null
+    }
+  ]
+}

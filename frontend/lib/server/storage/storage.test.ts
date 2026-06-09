@@ -185,6 +185,19 @@ describe('ApprovalRepository 状态机', () => {
     expect(approved.decidedAt).not.toBeNull()
   })
 
+  it('并发 approve 只能有一个原子 claim 成功', async () => {
+    const a = await db.approvals.createApproval({ c: 1 }, 'why', 's', 'tc')
+    const results = await Promise.allSettled([
+      db.approvals.approve(a.id),
+      db.approvals.approve(a.id),
+    ])
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    const rejected = results.find((result) => result.status === 'rejected')
+    expect(rejected?.reason).toBeInstanceOf(ApprovalAlreadyResolvedError)
+    expect((await db.approvals.getApproval(a.id)).status).toBe('approved')
+  })
+
   it('mark_executed 不改 reason', async () => {
     const a = await db.approvals.createApproval({ c: 1 }, 'orig reason')
     await db.approvals.approve(a.id)
@@ -192,6 +205,18 @@ describe('ApprovalRepository 状态机', () => {
     expect(executed.status).toBe('executed')
     // approve 已把 reason 设为 approved；mark_executed 不再改 reason。
     expect(executed.reason).toBe('approved')
+  })
+
+  it('markFailed 把 approved 审批闭合为 failed 并记录 reason', async () => {
+    const a = await db.approvals.createApproval({ c: 1 }, 'orig reason')
+    await db.approvals.approve(a.id)
+    const failed = await db.approvals.markFailed(a.id, 'executor unavailable')
+
+    expect(failed.status).toBe('failed')
+    expect(failed.reason).toBe('executor unavailable')
+    await expect(db.approvals.markExecuted(a.id)).rejects.toBeInstanceOf(
+      ApprovalAlreadyResolvedError,
+    )
   })
 
   it('reject 设 status=rejected + 自定义 reason，要求 pending', async () => {

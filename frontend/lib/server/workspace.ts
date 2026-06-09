@@ -66,6 +66,34 @@ export const SHELL_ONLY_ERROR =
   'command substitutions, variables, or control operators and call one ' +
   'executable with plain arguments.'
 
+/** 需要审批的可执行文件名：它们能绕过文件工具边界或隐式运行脚本。 */
+const APPROVAL_EXECUTABLES: ReadonlySet<string> = new Set([
+  'bash',
+  'bun',
+  'cmd',
+  'curl',
+  'deno',
+  'fish',
+  'node',
+  'npm',
+  'npx',
+  'perl',
+  'php',
+  'pnpm',
+  'pwsh',
+  'python',
+  'python2',
+  'python3',
+  'ruby',
+  'sh',
+  'wget',
+  'yarn',
+  'zsh',
+])
+
+/** 解释器 inline 代码参数；命中时必须走用户审批。 */
+const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(['-c', '-e', '--eval'])
+
 /** 路径越界或命中黑名单时抛出（移植 WorkspacePathError，workspace.py:53-54）。 */
 export class WorkspacePathError extends Error {
   constructor(message: string) {
@@ -323,7 +351,7 @@ export class WorkspaceService {
 
 /** 判断一个命令是否需要人工审批（移植 is_dangerous_command，workspace.py:171-174）。任一正则命中即真。 */
 export function isDangerousCommand(command: string): boolean {
-  return DANGEROUS_PATTERNS.some((pattern) => pattern.test(command))
+  return DANGEROUS_PATTERNS.some((pattern) => pattern.test(command)) || commandPolicy(command)
 }
 
 /** 判断命令是否需要 Kodeks 不执行的 shell 特性（移植 has_shell_only_syntax，workspace.py:269-272）。 */
@@ -376,6 +404,24 @@ export function parseCommandArgs(command: string): string[] | null {
     args.push(current)
   }
   return args.length > 0 ? args : null
+}
+
+/**
+ * 对无 shell argv 做一层命令策略判断：不替代 workspace 文件沙箱，只把高风险 argv 升级为审批。
+ */
+function commandPolicy(command: string): boolean {
+  const args = parseCommandArgs(command)
+  if (args === null) {
+    return false
+  }
+  const executable = basename(args[0]).toLowerCase()
+  if (APPROVAL_EXECUTABLES.has(executable)) {
+    if (executable === 'node') {
+      return args.slice(1).some((arg) => INLINE_CODE_FLAGS.has(arg))
+    }
+    return true
+  }
+  return args.slice(1).some((arg) => arg.startsWith('/') || arg.startsWith('~'))
 }
 
 /** 模块级默认执行后端（LocalExecutor）；测试可经 runApprovedCommand 的 executor 形参注入替身。 */

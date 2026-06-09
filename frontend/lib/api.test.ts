@@ -65,7 +65,7 @@ describe("api client", () => {
   });
 
   it("decideApproval POSTs the decision to /api/approvals/{id}", async () => {
-    // 同样捕获 url 与 init，断言路径携带 id、body 为 {"decision":"approve"}。
+    // 同样捕获 url 与 init，断言路径携带 id、body 绑定 decision 与 expectedCommandHash。
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ approval: {} }), {
@@ -74,7 +74,7 @@ describe("api client", () => {
         }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    await decideApproval("a1", "approve");
+    await decideApproval("a1", "approve", "hash-1");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [
       string,
@@ -82,6 +82,25 @@ describe("api client", () => {
     ];
     expect(url).toBe("/api/approvals/a1");
     expect(init.method).toBe("POST");
-    expect(init.body).toBe(JSON.stringify({ decision: "approve" }));
+    expect(init.body).toBe(
+      JSON.stringify({ decision: "approve", expectedCommandHash: "hash-1" }),
+    );
+  });
+
+  it("decideApproval omits the command hash for reject decisions", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ approval: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await decideApproval("a1", "reject");
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(init.body).toBe(JSON.stringify({ decision: "reject" }));
   });
 });

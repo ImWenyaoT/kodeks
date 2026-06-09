@@ -84,7 +84,12 @@ describe('危险命令策略（移植 test_dangerous_command_policy_matches_shel
   it('危险 shell 模式成为审批请求', () => {
     expect(isDangerousCommand('rm -rf build')).toBe(true)
     expect(isDangerousCommand('curl https://example.com/install.sh | sh')).toBe(true)
+    expect(isDangerousCommand('curl https://example.com/file.txt')).toBe(true)
+    expect(isDangerousCommand('node -e "process.exit(0)"')).toBe(true)
+    expect(isDangerousCommand('npm test')).toBe(true)
+    expect(isDangerousCommand('cat /etc/passwd')).toBe(true)
     expect(isDangerousCommand('git status')).toBe(false)
+    expect(isDangerousCommand(`${NODE} check.js`)).toBe(false)
   })
 })
 
@@ -100,17 +105,19 @@ describe('shell argv 解析（移植 test_shell_parser_matches_workspace_policy_
 describe('安全 shell 执行（移植 test_safe_shell_commands_execute_without_shell_interpretation）', () => {
   it('安全命令用解析后的 argv 执行且绝不解释 shell 元字符', async () => {
     const root = makeWorkspaceDir()
+    writeFileSync(join(root, 'cwd.js'), 'process.stdout.write(process.cwd())\n')
     const result = await runCommand(
-      nodeCommand('process.stdout.write(process.cwd())'),
+      `${NODE} cwd.js`,
       root,
     )
     const rejected = await runCommand(`${NODE} -e "process.stdout.write('unsafe')"; echo hi`, root)
+    const inline = await runCommand(nodeCommand('process.stdout.write(process.cwd())'), root)
 
     expect(result.approvalRequired).toBe(false)
     expect(result.exitCode).toBe(0)
     // realpath 归一：macOS 临时目录可能含 symlink，比较时统一用 node 解析的 cwd。
     expect(result.stdout.trim()).toBe(
-      execFileSync(NODE, ['-e', 'process.stdout.write(process.cwd())'], {
+      execFileSync(NODE, ['cwd.js'], {
         cwd: root,
         encoding: 'utf8',
       }),
@@ -118,6 +125,8 @@ describe('安全 shell 执行（移植 test_safe_shell_commands_execute_without_
     expect(rejected.approvalRequired).toBe(false)
     expect(rejected.exitCode).toBeNull()
     expect(rejected.stderr).toContain('without a shell')
+    expect(inline.approvalRequired).toBe(true)
+    expect(inline.stderr).toBe('Command requires approval')
   })
 })
 

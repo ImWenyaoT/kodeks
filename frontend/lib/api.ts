@@ -136,14 +136,19 @@ export async function bridgePreflight(model: string): Promise<BridgePreflight> {
 export async function decideApproval(
   id: string,
   decision: "approve" | "reject",
+  expectedCommandHash?: string,
 ): Promise<{
   approval?: unknown;
   result?: { exitCode?: number; stdout?: string; stderr?: string };
 }> {
+  const body =
+    decision === "approve"
+      ? { decision, expectedCommandHash }
+      : { decision };
   return requestJson(`/api/approvals/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify(body),
   });
 }
 

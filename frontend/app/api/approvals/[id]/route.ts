@@ -6,6 +6,7 @@ import {
   getApproval,
   getDatabase,
   readJsonBody,
+  requireControlRequest,
   resolveWorkspaceRoot,
 } from '@/lib/server/routes'
 
@@ -13,9 +14,13 @@ export const runtime = 'nodejs'
 
 /** 读取一条审批记录。 */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const denied = requireControlRequest(request)
+  if (denied !== null) {
+    return denied
+  }
   const { id } = await params
   const database = await getDatabase()
   return getApproval(id, database)
@@ -26,6 +31,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const denied = requireControlRequest(request)
+  if (denied !== null) {
+    return denied
+  }
   const { id } = await params
   const body = await readJsonBody(request)
   const database = await getDatabase()

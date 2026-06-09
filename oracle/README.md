@@ -22,7 +22,7 @@ oracle/
     audit.json           # 审计日志行（type + payload）
 ```
 
-## 14 个场景
+## 10 个场景
 
 `text-only`、`single-tool`、`unknown-tool`、`approval`、`plan-mode`、`memory-recall`、`stream-error`、
 `large-tool`、`multi-tool`、`pseudo-tool-call`（覆盖文本/工具/审批暂停/计划/记忆召回/错误/多轮续跑/大输出卸载等控制流）。

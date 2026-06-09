@@ -4,6 +4,7 @@ build/
 coverage/
 .cache/
 .pnpm-store/
+frontend/.npm-cache/
 
 # Runtime state and local databases
 .kodeks/
@@ -60,3 +61,7 @@ docs/*
 
 # Logs
 *.log
+
+# Generated eval artifacts
+evals/workspace-live/
+evals/results/live-latest.json

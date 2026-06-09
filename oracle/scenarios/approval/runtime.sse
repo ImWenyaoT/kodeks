@@ -11,5 +11,5 @@ event: tool_result
 data: {"type":"tool_result","tool_call_id":"call_shell","tool_name":"run_shell","tool_status":"approval_required","tool_output":"{\"ok\":false,\"approvalRequired\":true,\"approvalId\":\"appr_6000973a6c344ea6ac628c55e7b15e48\",\"status\":\"pending\",\"reason\":\"Command requires approval\",\"command\":\"rm -rf output\"}","session_id":"sess_approval"}
 
 event: approval_required
-data: {"type":"approval_required","approval_id":"appr_6000973a6c344ea6ac628c55e7b15e48","tool_call_id":"call_shell","message":"Command requires approval","session_id":"sess_approval"}
+data: {"type":"approval_required","approval_id":"appr_6000973a6c344ea6ac628c55e7b15e48","tool_call_id":"call_shell","message":"Command requires approval","command":"rm -rf output","command_hash":"b73dc5e7188632907365608ca3fb04afd5db2ebead473c2c1d00ee8f29b0ebbb","session_id":"sess_approval"}
 

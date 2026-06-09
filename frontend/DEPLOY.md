@@ -44,6 +44,12 @@ provision 提示：
 | `TURSO_AUTH_TOKEN` | Turso 远端鉴权（连 `libsql://` 时必需） | 本地 `file:` 无需 token |
 | `BLOB_READ_WRITE_TOKEN` | 内存 artifact 存进 Vercel Blob（`BlobArtifactStore`） | 本地 `.kodeks/memory-artifacts`（`LocalFileArtifactStore`） |
 
+### 线上控制面保护
+
+| 变量 | 配置后效果 | 不配（默认） |
+| --- | --- | --- |
+| `KODEKS_CONTROL_TOKEN` | 非本地 `/api/*` 控制面请求必须带 `Authorization: Bearer <token>`、`x-kodeks-control-token` 或 `kodeks_control_token` cookie；带 `Origin`/`Referer` 时还必须同源 | 本地 `localhost/127.0.0.1` 允许；非本地 control API fail closed |
+
 ### Vercel Sandbox 执行（审批命令）
 
 | 变量 | 说明 |
@@ -66,7 +72,8 @@ provision 提示：
    - 否则 → `LocalFileArtifactStore`（句柄是本地绝对路径）。
 3. **命令执行**（`resolveExecutor` → `shouldUseSandboxExecutor`）
    - `VERCEL` 置位 **且**（`VERCEL_OIDC_TOKEN` 或 `VERCEL_TOKEN`）→ `SandboxExecutor`（Firecracker microVM，argv 无 shell）。
-   - 否则 → `LocalExecutor`（`child_process.execFile`，argv 无 shell）。
+   - 本地开发（无 `VERCEL`）→ `LocalExecutor`（`child_process.execFile`，argv 无 shell）。
+   - `VERCEL` 置位但缺 sandbox 鉴权 → fail closed，命令执行返回不可用，不回退宿主 `LocalExecutor`。
 
 > 三种云端后端的**返回/接口形状与本地版逐字一致**，是透明替换：上层 wire/bridge/agent/tools 逻辑完全不感知后端差异。
 

@@ -74,7 +74,7 @@ describe("useChatStream", () => {
 
   it("pushes an approval when an approval_required frame arrives", async () => {
     const body = streamFrom([
-      'event: approval_required\ndata: {"type":"approval_required","approval_id":"ap-9","tool_call_id":"tc-9","message":"Run `rm -rf build`?"}\n\n',
+      'event: approval_required\ndata: {"type":"approval_required","approval_id":"ap-9","tool_call_id":"tc-9","message":"Run `rm -rf build`?","command":"rm -rf build","command_hash":"hash-9"}\n\n',
     ]);
     vi.mocked(openChatStream).mockResolvedValue(
       new Response(body, { status: 200 }),
@@ -87,7 +87,12 @@ describe("useChatStream", () => {
 
     // approval_required 帧应被分派到 pushApproval，落入 store.approvals。
     expect(useChatStore.getState().approvals).toEqual([
-      { approvalId: "ap-9", message: "Run `rm -rf build`?" },
+      {
+        approvalId: "ap-9",
+        message: "Run `rm -rf build`?",
+        command: "rm -rf build",
+        commandHash: "hash-9",
+      },
     ]);
     expect(useChatStore.getState().isRunning).toBe(false);
   });

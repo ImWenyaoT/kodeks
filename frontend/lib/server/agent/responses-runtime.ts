@@ -87,6 +87,9 @@ export async function* runResponsesToolLoop(
     responsesEventFactory,
     maxToolLoopTurns,
   } = args
+  const allowedToolNames = new Set(
+    defaultToolDefinitions(runtimeBody.mode === 'plan').map((definition) => definition.name),
+  )
 
   for (let turnIndex = 0; turnIndex < maxToolLoopTurns; turnIndex += 1) {
     runtimeBody.input = (await buildResponsesInputFromTranscript(
@@ -124,6 +127,7 @@ export async function* runResponsesToolLoop(
           runtimeEnv,
           sessionId,
           toolState,
+          allowedToolNames,
         )) {
           yield toolEvent
         }

@@ -4,7 +4,7 @@
 //
 // 保真红线（见 40-storage.md §5、保真风险 5/6/9/11/12）：
 //  · create_session upsert 冲突不更新 created_at（只更新 title/mode/workspace_root/parent_session_id/updated_at/archived_at）。
-//  · approval 三条更新列集合各异；非满足前置状态抛 ApprovalAlreadyResolvedError；未找到抛 ApprovalNotFoundError（逐字消息）。
+//  · approval 状态迁移用条件 UPDATE 原子 claim；非满足前置状态抛 ApprovalAlreadyResolvedError；未找到抛 ApprovalNotFoundError。
 //  · list_sessions ORDER BY updated_at DESC, id ASC + WHERE archived_at IS NULL；get_transcript ORDER BY rowid ASC。
 //  · agent_event 为 null 时写 SQL NULL（不是字符串 "null"）；JSON 列存库用 JSON.stringify。
 import type { Client } from '@libsql/client'
@@ -246,45 +246,46 @@ export class ApprovalRepository {
     return mapApproval(row)
   }
 
-  /** 把 pending 审批标记为 approved（移植 approve，session.py:215-218）。status 与 reason 都设为 "approved"。 */
+  /** 把 pending 审批原子标记为 approved。status 与 reason 都设为 "approved"。 */
   async approve(approvalId: string): Promise<StoredApproval> {
     return this.resolve(approvalId, 'approved', 'approved')
   }
 
   /**
-   * 把 pending 审批标记为 rejected 并附用户原因（移植 reject，session.py:220-233）。
+   * 把 pending 审批原子标记为 rejected 并附用户原因。
    * 要求当前 status === "pending"，否则抛 ApprovalAlreadyResolvedError；更新 status/reason/decided_at。
    */
   async reject(approvalId: string, reason: string): Promise<StoredApproval> {
-    const approval = await this.getApproval(approvalId)
-    if (approval.status !== 'pending') {
-      throw new ApprovalAlreadyResolvedError(`Approval already resolved: ${approvalId}`)
-    }
-    await this.database.connection.execute({
-      sql: "UPDATE approvals SET status = 'rejected', reason = ?, decided_at = ? WHERE id = ?",
-      args: [reason, currentTimestamp(), approvalId],
-    })
-    return this.getApproval(approvalId)
+    return this.resolve(approvalId, 'rejected', reason)
   }
 
   /**
-   * 把 approved 命令标记为 executed（仅一次，移植 mark_executed，session.py:235-248）。
+   * 把 approved 命令原子标记为 executed（仅一次，移植 mark_executed，session.py:235-248）。
    * 要求当前 status === "approved"，否则抛 ApprovalAlreadyResolvedError；只更新 status/decided_at（不改 reason）。
    */
   async markExecuted(approvalId: string): Promise<StoredApproval> {
-    const approval = await this.getApproval(approvalId)
-    if (approval.status !== 'approved') {
-      throw new ApprovalAlreadyResolvedError(`Approval already resolved: ${approvalId}`)
-    }
-    await this.database.connection.execute({
-      sql: "UPDATE approvals SET status = 'executed', decided_at = ? WHERE id = ?",
+    const result = await this.database.connection.execute({
+      sql: "UPDATE approvals SET status = 'executed', decided_at = ? WHERE id = ? AND status = 'approved'",
       args: [currentTimestamp(), approvalId],
     })
+    await this.requireStateTransition(result.rowsAffected, approvalId)
     return this.getApproval(approvalId)
   }
 
   /**
-   * 把一条 pending 审批移入其最终决定状态（移植 _resolve，session.py:250-263）。
+   * 把 approved 命令原子标记为 failed，闭合执行后端失败/超时后的尾部状态。
+   */
+  async markFailed(approvalId: string, reason: string): Promise<StoredApproval> {
+    const result = await this.database.connection.execute({
+      sql: "UPDATE approvals SET status = 'failed', reason = ?, decided_at = ? WHERE id = ? AND status = 'approved'",
+      args: [reason, currentTimestamp(), approvalId],
+    })
+    await this.requireStateTransition(result.rowsAffected, approvalId)
+    return this.getApproval(approvalId)
+  }
+
+  /**
+   * 把一条 pending 审批原子移入其最终决定状态（移植 _resolve，session.py:250-263）。
    * 要求当前 status === "pending"，否则抛 ApprovalAlreadyResolvedError；更新 status/reason/decided_at。
    */
   private async resolve(
@@ -292,15 +293,26 @@ export class ApprovalRepository {
     status: string,
     reason: string,
   ): Promise<StoredApproval> {
-    const approval = await this.getApproval(approvalId)
-    if (approval.status !== 'pending') {
-      throw new ApprovalAlreadyResolvedError(`Approval already resolved: ${approvalId}`)
-    }
-    await this.database.connection.execute({
-      sql: 'UPDATE approvals SET status = ?, reason = ?, decided_at = ? WHERE id = ?',
+    const result = await this.database.connection.execute({
+      sql: "UPDATE approvals SET status = ?, reason = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
       args: [status, reason, currentTimestamp(), approvalId],
     })
+    await this.requireStateTransition(result.rowsAffected, approvalId)
     return this.getApproval(approvalId)
+  }
+
+  /**
+   * 把条件 UPDATE 的 0-row 结果映射回原有错误契约：缺失仍是 not found，状态不符是 already resolved。
+   */
+  private async requireStateTransition(
+    rowsAffected: number,
+    approvalId: string,
+  ): Promise<void> {
+    if (rowsAffected > 0) {
+      return
+    }
+    await this.getApproval(approvalId)
+    throw new ApprovalAlreadyResolvedError(`Approval already resolved: ${approvalId}`)
   }
 }
 

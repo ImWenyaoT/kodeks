@@ -9,7 +9,7 @@
   --color-foreground: var(--foreground);
   /* HIG/Apple-first system font stacks: no web-font download. font-sans /
      font-mono utilities resolve to native UI fonts (SF on Apple, PingFang/Noto
-     for CJK, Segoe/YaHei on Windows). Geist injected by next/font is unused. */
+     for CJK, Segoe/YaHei on Windows). */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --font-heading: var(--font-sans);

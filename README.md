@@ -134,20 +134,54 @@ All checks run from `frontend/`:
 
 ```bash
 cd frontend
-npm test            # vitest (309 tests incl. oracle replay)
+npm test            # vitest (incl. oracle replay)
 npm run lint        # eslint
 npx tsc --noEmit    # typecheck
 npm run build       # next build
+npm run eval:live   # live model eval runner (requires a running Kodeks server)
+npm run release:check # test + lint + typecheck + build + live eval result gate
 ```
 
-CI runs the same gates (`.github/workflows/ci.yml`).
+CI runs the deterministic gates (`.github/workflows/ci.yml`). Releases should
+also pass `npm run release:check` with a fresh live eval result.
 
 ### Behavior parity (oracle)
 
 [`oracle/`](./oracle/README.md) holds golden behavior snapshots recorded from
 the original Python backend (event sequences, byte-exact SSE, audit rows) across
-14 scenarios. The TS tests replay them and assert byte-for-byte equivalence —
+10 scenarios. The TS tests replay them and assert byte-for-byte equivalence —
 this is how the migration proves the new runtime behaves identically to the old.
+
+### Live eval
+
+[`evals/live-coding-tasks.json`](./evals/live-coding-tasks.json) provides 63
+small real repair tasks. Start Kodeks against the same workspace used by the
+runner, then execute a sample:
+
+```bash
+cd frontend
+KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
+npm run eval:live -- --limit 5
+```
+
+Before a release, run the full suite and then gate the ignored local result:
+
+```bash
+cd frontend
+KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
+npm run eval:live -- --reset-workspace
+npm run release:check
+```
+
+For protected control APIs, pass `--control-token` or set
+`KODEKS_EVAL_CONTROL_TOKEN` / `KODEKS_CONTROL_TOKEN` before running
+`eval:live`.
+
+`release:check` fails if `evals/results/live-latest.json` is missing, older than
+72 hours, does not cover every manifest case, falls below the configured pass
+threshold, emits runtime errors, or changes protected verifier files. The
+threshold defaults are intentionally strict and can be relaxed only by explicit
+`KODEKS_LIVE_EVAL_*` environment overrides.
 
 ## Safety Model
 

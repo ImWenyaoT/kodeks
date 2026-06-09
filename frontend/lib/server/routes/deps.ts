@@ -12,6 +12,7 @@ import {
 } from '../storage'
 import {
   type Executor,
+  ExecutorUnavailableError,
   LocalExecutor,
   SandboxExecutor,
 } from '../execution'
@@ -28,7 +29,7 @@ export function resolveWorkspaceRoot(): string {
   if (override) {
     return resolve(override)
   }
-  return resolve(process.cwd())
+  return resolve(/* turbopackIgnore: true */ process.cwd())
 }
 
 /**
@@ -63,7 +64,7 @@ export function resolveArtifactStore(): ArtifactStore {
  * 判断当前 env 是否应启用 Vercel Sandbox 执行后端（纯函数，便于单测）。
  * 条件：运行在 Vercel（VERCEL 置位）且已配置 sandbox 鉴权——
  * 线上 OIDC（VERCEL_OIDC_TOKEN）或 access token（VERCEL_TOKEN）二者其一即可。
- * 不满足（本地开发、无鉴权）一律 false → 退回 LocalExecutor。
+ * 不满足（本地开发、无鉴权）一律 false；Vercel 缺鉴权由 resolveExecutor fail closed。
  * @param env 进程环境变量快照（注入以便测试，不直接读 process.env）；
  *   用 Record<string, string|undefined> 而非 NodeJS.ProcessEnv，便于测试传部分键的字面量对象。
  */
@@ -75,14 +76,29 @@ export function shouldUseSandboxExecutor(env: Record<string, string | undefined>
 
 /**
  * 选择命令执行后端（M6 后端切换）。
- * 满足 shouldUseSandboxExecutor → SandboxExecutor（Vercel microVM）；否则 LocalExecutor（本地，默认）。
- * 默认（无云 env）= 本地 child_process 后端，行为与 M3 完全一致。
+ * 满足 shouldUseSandboxExecutor → SandboxExecutor（Vercel microVM）。
+ * 本地默认 → LocalExecutor；Vercel 缺 sandbox 鉴权 → fail-closed executor。
  */
 export function resolveExecutor(): Executor {
   if (shouldUseSandboxExecutor(process.env)) {
     return new SandboxExecutor()
   }
+  if (process.env.VERCEL) {
+    return new UnavailableExecutor(
+      'Vercel Sandbox credentials are required for command execution.',
+    )
+  }
   return new LocalExecutor()
+}
+
+/** 缺少生产执行后端时的 fail-closed executor。 */
+class UnavailableExecutor implements Executor {
+  constructor(private readonly message: string) {}
+
+  /** 始终拒绝执行，避免云端静默回退到宿主 child_process。 */
+  async run(): Promise<never> {
+    throw new ExecutorUnavailableError(this.message)
+  }
 }
 
 /**

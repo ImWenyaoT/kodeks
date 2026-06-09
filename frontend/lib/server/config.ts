@@ -159,14 +159,14 @@ export function resolveKodeksConfigPath(env: RuntimeEnv = processEnv()): string 
     return userConfig
   }
   const workspaceConfig = joinPath(resolveKodeksWorkspaceConfigDir(env), CONFIG_FILE_NAME)
-  if (existsSync(workspaceConfig)) {
+  if (existsSync(/* turbopackIgnore: true */ workspaceConfig)) {
     return workspaceConfig
   }
-  if (existsSync(userConfig)) {
+  if (existsSync(/* turbopackIgnore: true */ userConfig)) {
     return userConfig
   }
   for (const candidate of legacyConfigCandidates(env)) {
-    if (existsSync(candidate)) {
+    if (existsSync(/* turbopackIgnore: true */ candidate)) {
       return candidate
     }
   }
@@ -179,7 +179,10 @@ export function resolveKodeksConfigPath(env: RuntimeEnv = processEnv()): string 
  */
 export function resolveKodeksWorkspaceConfigDir(env: RuntimeEnv = processEnv()): string {
   const workspaceRoot = stringValue(envGet(env, 'KODEKS_WORKSPACE_ROOT'))
-  const root = workspaceRoot !== undefined ? expanduser(workspaceRoot) : process.cwd()
+  const root =
+    workspaceRoot !== undefined
+      ? expanduser(workspaceRoot)
+      : /* turbopackIgnore: true */ process.cwd()
   return resolveDir(root, CONFIG_DIR_NAME)
 }
 
@@ -188,7 +191,10 @@ export function resolveKodeksWorkspaceConfigDir(env: RuntimeEnv = processEnv()):
  */
 export function resolveKodeksDotenvPath(env: RuntimeEnv = processEnv()): string {
   const workspaceRoot = stringValue(envGet(env, 'KODEKS_WORKSPACE_ROOT'))
-  const root = workspaceRoot !== undefined ? expanduser(workspaceRoot) : process.cwd()
+  const root =
+    workspaceRoot !== undefined
+      ? expanduser(workspaceRoot)
+      : /* turbopackIgnore: true */ process.cwd()
   return resolveDir(root, DOTENV_FILE_NAME)
 }
 
@@ -241,7 +247,7 @@ export function loadConfiguredModelCatalog(
 ): ConfiguredModelCatalog {
   const runtimeEnv = loadDotenvRuntimeEnv(env)
   const path = resolveKodeksConfigPath(runtimeEnv)
-  if (!existsSync(path)) {
+  if (!existsSync(/* turbopackIgnore: true */ path)) {
     return withDefaultModelCatalog({ primary: null, models: [] }, runtimeEnv)
   }
   const config = resolveConfigEnvVars(parseConfigFile(path), runtimeEnv) as Record<string, unknown>
@@ -273,7 +279,7 @@ function readModelConfigEnv(
   requestedModelRef: unknown,
 ): Record<string, string> {
   const path = resolveKodeksConfigPath(env)
-  if (!existsSync(path)) {
+  if (!existsSync(/* turbopackIgnore: true */ path)) {
     return {}
   }
   const config = resolveConfigEnvVars(parseConfigFile(path), env) as Record<string, unknown>
@@ -282,7 +288,7 @@ function readModelConfigEnv(
 
 /** 同步读取并 JSON 解析配置文件（复刻 Python `json.loads(path.read_text())`）。 */
 function parseConfigFile(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf-8'))
+  return JSON.parse(readFileSync(/* turbopackIgnore: true */ path, 'utf-8'))
 }
 
 /**
@@ -327,7 +333,7 @@ function loadDotenvRuntimeEnv(env: RuntimeEnv): Record<string, string | null | u
     return values
   }
   const path = resolveKodeksDotenvPath(values)
-  if (!existsSync(path)) {
+  if (!existsSync(/* turbopackIgnore: true */ path)) {
     return values
   }
   const dotenvValues = normalizeModelEnvAliases(readDotenvFile(path))
@@ -361,7 +367,7 @@ function normalizeModelEnvAliases(
  */
 function readDotenvFile(path: string): Record<string, string> {
   const values: Record<string, string> = {}
-  const text = readFileSync(path, 'utf-8')
+  const text = readFileSync(/* turbopackIgnore: true */ path, 'utf-8')
   for (const rawLine of splitLines(text)) {
     const parsed = parseDotenvLine(rawLine)
     if (parsed === undefined) {

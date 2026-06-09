@@ -8,7 +8,8 @@
 //    并 createApproval({command}) + auditLog.record(sid,'approval_required',{approvalId,command})。
 //  · read_memory_artifact 输出键序 ok,refId,artifact,content（artifact 字段展开）。
 //  · spawn_explore_agent 是确定性桩：session||'session_unknown'、listFiles(12)、evidence=visible[:5]、CERCN 逐字。
-//  · plan-mode 仅裁剪 schema、不在执行层加守卫；mutating/read_only 不驱动审批。
+//  · plan-mode schema 由 definitions(readOnlyOnly) 裁剪；执行层 allowlist 守卫在 agent/tool-loop.ts。
+//  · mutating/read_only 只驱动 mode allowlist，不替代 run_shell 审批。
 import {
   type ShellResult,
   ShellCommandTimeoutError,

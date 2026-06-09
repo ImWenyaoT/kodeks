@@ -36,8 +36,8 @@ export type AuditEventType = z.infer<typeof auditEventTypeSchema>
 /** 全部审计事件 type 元组（移植 contracts.py:28-42 AUDIT_EVENT_TYPES）。 */
 export const AUDIT_EVENT_TYPES = auditEventTypeSchema.options
 
-/** approval 状态机 4 值（移植 contracts.py:122）。 */
-export const approvalStatusSchema = z.enum(['pending', 'approved', 'rejected', 'executed'])
+/** approval 状态机：failed 表示已 claim 但执行后端失败/超时，避免尾部卡在 approved。 */
+export const approvalStatusSchema = z.enum(['pending', 'approved', 'rejected', 'executed', 'failed'])
 export type ApprovalStatus = z.infer<typeof approvalStatusSchema>
 
 /** plan 工件状态 2 值（移植 contracts.py:85）。 */

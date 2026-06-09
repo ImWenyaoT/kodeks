@@ -45,6 +45,24 @@ function ApprovalCard({
       <p className="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-foreground">
         {approval.message}
       </p>
+      {approval.command ? (
+        <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <div>
+            <dt className="sr-only">Command</dt>
+            <dd className="rounded-md bg-muted px-2 py-1 font-mono [overflow-wrap:anywhere] text-foreground">
+              {approval.command}
+            </dd>
+          </div>
+          {approval.commandHash ? (
+            <div>
+              <dt className="sr-only">Command hash</dt>
+              <dd className="font-mono [overflow-wrap:anywhere]">
+                sha256:{approval.commandHash}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
 
       {/* 动作区：批准（强调）+ 拒绝（描边）。文字 + 图标 + variant 三重区分，不依赖颜色。 */}
       <div className="mt-3 flex gap-2">

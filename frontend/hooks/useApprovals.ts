@@ -60,7 +60,13 @@ export function useApprovals(): ApprovalsApi {
       // 标记进入决策中（禁用该卡片按钮）。
       setDeciding(approvalId);
       try {
-        const res = await decideApproval(approvalId, decision);
+        const approval = useChatStore
+          .getState()
+          .approvals.find((item) => item.approvalId === approvalId);
+        if (decision === "approve" && !approval?.commandHash) {
+          throw new Error("Approval command hash is missing");
+        }
+        const res = await decideApproval(approvalId, decision, approval?.commandHash);
         // 从待审批列表移除该项。
         removeApproval(approvalId);
         // 推一条运行事件标记（最旧在前、最新在后；展示层负责倒序）。

@@ -10,11 +10,12 @@ import {
   isBlobUrl,
 } from './storage'
 import {
+  ExecutorUnavailableError,
   ExecutorTimeoutError,
   SandboxExecutor,
   withTimeout,
 } from './execution'
-import { shouldUseSandboxExecutor } from './routes/deps'
+import { resolveExecutor, shouldUseSandboxExecutor } from './routes/deps'
 
 describe('isBlobUrl 判定', () => {
   it('http/https URL 为真', () => {
@@ -99,6 +100,33 @@ describe('shouldUseSandboxExecutor 启用判定', () => {
 
   it('空 env（本地默认）→ 不启用', () => {
     expect(shouldUseSandboxExecutor({})).toBe(false)
+  })
+
+  it('Vercel 无 sandbox 鉴权时命令执行 fail closed', async () => {
+    const original = {
+      VERCEL: process.env.VERCEL,
+      VERCEL_OIDC_TOKEN: process.env.VERCEL_OIDC_TOKEN,
+      VERCEL_TOKEN: process.env.VERCEL_TOKEN,
+    }
+    try {
+      process.env.VERCEL = '1'
+      delete process.env.VERCEL_OIDC_TOKEN
+      delete process.env.VERCEL_TOKEN
+      await expect(
+        resolveExecutor().run(['node', '--version'], {
+          cwd: process.cwd(),
+          timeoutMs: 1000,
+          maxOutputBytes: 1024,
+        }),
+      ).rejects.toBeInstanceOf(ExecutorUnavailableError)
+    } finally {
+      if (original.VERCEL === undefined) delete process.env.VERCEL
+      else process.env.VERCEL = original.VERCEL
+      if (original.VERCEL_OIDC_TOKEN === undefined) delete process.env.VERCEL_OIDC_TOKEN
+      else process.env.VERCEL_OIDC_TOKEN = original.VERCEL_OIDC_TOKEN
+      if (original.VERCEL_TOKEN === undefined) delete process.env.VERCEL_TOKEN
+      else process.env.VERCEL_TOKEN = original.VERCEL_TOKEN
+    }
   })
 })
 

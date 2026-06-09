@@ -5,13 +5,14 @@
 //  · approval invalid/malformed → {error: '...'}（400）。
 // approve 副作用顺序固定（保真风险 7, 15）：approve → runApprovedCommand → markExecuted → audit。
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import {
   ApprovalAlreadyResolvedError,
   ApprovalNotFoundError,
   type KodeksDatabase,
 } from '../storage'
 import { runApprovedCommand, ShellCommandTimeoutError } from '../workspace'
-import { type Executor } from '../execution'
+import { ExecutorUnavailableError, type Executor } from '../execution'
 import { resolveExecutor } from './deps'
 
 /** 返回 strip 后的非空字符串，否则 null（移植 _string，approval_routes.py:104-107）。 */
@@ -37,6 +38,11 @@ function approvedCommand(value: unknown): string | null {
   return null
 }
 
+/** 返回命令字符串的 SHA256 digest，用于批准请求与待审批记录绑定。 */
+function commandHash(command: string): string {
+  return createHash('sha256').update(command).digest('hex')
+}
+
 /**
  * 读取一条审批记录（移植 get_approval，approval_routes.py:25-33）。
  * 200 {approval}；ApprovalNotFoundError → 404 {detail: str(exc)}。
@@ -60,7 +66,7 @@ export async function getApproval(
  * 决策一条审批（移植 decide_approval，approval_routes.py:35-91）。
  * reject → reject + audit approval_rejected + 200 {approval}；
  * decision !== 'approve'（且非 reject）→ 400 {error:'Invalid decision. Expected "approve" or "reject".'}；
- * approve → 取 pending；无可执行命令 → 400 {error:'Approval does not contain an executable command.'}；
+ * approve → 取 pending；无可执行命令 → 400；缺/错 command hash → 409；
  *   否则 approve → runApprovedCommand(workspaceRoot) → markExecuted → audit approval_executed → 200 {approval, result}。
  * 异常映射：NotFound 404 / AlreadyResolved 409 / ShellCommandTimeout 408（均 {detail}）。
  * @param executor 命令执行后端（M6 可注入）；默认 resolveExecutor()——本地 LocalExecutor、
@@ -99,17 +105,30 @@ export async function decideApproval(
         { status: 400 },
       )
     }
+    const expectedCommandHash = string(body.expectedCommandHash)
+    if (expectedCommandHash === null) {
+      return NextResponse.json({ detail: 'Approval command hash is required.' }, { status: 409 })
+    }
+    if (expectedCommandHash !== commandHash(command)) {
+      return NextResponse.json({ detail: 'Approval command hash mismatch.' }, { status: 409 })
+    }
     const approved = await database.approvals.approve(approvalId)
     // 透传 executor：本地默认 LocalExecutor；Vercel 上为 SandboxExecutor。runApprovedCommand 的
     // 后三个形参（timeoutMs/maxOutputBytes/parseFailureMessage）保持默认，仅末位 executor 注入。
-    const result = await runApprovedCommand(
-      command,
-      workspaceRoot,
-      undefined,
-      undefined,
-      undefined,
-      executor,
-    )
+    let result
+    try {
+      result = await runApprovedCommand(
+        command,
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        executor,
+      )
+    } catch (error) {
+      await database.approvals.markFailed(approvalId, errorMessage(error))
+      throw error
+    }
     const executed = await database.approvals.markExecuted(approvalId)
     await database.auditLog.record(approved.sessionId, 'approval_executed', {
       approvalId: approved.id,
@@ -129,6 +148,14 @@ export async function decideApproval(
     if (error instanceof ShellCommandTimeoutError) {
       return NextResponse.json({ detail: error.message }, { status: 408 })
     }
+    if (error instanceof ExecutorUnavailableError) {
+      return NextResponse.json({ detail: error.message }, { status: 503 })
+    }
     throw error
   }
+}
+
+/** 把未知错误转成持久化 reason。 */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

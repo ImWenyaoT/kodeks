@@ -72,6 +72,8 @@ beforeEach(() => {
   useChatStore.getState().pushApproval({
     approvalId: "ap-1",
     message: "Run `rm -rf build`?",
+    command: "rm -rf build",
+    commandHash: "hash-1",
   });
   decideApprovalMock.mockReset();
   decideApprovalMock.mockResolvedValue({
@@ -85,6 +87,8 @@ describe("ApprovalList", () => {
     renderList();
 
     expect(screen.getByText("Run `rm -rf build`?")).toBeInTheDocument();
+    expect(screen.getByText("rm -rf build")).toBeInTheDocument();
+    expect(screen.getByText("sha256:hash-1")).toBeInTheDocument();
     // 按钮以 aria-label（动作 + 消息上下文）命名。
     expect(
       screen.getByRole("button", { name: `${t.approve}: Run \`rm -rf build\`?` }),
@@ -105,7 +109,7 @@ describe("ApprovalList", () => {
 
     // 调用了带 "approve" 决策的 API。
     await waitFor(() =>
-      expect(decideApprovalMock).toHaveBeenCalledWith("ap-1", "approve"),
+      expect(decideApprovalMock).toHaveBeenCalledWith("ap-1", "approve", "hash-1"),
     );
 
     const s = useChatStore.getState();
@@ -130,7 +134,32 @@ describe("ApprovalList", () => {
     );
 
     await waitFor(() =>
-      expect(decideApprovalMock).toHaveBeenCalledWith("ap-1", "reject"),
+      expect(decideApprovalMock).toHaveBeenCalledWith("ap-1", "reject", "hash-1"),
+    );
+    expect(useChatStore.getState().approvals).toHaveLength(0);
+  });
+
+  // 点击拒绝：旧审批事件可能没有 commandHash，拒绝路径仍应能失败闭合。
+  it("rejects an approval even when the command hash is missing", async () => {
+    useChatStore.getState().reset();
+    useChatStore.getState().pushApproval({
+      approvalId: "ap-no-hash",
+      message: "Run unknown command?",
+      command: "unknown command",
+    });
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(
+      screen.getByRole("button", { name: `${t.reject}: Run unknown command?` }),
+    );
+
+    await waitFor(() =>
+      expect(decideApprovalMock).toHaveBeenCalledWith(
+        "ap-no-hash",
+        "reject",
+        undefined,
+      ),
     );
     expect(useChatStore.getState().approvals).toHaveLength(0);
   });

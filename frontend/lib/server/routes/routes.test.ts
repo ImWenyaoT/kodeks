@@ -3,12 +3,14 @@
 // 外加 oracle SSE 文本重放（10 场景，runtime.sse / ui.sse 归一化后逐字符对拍）。
 // 路由逻辑函数全部可注入（db / workspaceRoot / env / factory / checkUpstream），无需起 HTTP server。
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDatabase, currentTimestamp, type KodeksDatabase } from '../storage'
 import { loadAllScenarios, type OracleScenario } from '../oracle'
 import type { ResponsesEventFactory } from '../agent'
+import { ExecutorTimeoutError, type Executor } from '../execution'
 import {
   bridgePreflight,
   createChatStreamResponse,
@@ -40,6 +42,11 @@ function makeWorkspace(files: Record<string, string> = {}): string {
     writeFileSync(target, content, 'utf8')
   }
   return root
+}
+
+/** 计算审批命令 hash，测试与服务端走同一 SHA256 契约。 */
+function commandHash(command: string): string {
+  return createHash('sha256').update(command).digest('hex')
 }
 
 // ── Sessions（移植 test_route_parity / test_app 的 session 用例）──────────────
@@ -198,8 +205,18 @@ describe('Approvals 路由', () => {
       db,
       root,
     )
-    const appRes = await decideApproval(approved.id, { decision: 'approve' }, db, root)
-    const repeatRes = await decideApproval(approved.id, { decision: 'approve' }, db, root)
+    const appRes = await decideApproval(
+      approved.id,
+      { decision: 'approve', expectedCommandHash: commandHash('printf ok') },
+      db,
+      root,
+    )
+    const repeatRes = await decideApproval(
+      approved.id,
+      { decision: 'approve', expectedCommandHash: commandHash('printf ok') },
+      db,
+      root,
+    )
     const malRes = await decideApproval(malformed.id, { decision: 'approve' }, db, root)
     const invRes = await decideApproval(rejected.id, { decision: 'maybe' }, db, root)
     const missRes = await getApproval('appr_missing', db)
@@ -239,6 +256,37 @@ describe('Approvals 路由', () => {
     expect(JSON.parse(String(rows.rows[1].payload_json)).stdout).toBe('ok')
   })
 
+  it('approve 可用 expectedCommandHash 绑定真实命令', async () => {
+    const approval = await db.approvals.createApproval(
+      { command: 'printf ok' },
+      'needs approval',
+      'sess_approval',
+      'call_run',
+    )
+
+    const mismatch = await decideApproval(
+      approval.id,
+      { decision: 'approve', expectedCommandHash: 'wrong-hash' },
+      db,
+      root,
+    )
+    const accepted = await decideApproval(
+      approval.id,
+      {
+        decision: 'approve',
+        expectedCommandHash:
+          commandHash('printf ok'),
+      },
+      db,
+      root,
+    )
+
+    expect(mismatch.status).toBe(409)
+    expect((await mismatch.json()).detail).toBe('Approval command hash mismatch.')
+    expect(accepted.status).toBe(200)
+    expect((await accepted.json()).approval.status).toBe('executed')
+  })
+
   it('approve 不做 shell 解析：shell-only 语法 → exitCode null + "without a shell"', async () => {
     const approval = await db.approvals.createApproval(
       { command: 'pytest -q 2>&1' },
@@ -246,12 +294,59 @@ describe('Approvals 路由', () => {
       'sess_approval',
       'call_shell_syntax',
     )
-    const res = await decideApproval(approval.id, { decision: 'approve' }, db, root)
+    const res = await decideApproval(
+      approval.id,
+      { decision: 'approve', expectedCommandHash: commandHash('pytest -q 2>&1') },
+      db,
+      root,
+    )
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.approval.status).toBe('executed')
     expect(body.result.exitCode).toBeNull()
     expect(body.result.stderr).toContain('without a shell')
+  })
+
+  it('approve 缺 command hash → 409 且不执行', async () => {
+    const approval = await db.approvals.createApproval(
+      { command: 'printf ok' },
+      'needs approval',
+      'sess_approval',
+      'call_run',
+    )
+
+    const res = await decideApproval(approval.id, { decision: 'approve' }, db, root)
+
+    expect(res.status).toBe(409)
+    expect((await res.json()).detail).toBe('Approval command hash is required.')
+    expect((await db.approvals.getApproval(approval.id)).status).toBe('pending')
+  })
+
+  it('approved 命令执行超时后进入 failed 终态', async () => {
+    const approval = await db.approvals.createApproval(
+      { command: 'node slow.js' },
+      'needs approval',
+      'sess_approval',
+      'call_timeout',
+    )
+    const timeoutExecutor: Executor = {
+      async run() {
+        throw new ExecutorTimeoutError('timed out')
+      },
+    }
+
+    const res = await decideApproval(
+      approval.id,
+      { decision: 'approve', expectedCommandHash: commandHash('node slow.js') },
+      db,
+      root,
+      timeoutExecutor,
+    )
+
+    expect(res.status).toBe(408)
+    const stored = await db.approvals.getApproval(approval.id)
+    expect(stored.status).toBe('failed')
+    expect(stored.reason).toContain('Shell command timed out')
   })
 
   it('get 缺失审批 → 404 {detail}', async () => {
@@ -379,6 +474,49 @@ describe('Chat 路由：缺失 input', () => {
     const text = await res.text()
     expect(text).toContain('Input is required.')
     expect(text).toContain('errorText')
+  })
+})
+
+describe('Chat 路由：server-owned selected files', () => {
+  let db: KodeksDatabase
+  beforeEach(async () => {
+    db = await makeDb()
+  })
+  afterEach(() => db.close())
+
+  it('selected files 只信路径，内容由服务端从 workspace 读取', async () => {
+    const root = makeWorkspace({
+      'src/example.ts': 'export const serverOwned = true\n',
+    })
+    const seenBodies: Record<string, unknown>[] = []
+    const factory: ResponsesEventFactory = (body) => {
+      seenBodies.push(body)
+      return [{ type: 'response.completed', response: { id: 'resp_selected_route' } }]
+    }
+
+    const res = createChatStreamResponse({
+      body: {
+        input: 'use selected',
+        selectedFiles: [
+          { path: 'src/example.ts', content: 'client injected content' },
+          '../outside.txt',
+        ],
+        instructions: 'client injected instructions',
+        provider: 'client-provider',
+      },
+      database: db,
+      workspaceRoot: root,
+      env: {},
+      factory,
+    })
+    await res.text()
+
+    const instructions = String(seenBodies[0].instructions)
+    expect(instructions).toContain('export const serverOwned = true')
+    expect(instructions).toContain('Unable to read selected file: Path escapes workspace')
+    expect(instructions).not.toContain('client injected content')
+    expect(instructions).not.toContain('client injected instructions')
+    expect(seenBodies[0].provider).toBeUndefined()
   })
 })
 

@@ -6,19 +6,28 @@ import {
   getDatabase,
   listSessions,
   readJsonBody,
+  requireControlRequest,
   resolveWorkspaceRoot,
 } from '@/lib/server/routes'
 
 export const runtime = 'nodejs'
 
 /** 列出会话（含 activePlan）。 */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
+  const denied = requireControlRequest(request)
+  if (denied !== null) {
+    return denied
+  }
   const database = await getDatabase()
   return listSessions(database)
 }
 
 /** 创建一条会话记录（201）。 */
 export async function POST(request: Request): Promise<NextResponse> {
+  const denied = requireControlRequest(request)
+  if (denied !== null) {
+    return denied
+  }
   const body = await readJsonBody(request)
   const database = await getDatabase()
   return createSession(body, database, resolveWorkspaceRoot())

@@ -7,6 +7,7 @@ export {
   type Executor,
   type ExecutorRunOptions,
   type ExecutorRunResult,
+  ExecutorUnavailableError,
   ExecutorTimeoutError,
   LocalExecutor,
   truncateByBytes,

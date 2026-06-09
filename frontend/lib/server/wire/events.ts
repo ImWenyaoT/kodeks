@@ -55,6 +55,8 @@ export const rawEventSchema = z.discriminatedUnion('type', [
     approval_id: z.string(),
     tool_call_id: z.string(),
     message: z.string(),
+    command: z.string(),
+    command_hash: z.string(),
     session_id: z.string(),
   }),
   z.object({
@@ -120,6 +122,8 @@ export const uiEventSchema = z.discriminatedUnion('type', [
     approvalId: z.string(),
     toolCallId: z.string(),
     message: z.string(),
+    command: z.string(),
+    commandHash: z.string(),
     sessionId: z.string(),
   }),
   z.object({ type: z.literal('finish'), responseId: z.string(), sessionId: z.string() }),
@@ -199,6 +203,8 @@ export function toUiTransportPayload(event: Record<string, unknown>): Record<str
         approvalId: s(event.approval_id),
         toolCallId: s(event.tool_call_id),
         message: s(event.message),
+        command: s(event.command),
+        commandHash: s(event.command_hash),
         sessionId,
       }
     case 'response_completed':

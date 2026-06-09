@@ -24,6 +24,7 @@ export { listSessions, createSession, getSession } from './sessions'
 
 // approvals
 export { getApproval, decideApproval } from './approvals'
+export { requireControlRequest } from './control'
 
 // workspace
 export { filesList } from './workspace'

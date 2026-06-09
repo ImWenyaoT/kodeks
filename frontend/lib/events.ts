@@ -5,7 +5,14 @@ export type RuntimeEvent =
   | { type: "assistant_status"; message: string }
   | { type: "tool_call"; toolCallId: string; toolName: string; args: unknown }
   | { type: "tool_result"; toolCallId: string; toolName: string; output: string; status: string }
-  | { type: "approval_required"; approvalId: string; toolCallId: string; message: string }
+  | {
+      type: "approval_required";
+      approvalId: string;
+      toolCallId: string;
+      message: string;
+      command: string;
+      commandHash: string;
+    }
   | { type: "plan_artifact"; raw: Record<string, unknown> }
   | { type: "memory_recalled"; raw: Record<string, unknown> }
   | { type: "response_completed"; responseId: string }
@@ -27,7 +34,14 @@ export function parseRuntimeEvent(data: string): RuntimeEvent | null {
     case "tool_result":
       return { type: "tool_result", toolCallId: s(r.tool_call_id), toolName: s(r.tool_name), output: s(r.tool_output), status: s(r.tool_status) };
     case "approval_required":
-      return { type: "approval_required", approvalId: s(r.approval_id), toolCallId: s(r.tool_call_id), message: s(r.message) };
+      return {
+        type: "approval_required",
+        approvalId: s(r.approval_id),
+        toolCallId: s(r.tool_call_id),
+        message: s(r.message),
+        command: s(r.command),
+        commandHash: s(r.command_hash),
+      };
     case "plan_artifact": return { type: "plan_artifact", raw: r };
     case "memory_recalled": return { type: "memory_recalled", raw: r };
     case "response_completed": return { type: "response_completed", responseId: s(r.response_id) };

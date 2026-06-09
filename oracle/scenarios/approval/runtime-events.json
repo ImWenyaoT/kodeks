@@ -30,6 +30,8 @@
     "approval_id": "appr_6000973a6c344ea6ac628c55e7b15e48",
     "tool_call_id": "call_shell",
     "message": "Command requires approval",
+    "command": "rm -rf output",
+    "command_hash": "b73dc5e7188632907365608ca3fb04afd5db2ebead473c2c1d00ee8f29b0ebbb",
     "session_id": "sess_approval"
   }
 ]

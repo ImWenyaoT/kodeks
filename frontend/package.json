@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "eval:live": "node scripts/run-live-evals.mjs",
+    "eval:live:check": "node scripts/check-live-eval-result.mjs",
+    "release:check": "npm test && npm run lint && npx tsc --noEmit && npm run build && npm run eval:live:check",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -47,5 +50,8 @@
     "typescript": "^5",
     "vitest": "^4.1.8",
     "vitest-axe": "^0.1.0"
+  },
+  "overrides": {
+    "postcss": "8.5.15"
   }
 }

@@ -54,6 +54,14 @@ export class ExecutorTimeoutError extends Error {
   }
 }
 
+/** 执行后端不可用：用于云端缺 sandbox 鉴权时 fail closed。 */
+export class ExecutorUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ExecutorUnavailableError'
+  }
+}
+
 /**
  * 把文本按 UTF-8 字节预算截断（移植 Python _truncate，workspace.py:281-287）。
  * 字节数 <= max 时原样返回；超出则取前 max 字节后用 TextDecoder（fatal:false）解码，

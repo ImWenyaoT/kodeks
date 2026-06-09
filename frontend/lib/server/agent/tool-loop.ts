@@ -9,6 +9,7 @@
 //  · status==ok 才经 compactToolResult（阈值 env KODEKS_MEMORY_ARTIFACT_THRESHOLD_BYTES 默认 4096，max(1,value)）。
 //  · mapped_status != approval_required 才把记录追加进 toolCalls/toolMessages（approval 不进 continuation）。
 //  · approval_id=parsed.approvalId||""；message=parsed.reason||"Command requires approval"。
+import { createHash } from 'node:crypto'
 import type { KodeksDatabase } from '../storage'
 import type { RuntimeEnv } from '../config'
 import type {
@@ -69,6 +70,7 @@ export type RuntimeEvent = Record<string, unknown>
  * @param runtimeEnv 运行时 env（读取压缩阈值）
  * @param sessionId 当前会话 id
  * @param toolState 本轮工具状态机（就地更新）
+ * @param allowedToolNames 当前模式允许执行的工具名集合；null 表示只检查注册表
  */
 export async function* handleOutputItem(
   item: unknown,
@@ -78,6 +80,7 @@ export async function* handleOutputItem(
   runtimeEnv: RuntimeEnv,
   sessionId: string,
   toolState: ToolRoundState,
+  allowedToolNames: ReadonlySet<string> | null = null,
 ): AsyncGenerator<RuntimeEvent> {
   if (!isDict(item) || item.type !== 'function_call') {
     return
@@ -119,6 +122,25 @@ export async function* handleOutputItem(
       session_id: sessionId,
     }
     yield errorEvent(output, sessionId, 'model_requested_unknown_tool')
+    return
+  }
+  if (allowedToolNames !== null && !allowedToolNames.has(toolName)) {
+    const output = `Tool not allowed in the current mode: ${toolName}`
+    toolState.haltToolLoop = true
+    await database.auditLog.record(sessionId, 'tool_failed', {
+      toolCallId,
+      toolName,
+      reason: output,
+    })
+    yield {
+      type: 'tool_result',
+      tool_call_id: toolCallId,
+      tool_name: toolName,
+      tool_status: 'error',
+      tool_output: output,
+      session_id: sessionId,
+    }
+    yield errorEvent(output, sessionId, 'tool_not_allowed_in_mode')
     return
   }
   const result = await registry.execute(toolName, toolArguments, {
@@ -169,6 +191,8 @@ export async function* handleOutputItem(
       approval_id: String(parsedOutput.approvalId || ''),
       tool_call_id: toolCallId,
       message: String(parsedOutput.reason || 'Command requires approval'),
+      command: String(parsedOutput.command || ''),
+      command_hash: commandHash(String(parsedOutput.command || '')),
       session_id: sessionId,
     }
   }
@@ -278,6 +302,11 @@ function errorEvent(message: string, sessionId: string, code = 'runtime_error'):
     code,
     session_id: sessionId,
   }
+}
+
+/** 返回审批命令的 SHA256 digest，用于 UI 展示与批准时绑定。 */
+function commandHash(command: string): string {
+  return createHash('sha256').update(command).digest('hex')
 }
 
 /** 复刻 Python `isinstance(x, dict)`：普通对象（非 null、非数组）。 */

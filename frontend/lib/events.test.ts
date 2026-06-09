@@ -8,8 +8,16 @@ describe("parseRuntimeEvent", () => {
     expect(e).toEqual({ type: "text_delta", delta: "hi" });
   });
   it("parses approval_required", () => {
-    const e = parseRuntimeEvent('{"type":"approval_required","approval_id":"a1","message":"run?"}');
-    expect(e).toMatchObject({ type: "approval_required", approvalId: "a1", message: "run?" });
+    const e = parseRuntimeEvent(
+      '{"type":"approval_required","approval_id":"a1","message":"run?","command":"rm -rf build","command_hash":"abc"}',
+    );
+    expect(e).toMatchObject({
+      type: "approval_required",
+      approvalId: "a1",
+      message: "run?",
+      command: "rm -rf build",
+      commandHash: "abc",
+    });
   });
 
   // tool_call：tool_call_id / tool_name 映射；缺省 tool_arguments 时 args 默认为 {}。

@@ -24,6 +24,8 @@ export type Mode = "act" | "plan";
 export interface Approval {
   approvalId: string;
   message: string;
+  command?: string;
+  commandHash?: string;
 }
 
 /** 可被浅合并的设置子集。 */

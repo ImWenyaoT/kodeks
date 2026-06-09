@@ -65,7 +65,12 @@ export function useChatStream(): ChatStreamApi {
           s.setSession(ev.sessionId);
           break;
         case "approval_required":
-          s.pushApproval({ approvalId: ev.approvalId, message: ev.message });
+          s.pushApproval({
+            approvalId: ev.approvalId,
+            message: ev.message,
+            command: ev.command,
+            commandHash: ev.commandHash,
+          });
           break;
         case "error":
           // 把错误同时呈现在助手气泡（便于用户看到）与运行事件流（携带 code）。

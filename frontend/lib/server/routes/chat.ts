@@ -10,6 +10,7 @@ import {
 import type { RuntimeEnv } from '../config'
 import type { KodeksDatabase } from '../storage'
 import { encodeSseFrame, toUiTransportPayload } from '../wire/events'
+import { WorkspaceService } from '../workspace'
 
 /** Chat 流响应构造参数（可注入 db/workspaceRoot/env/factory，便于单测 + oracle 重放）。 */
 export interface ChatStreamArgs {
@@ -37,7 +38,8 @@ export function createChatStreamResponse(args: ChatStreamArgs): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const event of runPythonChatTurn(body, database, workspaceRoot, env, factory)) {
+        const runtimeBody = bodyWithServerSelectedFiles(body, workspaceRoot)
+        for await (const event of runPythonChatTurn(runtimeBody, database, workspaceRoot, env, factory)) {
           const record = event as Record<string, unknown>
           controller.enqueue(encoder.encode(encodeSseFrame(String(record.type), record)))
         }
@@ -60,7 +62,8 @@ export function createChatUiResponse(args: ChatStreamArgs): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const event of runPythonChatTurn(body, database, workspaceRoot, env, factory)) {
+        const runtimeBody = bodyWithServerSelectedFiles(body, workspaceRoot)
+        for await (const event of runPythonChatTurn(runtimeBody, database, workspaceRoot, env, factory)) {
           const payload = toUiTransportPayload(event as Record<string, unknown>)
           if (payload !== null) {
             controller.enqueue(encoder.encode(encodeSseFrame(String(payload.type), payload)))
@@ -74,4 +77,63 @@ export function createChatUiResponse(args: ChatStreamArgs): Response {
   return new Response(stream, {
     headers: { 'Content-Type': 'text/event-stream' },
   })
+}
+
+/**
+ * 将 route 请求体降权为服务端可信上下文：selected files 只接受路径，由 WorkspaceService 读取内容。
+ */
+function bodyWithServerSelectedFiles(
+  body: Record<string, unknown>,
+  workspaceRoot: string,
+): Record<string, unknown> {
+  const nextBody: Record<string, unknown> = { ...body }
+  delete nextBody.instructions
+  delete nextBody.provider
+  const paths = selectedFilePaths(body)
+  if (paths.length === 0) {
+    delete nextBody.selectedFiles
+    delete nextBody.selected_files
+    return nextBody
+  }
+  const workspace = new WorkspaceService(workspaceRoot)
+  nextBody.selectedFiles = paths.map((path) => {
+    try {
+      return { path, content: workspace.readFile(path), truncated: false }
+    } catch (error) {
+      return { path, error: errorMessage(error) }
+    }
+  })
+  delete nextBody.selected_files
+  return nextBody
+}
+
+/** 从 camelCase/snake_case 请求字段提取去重后的 selected-file 路径。 */
+function selectedFilePaths(body: Record<string, unknown>): string[] {
+  const raw = Array.isArray(body.selected_files) ? body.selected_files : body.selectedFiles
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const paths: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const path =
+      typeof item === 'string'
+        ? item.trim()
+        : item !== null &&
+            typeof item === 'object' &&
+            !Array.isArray(item) &&
+            typeof (item as { path?: unknown }).path === 'string'
+          ? String((item as { path: string }).path).trim()
+          : ''
+    if (path && !seen.has(path)) {
+      seen.add(path)
+      paths.push(path)
+    }
+  }
+  return paths
+}
+
+/** 把未知错误转成 route-safe message。 */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
