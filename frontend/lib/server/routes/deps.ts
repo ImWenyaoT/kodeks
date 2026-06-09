@@ -95,6 +95,11 @@ export function getDatabase(): Promise<KodeksDatabase> {
     databasePromise = createDatabase(resolveDatabaseUrl(), {
       artifactStore: resolveArtifactStore(),
       authToken: process.env.TURSO_AUTH_TOKEN,
+    }).catch((error: unknown) => {
+      // 首次建库失败时不要把 rejected Promise 永久缓存,否则进程级永久不可用(尤其 Turso 网络抖动);
+      // 重置为 null 让下一次请求重试(对齐 Python app.py database() 闭包失败不缓存、下次重建的语义)。
+      databasePromise = null
+      throw error
     })
   }
   return databasePromise

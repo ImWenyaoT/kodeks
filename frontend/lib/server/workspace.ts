@@ -9,9 +9,9 @@
 //  · parseCommandArgs 自实现引号分词（仅 '/" 引号、空白分隔、未闭合→null），不用 shell-quote 库。
 //  · listFiles 排序+剪枝：dir 与 file 名均排序，原地剪枝黑名单目录避免下钻，POSIX 相对路径，limit 截断。
 //  · 写入/字节截断按 UTF-8 字节（Buffer.byteLength），不是 string.length。
-import { type Dirent, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { type Dirent, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   type Executor,
   ExecutorTimeoutError,
@@ -149,6 +149,30 @@ function pathParts(relativePath: string): string[] {
   return relativePath.split(/[\\/]/).filter((part) => part.length > 0 && part !== '.')
 }
 
+/**
+ * 解析路径的真实形态（跟随符号链接）；对不存在的尾部按词法拼接——复刻 Python `Path.resolve(strict=False)`。
+ * 词法 `path.resolve` 不跟随符号链接,故工作区内的目录符号链接（如 `link -> /etc`）能逃逸边界;
+ * 这里把已存在的最长前缀解析为真实路径、再拼回不存在的尾部,用于做"真实路径"越界判定。
+ */
+function realResolveExisting(target: string): string {
+  let current = target
+  const tail: string[] = []
+  for (;;) {
+    try {
+      const real = realpathSync(current)
+      return tail.length > 0 ? join(real, ...tail.reverse()) : real
+    } catch {
+      const parent = dirname(current)
+      if (parent === current) {
+        // 上溯到文件系统根仍无可解析项（理论上 '/' 总能解析）；回退为词法 target。
+        return target
+      }
+      tail.push(basename(current))
+      current = parent
+    }
+  }
+}
+
 /** 限定在单一授权项目根内的文件与列举访问（移植 WorkspaceService，workspace.py:87-152）。 */
 export class WorkspaceService {
   /** 解析后的绝对工作区根。 */
@@ -190,6 +214,20 @@ export class WorkspaceService {
     }
     if (isBlockedWorkspacePath(parts)) {
       throw new WorkspacePathError('Path is blocked')
+    }
+    // 符号链接逃逸防护（复刻 Python `Path.resolve()` 跟随符号链接的语义）：
+    // 词法越界检查只看路径字面量,工作区内的目录符号链接（如 link -> /etc）可绕过它;
+    // 这里把 root 与 target 都解析为真实路径后再判一次越界,堵住这类逃逸。
+    let realRoot: string
+    try {
+      realRoot = realpathSync(this.root)
+    } catch {
+      // root 尚不存在时退回词法 root（Python resolve 对不存在路径同样按词法处理,不报越界）。
+      realRoot = this.root
+    }
+    const realRel = relative(realRoot, realResolveExisting(target))
+    if (realRel.startsWith('..' + sep) || realRel === '..' || isAbsolute(realRel)) {
+      throw new WorkspacePathError('Path escapes workspace')
     }
     return target
   }

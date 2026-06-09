@@ -127,8 +127,14 @@ export async function createDatabase(
       ? { url, authToken: options.authToken }
       : { url },
   )
-  await configureConnection(connection)
-  await initializeSchema(connection)
+  try {
+    await configureConnection(connection)
+    await initializeSchema(connection)
+  } catch (error) {
+    // 初始化失败:关闭已建连接,避免泄漏文件句柄/TCP 连接(serverless 下尤甚);再上抛。
+    connection.close()
+    throw error
+  }
   const artifactStore = options.artifactStore ?? new LocalFileArtifactStore(process.cwd())
   return new KodeksDatabase(connection, artifactStore)
 }

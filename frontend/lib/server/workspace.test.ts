@@ -3,7 +3,7 @@
 // workspace/shell 用例（忽略 storage 用例——已在 M2 完成）。
 // shell 执行用例把 Python 解释器换成 node 以可移植；truncation 用例同理。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -52,6 +52,31 @@ describe('Workspace 沙箱（移植 test_workspace_blocks_internal_paths_and_lis
     expect(() => workspace.readFile('../outside.txt')).toThrow(WorkspacePathError)
     expect(() => workspace.readFile('.git/config')).toThrow(WorkspacePathError)
     expect(() => workspace.readFile('.env.backup')).toThrow(WorkspacePathError)
+  })
+})
+
+describe('符号链接逃逸防护（P0 安全回退修复回归）', () => {
+  it('工作区内的目录符号链接不能逃逸沙箱', () => {
+    const root = makeWorkspaceDir()
+    const outside = makeWorkspaceDir()
+    writeFileSync(join(outside, 'secret.txt'), 'TOP SECRET\n')
+    // 在工作区内建一个指向外部目录的符号链接（词法检查通过,但真实路径越界）。
+    symlinkSync(outside, join(root, 'link'))
+    const workspace = new WorkspaceService(root)
+
+    // 经目录符号链接读外部文件必须被拦截。
+    expect(() => workspace.readFile('link/secret.txt')).toThrow(WorkspacePathError)
+    // 直接指向外部文件的符号链接同样拦截。
+    symlinkSync(join(outside, 'secret.txt'), join(root, 'secretlink'))
+    expect(() => workspace.readFile('secretlink')).toThrow(WorkspacePathError)
+  })
+
+  it('工作区内的正常文件（非符号链接）仍可读', () => {
+    const root = makeWorkspaceDir()
+    mkdirSync(join(root, 'sub'))
+    writeFileSync(join(root, 'sub', 'a.txt'), 'hello\n')
+    const workspace = new WorkspaceService(root)
+    expect(workspace.readFile('sub/a.txt')).toBe('hello\n')
   })
 })
 
