@@ -1,0 +1,17 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_pseudo"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Sure: <tool_call>{\"name\":\"x\"}</tool_call>",
+    "session_id": "sess_pseudo"
+  },
+  {
+    "type": "error",
+    "message": "Model returned tool-call text instead of a native function_call event.",
+    "code": "model_returned_pseudo_tool_call",
+    "session_id": "sess_pseudo"
+  }
+]

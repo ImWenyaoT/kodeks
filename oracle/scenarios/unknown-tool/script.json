@@ -1,0 +1,20 @@
+[
+  [
+    {
+      "type": "response.output_item.done",
+      "item": {
+        "type": "function_call",
+        "call_id": "call_glob",
+        "name": "glob",
+        "arguments": "{\"pattern\": \"**/*.ts\"}"
+      }
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_unknown",
+        "status": "completed"
+      }
+    }
+  ]
+]

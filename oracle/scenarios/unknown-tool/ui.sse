@@ -1,0 +1,15 @@
+event: session
+data: {"type":"session","sessionId":"sess_unknown"}
+
+event: status
+data: {"type":"status","message":"Using glob","sessionId":"sess_unknown"}
+
+event: tool-call
+data: {"type":"tool-call","toolCallId":"call_glob","toolName":"glob","args":{"pattern":"**/*.ts"},"sessionId":"sess_unknown"}
+
+event: tool-result
+data: {"type":"tool-result","toolCallId":"call_glob","toolName":"glob","result":"Unknown tool requested by model: glob","status":"error","sessionId":"sess_unknown"}
+
+event: error
+data: {"type":"error","errorText":"Unknown tool requested by model: glob","code":"model_requested_unknown_tool","sessionId":"sess_unknown"}
+

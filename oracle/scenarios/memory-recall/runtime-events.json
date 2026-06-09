@@ -1,0 +1,26 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_memory"
+  },
+  {
+    "type": "memory_recalled",
+    "memory_ids": [
+      "atom_8db674d498824df1994d4be25786252b"
+    ],
+    "memory_layers": {
+      "atom": 1
+    },
+    "session_id": "sess_memory"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Plan mode is read-only.",
+    "session_id": "sess_memory"
+  },
+  {
+    "type": "response_completed",
+    "response_id": "resp_memory",
+    "session_id": "sess_memory"
+  }
+]

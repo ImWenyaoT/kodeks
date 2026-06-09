@@ -1,0 +1,9 @@
+{
+  "workspaceFiles": {
+    "large.txt": "memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body memory artifact body "
+  },
+  "env": {
+    "KODEKS_MEMORY_ARTIFACT_THRESHOLD_BYTES": "64"
+  },
+  "seedMemories": []
+}

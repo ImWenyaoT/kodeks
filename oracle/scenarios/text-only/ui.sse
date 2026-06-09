@@ -1,0 +1,12 @@
+event: session
+data: {"type":"session","sessionId":"sess_text"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"\u4f60\u597d\uff0c","sessionId":"sess_text"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"world\u3002","sessionId":"sess_text"}
+
+event: finish
+data: {"type":"finish","responseId":"resp_text","sessionId":"sess_text"}
+

@@ -1,0 +1,30 @@
+event: session
+data: {"type":"session","sessionId":"sess_multi"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Reading the first file...","sessionId":"sess_multi"}
+
+event: status
+data: {"type":"status","message":"Using read_file","sessionId":"sess_multi"}
+
+event: tool-call
+data: {"type":"tool-call","toolCallId":"call_a","toolName":"read_file","args":{"path":"README.md"},"sessionId":"sess_multi"}
+
+event: tool-result
+data: {"type":"tool-result","toolCallId":"call_a","toolName":"read_file","result":"{\"ok\":true,\"path\":\"README.md\",\"content\":\"first file\\n\"}","status":"ok","sessionId":"sess_multi"}
+
+event: status
+data: {"type":"status","message":"Using read_file","sessionId":"sess_multi"}
+
+event: tool-call
+data: {"type":"tool-call","toolCallId":"call_b","toolName":"read_file","args":{"path":"AGENTS.md"},"sessionId":"sess_multi"}
+
+event: tool-result
+data: {"type":"tool-result","toolCallId":"call_b","toolName":"read_file","result":"{\"ok\":true,\"path\":\"AGENTS.md\",\"content\":\"second file\\n\"}","status":"ok","sessionId":"sess_multi"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Read both files.","sessionId":"sess_multi"}
+
+event: finish
+data: {"type":"finish","responseId":"resp_multi_final","sessionId":"sess_multi"}
+

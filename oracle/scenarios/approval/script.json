@@ -1,0 +1,20 @@
+[
+  [
+    {
+      "type": "response.output_item.done",
+      "item": {
+        "type": "function_call",
+        "call_id": "call_shell",
+        "name": "run_shell",
+        "arguments": "{\"command\": \"rm -rf output\"}"
+      }
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_approval",
+        "status": "completed"
+      }
+    }
+  ]
+]

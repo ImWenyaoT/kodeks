@@ -1,0 +1,43 @@
+[
+  {
+    "type": "session_created",
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Reading...",
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "assistant_status",
+    "message": "Using read_file",
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "tool_call",
+    "tool_call_id": "call_read",
+    "tool_name": "read_file",
+    "tool_arguments": {
+      "path": "README.md"
+    },
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "tool_result",
+    "tool_call_id": "call_read",
+    "tool_name": "read_file",
+    "tool_status": "ok",
+    "tool_output": "{\"ok\":true,\"path\":\"README.md\",\"content\":\"hello from workspace\\n\"}",
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "text_delta",
+    "delta": "Done.",
+    "session_id": "sess_tool"
+  },
+  {
+    "type": "response_completed",
+    "response_id": "resp_final",
+    "session_id": "sess_tool"
+  }
+]

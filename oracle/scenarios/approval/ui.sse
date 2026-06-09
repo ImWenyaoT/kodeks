@@ -1,0 +1,15 @@
+event: session
+data: {"type":"session","sessionId":"sess_approval"}
+
+event: status
+data: {"type":"status","message":"Using run_shell","sessionId":"sess_approval"}
+
+event: tool-call
+data: {"type":"tool-call","toolCallId":"call_shell","toolName":"run_shell","args":{"command":"rm -rf output"},"sessionId":"sess_approval"}
+
+event: tool-result
+data: {"type":"tool-result","toolCallId":"call_shell","toolName":"run_shell","result":"{\"ok\":false,\"approvalRequired\":true,\"approvalId\":\"appr_6000973a6c344ea6ac628c55e7b15e48\",\"status\":\"pending\",\"reason\":\"Command requires approval\",\"command\":\"rm -rf output\"}","status":"approval_required","sessionId":"sess_approval"}
+
+event: approval-required
+data: {"type":"approval-required","approvalId":"appr_6000973a6c344ea6ac628c55e7b15e48","toolCallId":"call_shell","message":"Command requires approval","sessionId":"sess_approval"}
+

@@ -1,0 +1,6 @@
+event: session
+data: {"type":"session","sessionId":"sess_error"}
+
+event: error
+data: {"type":"error","errorText":"upstream stream error","code":"runtime_error","sessionId":"sess_error"}
+

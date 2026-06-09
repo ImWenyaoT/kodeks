@@ -9,39 +9,35 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Python runtime checks
+  frontend:
+    name: TypeScript runtime checks
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install Python dependencies
-        run: uv sync
+      - name: Install dependencies
+        run: npm ci
 
       - name: Typecheck
-        run: uv run mypy
+        run: npx tsc --noEmit
 
       - name: Lint
-        run: uv run ruff check
+        run: npm run lint
 
       - name: Test
-        run: uv run pytest
+        run: npm test
 
-      - name: Agent evals
-        run: uv run python evals/run_local.py --quiet
-
-      - name: Smoke
-        run: uv run python -m kodeks.smoke --in-process
-
-      - name: Build package
-        run: uv build
+      - name: Build
+        run: npm run build

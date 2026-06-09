@@ -1,6 +1,11 @@
 # Kodeks 架构说明
 
-Kodeks 是一个 local-first 的 coding agent workbench。用户界面、HTTP API、chat runtime 和本地工具执行都由 Python/FastAPI 服务承载。你可以先把它理解成：
+> ⚠️ **本文档描述的是已退役的 Python/FastAPI 运行时(概念设计仍有参考价值)。** 当前运行时已迁移为
+> 单个 Next.js 全栈应用:HTTP 路由是 `frontend/app/api/**/route.ts`,运行时逻辑在 `frontend/lib/server/`
+> (bridge/storage/tools/agent/routes/wire),持久化用 libSQL。行为与本文所述 Python 版字节级一致
+> (由 [`oracle/`](../oracle/README.md) 钉死)。最新结构见 [README](../README.zh-CN.md)。
+
+Kodeks 是一个 local-first 的 coding agent workbench。HTTP API、chat runtime 和本地工具执行都由 Python/FastAPI 服务承载；浏览器 UI 是一个 Next.js static export，构建产物放在 `src/kodeks/static/`，由同一个 FastAPI 进程通过 `StaticFiles` mount 直接 serve。你可以先把它理解成：
 
 ```text
 agent = LLM + harness
@@ -31,7 +36,7 @@ Web search、重复的 stream 协议、provider dashboard 和大型 plugin surfa
 
 默认 chat 请求的主路径是：
 
-1. 浏览器打开 FastAPI 服务的 `/` Python-hosted UI。
+1. 浏览器打开 FastAPI `StaticFiles` mount 在 `/` 上 serve 的 Next.js static export UI。
 2. 浏览器把用户输入 POST 到 Python `/api/chat/stream`。
 3. `src/kodeks/app.py` 的 FastAPI route 接收请求并打开同一 SSE stream contract。
 4. `src/kodeks/runtime.py` 创建 runtime context，包括 workspace、model options、storage repositories、memory、plan artifact、harness pattern 和 tool services。
@@ -59,13 +64,15 @@ UI
 1. 运行 `uv run kodeks-server --reload`。
 2. 打开 `http://127.0.0.1:8000`。
 
+UI 在这里只是既有 `/api` + SSE contract 的纯客户端：它不承载 runtime 逻辑，只负责发请求和渲染事件。它的源码在 `frontend/`，由 `./scripts/build-frontend.sh` 跑 `next build` static export 后同步进 `src/kodeks/static/`，该目录会进入 Git；运行 kodeks 本身不需要 Node。
+
 ## 推荐阅读顺序
 
 建议按下面的顺序理解现有系统：
 
 1. `docs/architecture.md`：先建立全局地图。
 2. `src/kodeks/app.py`：看 HTTP route、FastAPI app assembly 和默认 UI。
-3. `src/kodeks/static/index.html`：看 browser shell。
+3. `frontend/`：看 Next.js（TypeScript + Tailwind + shadcn/ui）UI 源码，构建后的 static export 在 `src/kodeks/static/`。
 4. `src/kodeks/runtime.py`：看一轮 chat turn 如何准备 session、memory、tools 和 SSE events。
 5. `src/kodeks/harness.py`：看固定 harness pattern 如何对抗半途而废、自证偏见和目标漂移。
 6. `src/kodeks/responses_runtime.py`：看 Responses-shaped event stream 和工具续跑循环。

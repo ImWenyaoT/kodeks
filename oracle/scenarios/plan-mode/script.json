@@ -1,0 +1,15 @@
+[
+  [
+    {
+      "type": "response.output_text.delta",
+      "delta": "# Storage plan\n\nPersist a plan artifact.\n\n1. Add a plans table\n2. Restore it next turn"
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_plan",
+        "status": "completed"
+      }
+    }
+  ]
+]

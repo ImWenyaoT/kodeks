@@ -1,0 +1,44 @@
+[
+  {
+    "event_type": "turn_started",
+    "payload": {
+      "mode": "plan",
+      "resumed": true
+    }
+  },
+  {
+    "event_type": "harness_pattern_selected",
+    "payload": {
+      "pattern": "single_turn",
+      "reasons": [
+        "plan mode keeps ordinary planning read-only and compact"
+      ],
+      "failureModes": [
+        "goal_drift"
+      ],
+      "stopCondition": "stop after a clear plan artifact is produced",
+      "approvalBoundary": "Subagents are read-only by default; workspace mutation, shell risk, and memory rule changes return to the main agent or user approval.",
+      "subagentContract": {
+        "claim": "state the explored conclusion",
+        "evidence": "name files, memories, or tool outputs inspected",
+        "risk": "surface uncertainty or missing evidence",
+        "confidence": "low, medium, or high",
+        "nextAction": "recommend the next bounded action"
+      }
+    }
+  },
+  {
+    "event_type": "plan_checkpointed",
+    "payload": {
+      "planId": "plan_e8ec386391314e92bcb18feb859539d0",
+      "sourceMessageId": "msg_f668d6df10b242c0af752e448b5435fb"
+    }
+  },
+  {
+    "event_type": "turn_completed",
+    "payload": {
+      "responseId": "resp_plan",
+      "assistantBytes": 86
+    }
+  }
+]

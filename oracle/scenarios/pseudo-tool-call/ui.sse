@@ -1,0 +1,9 @@
+event: session
+data: {"type":"session","sessionId":"sess_pseudo"}
+
+event: text-delta
+data: {"type":"text-delta","delta":"Sure: <tool_call>{\"name\":\"x\"}</tool_call>","sessionId":"sess_pseudo"}
+
+event: error
+data: {"type":"error","errorText":"Model returned tool-call text instead of a native function_call event.","code":"model_returned_pseudo_tool_call","sessionId":"sess_pseudo"}
+
