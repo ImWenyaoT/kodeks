@@ -5,13 +5,15 @@ small: a coding agent with memory, multi-session state, subagent exploration,
 plan mode, workspace tools, human approval, and a protocol adapter for
 OpenAI-compatible Chat Completions, with DeepSeek as the default upstream.
 
-> **Runtime: TypeScript / Next.js.** kodeks was migrated from its original
-> Python/FastAPI backend to a single Next.js full-stack app (App Router route
-> handlers + `frontend/lib/server`). Behavior parity with the Python original is
-> pinned by byte-level golden fixtures under [`oracle/`](./oracle/README.md). The
-> Python sources have been retired; see git history if you need them.
+> **Runtime: Python/FastAPI backend + Next.js frontend (two processes).** The
+> HTTP API, chat runtime, and local tool execution run as a Python/FastAPI
+> service (`src/kodeks/**`, port 8000). The browser UI is a separate Next.js/React
+> app (`frontend/`, port 3000) that reverse-proxies `/api/*` to the Python backend
+> via `frontend/next.config.ts` rewrites — the browser stays same-origin, so no
+> CORS is needed. Behavior is pinned by byte-level golden fixtures under
+> [`oracle/`](./oracle/README.md).
 
-[中文 README](./README.zh-CN.md) · [Architecture](./docs/architecture.md) · [Deploy](./frontend/DEPLOY.md) · [Oracle fixtures](./oracle/README.md)
+[中文 README](./README.zh-CN.md) · [Architecture](./docs/architecture.md) · [Product requirements](./docs/PRD.md) · [Concept map](./docs/concepts-map.md) · [Deploy](./frontend/DEPLOY.md) · [Oracle fixtures](./oracle/README.md)
 
 ## Product Boundary
 
@@ -37,41 +39,62 @@ permissions, state, protocol shape, and evaluation.
 
 ## Architecture
 
-A single Next.js application. The browser UI (React 19 + Tailwind v4 + shadcn/ui
-+ Zustand) and the backend runtime live in the same `frontend/` app and talk
-over same-origin `fetch`.
+Two processes. A Python/FastAPI backend (`src/kodeks/**`, port 8000) holds the
+HTTP API, chat runtime, and local tool execution. A separate Next.js/React app
+(`frontend/`, port 3000; React 19 + Tailwind v4 + shadcn/ui + Zustand) serves
+the browser UI. The frontend reverse-proxies `/api/*` to the backend through
+`frontend/next.config.ts` rewrites, so the browser stays same-origin and no CORS
+is needed.
 
 ```
-frontend/
-  app/                       Next.js App Router
-    page.tsx, layout.tsx     React UI (unchanged through the migration)
-    api/**/route.ts          HTTP route handlers (Node runtime), thin wrappers
-  lib/server/                the backend runtime (migrated from Python)
-    wire/                    SSE framing + runtime/UI event contracts (Zod)
-    bridge/                  MoonBridge: Responses <-> Chat Completions (DeepSeek)
-    config.ts, model-config  env / dotenv / model catalog / provider resolution
-    storage/                 libSQL repositories (sessions/memory/approvals/plan/...)
-    tools/                   9 model tools + registry (read/write/grep/run_shell/...)
-    workspace.ts             path sandbox + dangerous-command policy + argv exec
-    agent/                   the turn loop, tool continuation, context assembly, harness
-    routes/                  injectable route logic (chat/sessions/approvals/...)
-    execution/               command executor (local / Vercel Sandbox)
+src/kodeks/                  Python/FastAPI backend (port 8000)
+  app.py                     FastAPI app + route mounting
+  server.py                  uvicorn entry (kodeks-server)
+  api/                       chat/session/approval/bridge/workspace routes
+    sse.py, ui_transport.py  SSE framing + runtime/UI event transport
+  runtime.py, responses_runtime.py, responses_tool_loop.py, harness.py
+                             agent loop (turn loop, tool continuation, context)
+  tools/                     model tools: registry / schemas / helpers
+  storage/                   db / session / memory (SQLite)
+  providers/bridge.py        MoonBridge: Responses <-> Chat Completions (DeepSeek)
+  config.py, model_config.py env / dotenv / model catalog / provider resolution
+  workspace.py               path sandbox + dangerous-command policy + argv exec
+  plans.py                   plan-mode state
+frontend/                    Next.js/React frontend (port 3000)
+  app/                       Next.js App Router: page.tsx, layout.tsx
+  components/                React UI
+  hooks/                     useModels / useSessions / useChatStream /
+                             useApprovals / useBridgePreflight
+  stores/                    Zustand state
+  lib/                       api.ts / sse.ts / events.ts / i18n.ts / format.ts
+                             (client only)
+  next.config.ts             rewrites() reverse-proxy /api/* -> 127.0.0.1:8000
 oracle/                      golden behavior fixtures (see oracle/README.md)
 ```
 
-The model upstream is reached **in-process**: the runtime calls the bridge
-directly (`fromDeepseekStream(fetchChatCompletionsStream(toDeepseekChatRequest(...)))`),
-no self HTTP hop. The default upstream is DeepSeek via MoonBridge.
+How the frontend reaches the backend: the React client (`frontend/lib/api.ts`)
+calls relative `/api/*` URLs. `frontend/next.config.ts` `rewrites()` proxies
+`/api/*` (plus `/health`, `/v1/*`, `/responses`, `/models`, `/bridge/health`) to
+`http://127.0.0.1:8000` (override with env `KODEKS_API_ORIGIN`). The chat stream
+is a POST + `fetch` `ReadableStream` SSE. The default model upstream is DeepSeek
+via MoonBridge.
 
 ## Quick Start
 
+Install both halves — Python backend (repo root) and Next.js frontend
+(`frontend/`):
+
 ```bash
-cd frontend
-npm install
+uv sync                 # Python backend deps (repo root)
+cd frontend && npm install && cd ..
 ```
 
-Provide DeepSeek credentials in `frontend/.env.local` (Next.js loads it
-automatically):
+Provide DeepSeek credentials in the repo-root `.env` (the Python backend reads
+`.env` from its cwd / repo root). Copy the template and fill in the key:
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 DEEPSEEK_API_KEY=sk-...
@@ -79,17 +102,33 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
 ```
 
-Run the dev server and open `http://localhost:3000`:
+(`DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` are aliased to
+`KODEKS_CHAT_COMPLETIONS_*`. `KODEKS_API_ORIGIN` is optional and only read by the
+Next process — the local default works.)
+
+Run both processes with one command, then open `http://localhost:3000`:
 
 ```bash
-npm run dev
+uv run scripts/dev.py   # launches uvicorn :8000 + next dev :3000, prefixes
+                        # logs, propagates Ctrl-C
 ```
 
-Health check and an SSE chat stream:
+Or run them manually in two terminals:
 
 ```bash
-curl http://localhost:3000/health
-curl -N -X POST http://localhost:3000/api/chat/stream \
+# terminal 1 — Python backend (repo root)
+uv run kodeks-server --reload --port 8000
+
+# terminal 2 — Next.js frontend
+cd frontend && npm run dev
+```
+
+Open the UI at `http://localhost:3000`. Smoke-check the backend directly on
+:8000 (the frontend proxies the same routes on :3000):
+
+```bash
+curl http://127.0.0.1:8000/health
+curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"input":"hello","session_id":"s_demo","mode":"act"}'
 ```
@@ -97,12 +136,13 @@ curl -N -X POST http://localhost:3000/api/chat/stream \
 ## Configuration
 
 Required: an OpenAI-compatible Chat Completions API key, routed through
-MoonBridge. DeepSeek is the default upstream.
+MoonBridge. DeepSeek is the default upstream. Credentials live in the repo-root
+`.env`, which the Python backend loads from its cwd / repo root (`config.py`).
 
 Configuration precedence is:
 
 1. Explicit process environment variables
-2. Project `.env` (workspace-root `.env`, when `KODEKS_WORKSPACE_ROOT` is set)
+2. Repo-root `.env` (read by the Python backend)
 3. Structured config files (`.kodeks/config.json`, then `~/.kodeks/config.json`)
 
 Common options:
@@ -113,75 +153,55 @@ Common options:
   `deepseek-v4-pro` and `deepseek-v4-flash`)
 - `KODEKS_BRIDGE_REASONING_EFFORT` ∈ `none|low|medium|high|xhigh`
 - `KODEKS_WORKSPACE_ROOT`, `KODEKS_DB_PATH`
+- `KODEKS_API_ORIGIN` (Next process only; where the frontend proxies `/api/*`;
+  default `http://127.0.0.1:8000`). Optional — if set, it can live in
+  `frontend/.env.local`.
 
-Persistence: a local libSQL file under `.kodeks/kodeks.sqlite3` by default. For
-serverless/production, set `TURSO_DATABASE_URL` (+ `TURSO_AUTH_TOKEN`) for the
-database, `BLOB_READ_WRITE_TOKEN` for large memory artifacts (Vercel Blob), and
-deploy on Vercel — see [`frontend/DEPLOY.md`](./frontend/DEPLOY.md).
+Persistence: the Python backend keeps a local SQLite file under
+`.kodeks/kodeks.sqlite3` by default (override with `KODEKS_DB_PATH`). For
+deployment options, see [`frontend/DEPLOY.md`](./frontend/DEPLOY.md).
 
 ## MoonBridge
 
-MoonBridge is an internal protocol adapter (`frontend/lib/server/bridge/`). The
-runtime keeps a Responses-shaped contract while routing an OpenAI-compatible
-Chat Completions upstream (DeepSeek by default). It converts the request
+MoonBridge is an internal protocol adapter (`src/kodeks/providers/bridge.py`,
+exposed through `src/kodeks/api/bridge_routes.py`). The runtime keeps a
+Responses-shaped contract while routing an OpenAI-compatible Chat Completions
+upstream (DeepSeek by default). It converts the request
 (`instructions`/`input`/`tools`/`reasoning.effort`) and maps the streamed
 `chat.completion.chunk` responses back to Responses events, preserving DeepSeek
 `reasoning_content` on tool-call turns.
 
 ## Development
 
-All checks run from `frontend/`:
+Backend checks run from the repo root:
+
+```bash
+uv sync
+uv run ruff check
+uv run mypy
+uv run pytest
+uv run python -m kodeks.smoke --in-process   # offline smoke check
+uv build                                      # build the package
+```
+
+Frontend checks run from `frontend/`:
 
 ```bash
 cd frontend
-npm test            # vitest (incl. oracle replay)
+npm install
 npm run lint        # eslint
-npx tsc --noEmit    # typecheck
+npm test            # vitest
 npm run build       # next build
-npm run eval:live   # live model eval runner (requires a running Kodeks server)
-npm run release:check # test + lint + typecheck + build + live eval result gate
 ```
 
-CI runs the deterministic gates (`.github/workflows/ci.yml`). Releases should
-also pass `npm run release:check` with a fresh live eval result.
+CI runs the same gates (`.github/workflows/ci.yml`).
 
 ### Behavior parity (oracle)
 
-[`oracle/`](./oracle/README.md) holds golden behavior snapshots recorded from
-the original Python backend (event sequences, byte-exact SSE, audit rows) across
-10 scenarios. The TS tests replay them and assert byte-for-byte equivalence —
-this is how the migration proves the new runtime behaves identically to the old.
-
-### Live eval
-
-[`evals/live-coding-tasks.json`](./evals/live-coding-tasks.json) provides 63
-small real repair tasks. Start Kodeks against the same workspace used by the
-runner, then execute a sample:
-
-```bash
-cd frontend
-KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
-npm run eval:live -- --limit 5
-```
-
-Before a release, run the full suite and then gate the ignored local result:
-
-```bash
-cd frontend
-KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
-npm run eval:live -- --reset-workspace
-npm run release:check
-```
-
-For protected control APIs, pass `--control-token` or set
-`KODEKS_EVAL_CONTROL_TOKEN` / `KODEKS_CONTROL_TOKEN` before running
-`eval:live`.
-
-`release:check` fails if `evals/results/live-latest.json` is missing, older than
-72 hours, does not cover every manifest case, falls below the configured pass
-threshold, emits runtime errors, or changes protected verifier files. The
-threshold defaults are intentionally strict and can be relaxed only by explicit
-`KODEKS_LIVE_EVAL_*` environment overrides.
+[`oracle/`](./oracle/README.md) holds golden behavior snapshots (event
+sequences, byte-exact SSE, audit rows) across 14 scenarios. The Python test
+`tests/test_route_parity.py` replays them and asserts byte-for-byte equivalence,
+pinning the backend's behavior to those fixtures.
 
 ## Safety Model
 
@@ -199,11 +219,10 @@ using it on sensitive repositories.
 
 ## Documentation
 
-- [`frontend/DEPLOY.md`](./frontend/DEPLOY.md): Vercel deploy runbook (Turso /
-  Blob / Sandbox).
+- [`frontend/DEPLOY.md`](./frontend/DEPLOY.md): deployment runbook.
 - [`oracle/README.md`](./oracle/README.md): golden behavior fixtures.
 - [`docs/architecture.md`](./docs/architecture.md): harness design and product
-  boundary (conceptual; predates the TS migration).
+  boundary (conceptual).
 
 ## License
 

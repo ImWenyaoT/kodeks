@@ -9,8 +9,39 @@ permissions:
   contents: read
 
 jobs:
+  backend:
+    name: Python runtime checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Typecheck
+        run: uv run mypy
+
+      - name: Test
+        run: uv run pytest
+
+      - name: Smoke
+        run: uv run python -m kodeks.smoke --in-process
+
+      - name: Build
+        run: uv build
+
   frontend:
-    name: TypeScript runtime checks
+    name: Next.js UI checks
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -1,111 +1,66 @@
-# Kodeks 部署 Runbook（Vercel 生产）
+# Kodeks 部署说明（双进程：Python 后端 + Next.js 前端）
 
-本文档面向把 `frontend/`（Next.js App Router）部署到 Vercel 生产环境。代码已做到「一配 env 即可部署」：
-**不配任何云端 env → 全本地后端，行为与本地开发一致**；按需配置对应 env → 透明切换到云端后端。
+当前架构是**两个进程**：
 
-> 范围：本文只覆盖**需要 provision 的资源**与**需要配置的 env 变量**。实际的云端 provision/deploy 命令请你按各自控制台/CLI 执行——本仓库不代为执行。
+- **Python/FastAPI 后端**（`src/kodeks/**`，常驻进程，默认 `:8000`）——承载 HTTP API、chat runtime、本地工具执行，持久化用本地 SQLite，命令执行用本地 `subprocess`（带审批门控）。
+- **Next.js/React 前端**（`frontend/`，默认 `:3000`）——只渲染 UI，经 `next.config.ts` 的 `rewrites()` 把 `/api/*` 反向代理到后端。浏览器全程同源，无需 CORS。
 
----
-
-## 1. 需要 provision 的资源
-
-| 资源 | 用途 | 何时需要 | 产出的凭据 |
-| --- | --- | --- | --- |
-| **DeepSeek API key** | 模型 / 工具往返的上游（OpenAI 兼容） | 始终（本地 + 线上） | `DEEPSEEK_API_KEY` |
-| **Turso 数据库**（libSQL） | 会话 / 审批 / 计划 / 审计 / 记忆等持久化 | 线上（serverless 无持久磁盘） | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` |
-| **Vercel Blob store** | 卸载的大体积内存 artifact 正文存储 | 线上（serverless 无持久磁盘） | `BLOB_READ_WRITE_TOKEN` |
-| **Vercel Sandbox** | 审批后命令在隔离 microVM 内执行 | 线上（serverless 无法直接 spawn 子进程跑工作区命令） | OIDC 自动 / `VERCEL_TOKEN`+`VERCEL_TEAM_ID`+`VERCEL_PROJECT_ID` |
-
-provision 提示：
-
-- **Turso**：用 Turso CLI 建库并生成 token（`turso db create`、`turso db tokens create`），URL 形如 `libsql://<db>-<org>.turso.io`。
-- **Vercel Blob**：在 Vercel 项目的 Storage 里创建 Blob store；`BLOB_READ_WRITE_TOKEN` 会作为项目 env 自动注入（也可手动复制）。
-- **Vercel Sandbox**：部署在 Vercel 上时，OIDC 鉴权（`VERCEL_OIDC_TOKEN`）由平台自动注入，**无需手填**；仅在非 Vercel 环境（外部 CI/自托管）才需 access token 三件套。
+> ⚠️ **生产部署当前为暂缓（deferred）状态**：本仓库尚未提供生产部署的脚本/配置。本文档给出本地运行方式与若干可行的生产形态供参考，但**不代为执行**云端 provision/deploy。
+>
+> 注意：迁移前的「单个 Next.js 应用一键部署到 Vercel + Turso/Blob/Sandbox 按 env 透明切换云端后端」的形态**已不适用**——那套云端后端是 TS 实现（`frontend/lib/server/`），已随后端回退到 Python 而删除。Python 后端是常驻服务，不是 Vercel Function。
 
 ---
 
-## 2. 需要配置的 env 变量清单
+## 1. 本地运行（开发）
 
-> 详见仓库根 `.env.example`（只含变量名 + 占位说明）。
+仓库根目录一条命令同时拉起两个进程：
 
-### 必填（本地 + 线上）
+```bash
+uv run scripts/dev.py          # uvicorn :8000 + next dev :3000，统一日志、Ctrl-C 收尾
+```
+
+或两个终端手动启动：
+
+```bash
+# 终端 1 —— Python 后端（仓库根目录）
+uv sync
+uv run kodeks-server --reload --port 8000
+
+# 终端 2 —— Next.js 前端
+cd frontend && npm install && npm run dev
+```
+
+浏览器打开 `http://localhost:3000`。凭据放仓库根 `.env`（见根 `.env.example`，至少 `DEEPSEEK_API_KEY`）。
+
+---
+
+## 2. 必填环境变量
+
+详见仓库根 [`.env.example`](../.env.example)。最小集：
 
 | 变量 | 说明 |
 | --- | --- |
-| `DEEPSEEK_API_KEY` | DeepSeek API key。 |
+| `DEEPSEEK_API_KEY` | DeepSeek（OpenAI 兼容）API key；经 `config.py` 的 `MODEL_ENV_ALIASES` 映射到 `KODEKS_CHAT_COMPLETIONS_API_KEY`。 |
 | `DEEPSEEK_BASE_URL` | 上游 base URL，默认 `https://api.deepseek.com`。 |
-| `DEEPSEEK_MODEL` | 可选，覆盖默认模型名。 |
+| `KODEKS_API_ORIGIN` | **前端进程读取**：`next.config.ts` 据此把 `/api/*` 反代到后端。本地缺省 `http://127.0.0.1:8000`；生产指向独立部署的 Python 服务。 |
 
-### 线上持久化（不配则回退本地）
-
-| 变量 | 配置后效果 | 不配（默认） |
-| --- | --- | --- |
-| `TURSO_DATABASE_URL` | 用 Turso 远端 libSQL 库 | 本地 `file:` SQLite（`KODEKS_DB_PATH` 或 `workspace/.kodeks/kodeks.sqlite3`） |
-| `TURSO_AUTH_TOKEN` | Turso 远端鉴权（连 `libsql://` 时必需） | 本地 `file:` 无需 token |
-| `BLOB_READ_WRITE_TOKEN` | 内存 artifact 存进 Vercel Blob（`BlobArtifactStore`） | 本地 `.kodeks/memory-artifacts`（`LocalFileArtifactStore`） |
-
-### 线上控制面保护
-
-| 变量 | 配置后效果 | 不配（默认） |
-| --- | --- | --- |
-| `KODEKS_CONTROL_TOKEN` | 非本地 `/api/*` 控制面请求必须带 `Authorization: Bearer <token>`、`x-kodeks-control-token` 或 `kodeks_control_token` cookie；带 `Origin`/`Referer` 时还必须同源 | 本地 `localhost/127.0.0.1` 允许；非本地 control API fail closed |
-
-### Vercel Sandbox 执行（审批命令）
-
-| 变量 | 说明 |
-| --- | --- |
-| `VERCEL` | 部署在 Vercel 时平台自动置位（=1）。判定是否启用 Sandbox 后端的前置条件之一。 |
-| `VERCEL_OIDC_TOKEN` | Vercel 线上自动注入；本地用 `vercel env pull` 拉取（12h 过期）。 |
-| `VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID` | 仅非 Vercel 环境（外部 CI/自托管）用 Sandbox 时改用的 access token 三件套。 |
+可选：`DEEPSEEK_MODEL`、`KODEKS_DB_PATH`（本地 SQLite 路径，缺省 `<workspace>/.kodeks/kodeks.sqlite3`）、`KODEKS_WORKSPACE_ROOT`、`KODEKS_CORS_ORIGINS`（同源 rewrites 架构下无需设置）。
 
 ---
 
-## 3. 本地 vs 线上后端切换说明
+## 3. 生产形态（参考，未实现）
 
-后端切换是**纯 env 驱动**的，代码里有三处选择点（`frontend/lib/server/routes/deps.ts`）：
+按对 SSE 长连与运维复杂度的取舍，三种可行形态：
 
-1. **数据库**（`getDatabase` → `resolveDatabaseUrl` + `authToken`）
-   - 有 `TURSO_DATABASE_URL` → 连 Turso 远端，并透传 `TURSO_AUTH_TOKEN`。
-   - 否则 → 本地 `file:` SQLite。
-2. **Artifact 存储**（`resolveArtifactStore`）
-   - 有 `BLOB_READ_WRITE_TOKEN` → `BlobArtifactStore`（artifact 句柄是 Blob 公网 URL）。
-   - 否则 → `LocalFileArtifactStore`（句柄是本地绝对路径）。
-3. **命令执行**（`resolveExecutor` → `shouldUseSandboxExecutor`）
-   - `VERCEL` 置位 **且**（`VERCEL_OIDC_TOKEN` 或 `VERCEL_TOKEN`）→ `SandboxExecutor`（Firecracker microVM，argv 无 shell）。
-   - 本地开发（无 `VERCEL`）→ `LocalExecutor`（`child_process.execFile`，argv 无 shell）。
-   - `VERCEL` 置位但缺 sandbox 鉴权 → fail closed，命令执行返回不可用，不回退宿主 `LocalExecutor`。
-
-> 三种云端后端的**返回/接口形状与本地版逐字一致**，是透明替换：上层 wire/bridge/agent/tools 逻辑完全不感知后端差异。
-
-**本地默认（不配任何云端 env）= 全 local 后端。** 既有测试套件全部运行在 local 后端上、零回归。
+1. **双 Host（推荐）**：前端 `frontend/` 部署到任意静态/SSR 平台（如 Vercel，Root Directory 设 `frontend`）；Python 后端用容器/VM 跑 `uvicorn`（Fly.io / Railway / Render / 自建 VM）。前端设 `KODEKS_API_ORIGIN=https://<python-host>`，由 rewrites 跨 host 反代。
+   - **SSR 平台代理长 SSE 有超时/缓冲风险**：`/api/chat/stream` 是无 `[DONE]` 终止符、靠连接关闭收尾的长流。若平台代理会截断，需让前端的聊天流**直连** Python host（此时要在 Python 设 `KODEKS_CORS_ORIGINS` 并给该调用用绝对 URL）。
+2. **单 Host（nginx/Caddy）**：一台机器上同时跑 `next start` 与 `uvicorn`，由 nginx 反代 `/api → :8000`，对 SSE 路由设 `proxy_buffering off`、`gzip off`、无读超时。最接近原单源模型，但 UI 由 Node 提供。
+3. **Python 直接服务 UI（回到单进程）**：`next build` 产物同步进 `src/kodeks/static/`，由 FastAPI 在 `/` 提供。消除双进程，但失去 Next 的 SSR/动态路由。仅在确需单进程时采用。
 
 ---
 
-## 4. preview → prod 部署步骤
+## 4. SSE 反代注意事项
 
-1. **链接项目**（一次）：`vercel link`，把本仓库的 `frontend/` 关联到 Vercel 项目（Root Directory 设为 `frontend`）。
-2. **配置 env**：在 Vercel 项目 Settings → Environment Variables 里，按上面第 2 节为 **Preview** 和 **Production** 分别填入变量。
-   - DeepSeek 段：两套环境都填。
-   - Turso / Blob / Sandbox 段：建议 Preview 与 Production **使用各自独立的库/store**，避免互相污染数据。
-3. **拉取本地凭据**（如需本地连云端调试）：`vercel env pull`，生成 `.env.local`（含 `VERCEL_OIDC_TOKEN`，12h 过期，过期重拉）。
-4. **Preview 部署**：推到非默认分支触发 preview 部署（或 `vercel deploy`）。先在 preview 上跑完第 5 节验证清单。
-5. **Promote 到 Production**：preview 验证通过后，合并到默认分支触发生产部署（或 `vercel deploy --prod` / 在控制台 Promote）。
-
-> 长连 SSE：`/api/chat/stream` 与 `/api/chat/ui` 已 `export const maxDuration = 300`（Fluid Compute 放宽函数时长上限），无需额外 `vercel.json`。两路由保留 `runtime = 'nodejs'`。
-
----
-
-## 5. 冷启动后 会话/记忆持久化验证清单
-
-部署后（尤其首次冷启动），按下表逐项验证云端后端确实生效、且重启不丢数据：
-
-- [ ] **建会话**：POST `/api/sessions` 创建一个会话，记下 `id`。
-- [ ] **持久化跨冷启动**：等函数实例回收（或触发新部署）后，GET `/api/sessions/{id}` 仍能取回该会话 → 证明数据落在 Turso 而非实例本地磁盘。
-- [ ] **会话列表稳定**：GET `/api/sessions` 在多次冷启动间返回一致的历史会话集。
-- [ ] **记忆 artifact 卸载到 Blob**：触发一次产出 >4KB 工具输出的 chat turn；确认返回的紧凑 JSON 含 `offloaded:true` 与 `refId`，且对应 `memory_artifacts.file_path` 是 `https://...blob...` 形态的 Blob URL（而非本地路径）。
-- [ ] **记忆 artifact 可回读**：通过记忆召回/读取路径取回该 artifact 正文，内容完整 → 证明 `BlobArtifactStore.read` 能 fetch 回 Blob URL。
-- [ ] **审批命令在 Sandbox 执行**：发起一条需审批的命令，approve 后确认返回的 `result`（`exitCode`/`stdout`/`stderr`/`*Truncated`）形状正常 → 证明 `SandboxExecutor` 已透明替换 `LocalExecutor`。
-- [ ] **审批超时一致**：构造一个会超时的审批命令，确认返回 408 `{detail}`（与本地 `ShellCommandTimeoutError` 行为一致）。
-- [ ] **长 SSE 不被截断**：跑一个较长的 chat turn，确认 SSE 流完整结束（未在中途被平台超时切断）→ 证明 `maxDuration=300` 生效。
-
-任一项失败时，回到第 2/3 节核对对应 env 是否在该环境（Preview/Production）正确配置。
+- 本地 `next dev` / `next start` 的 rewrites 默认**不缓冲**、流式透传，开箱即用。
+- 任何前置 CDN/压缩/代理层都需对 `/api/chat/stream`（和 `/api/chat/ui`）关闭缓冲与压缩、取消读超时，否则长流可能被截断。
+- 后端自身不发 `Cache-Control`/`X-Accel-Buffering`；如前置 nginx，按需在边界补 `X-Accel-Buffering: no`。

@@ -4,11 +4,12 @@
 子代理探索、plan 模式、工作区工具、人工审批,以及一个面向 OpenAI 兼容 Chat Completions 的
 协议适配器(默认上游 DeepSeek)。
 
-> **运行时:TypeScript / Next.js。** kodeks 已从最初的 Python/FastAPI 后端迁移为单个 Next.js
-> 全栈应用(App Router route handlers + `frontend/lib/server`)。与 Python 原版的行为一致性由
-> [`oracle/`](./oracle/README.md) 下的字节级黄金 fixtures 钉死。Python 源码已退役,需要时查 git 历史。
+> **运行时:Python/FastAPI 后端 + Next.js 前端(两个进程)。** HTTP API、聊天运行时与本地工具
+> 执行作为 Python/FastAPI 服务运行(`src/kodeks/**`,端口 8000)。浏览器 UI 是独立的 Next.js/React
+> 应用(`frontend/`,端口 3000),经 `frontend/next.config.ts` 的 rewrites 把 `/api/*` 反代到 Python
+> 后端——浏览器全程同源,无需 CORS。行为由 [`oracle/`](./oracle/README.md) 下的字节级黄金 fixtures 钉死。
 
-[English README](./README.md) · [架构](./docs/architecture.md) · [部署](./frontend/DEPLOY.md) · [Oracle 黄金基准](./oracle/README.md)
+[English README](./README.md) · [架构说明](./docs/architecture.md) · [产品需求](./docs/PRD.md) · [概念映射](./docs/concepts-map.md) · [部署](./frontend/DEPLOY.md) · [Oracle 黄金基准](./oracle/README.md)
 
 ## 产品边界
 
@@ -26,39 +27,57 @@ kodeks 不是通用 agent 平台:不做 web 搜索、provider 面板、插件市
 
 ## 架构
 
-单个 Next.js 应用。浏览器 UI(React 19 + Tailwind v4 + shadcn/ui + Zustand)与后端运行时
-同在 `frontend/`,经**同源 fetch** 通信。
+两个进程。Python/FastAPI 后端(`src/kodeks/**`,端口 8000)承载 HTTP API、聊天运行时与
+本地工具执行。Next.js/React 前端(`frontend/`,端口 3000;React 19 + Tailwind v4 + shadcn/ui
++ Zustand)单独提供浏览器 UI。前端经 `frontend/next.config.ts` 的 rewrites 把 `/api/*` 反代到
+后端,浏览器全程同源,无需 CORS。
 
 ```
-frontend/
-  app/                       Next.js App Router
-    page.tsx, layout.tsx     React UI(迁移全程未改)
-    api/**/route.ts          HTTP 路由壳(Node runtime,薄包装)
-  lib/server/                后端运行时(从 Python 移植)
-    wire/                    SSE 帧编码 + runtime/UI 事件契约(Zod)
-    bridge/                  MoonBridge:Responses <-> Chat Completions(DeepSeek)
-    config.ts, model-config  env/dotenv/模型目录/provider 解析
-    storage/                 libSQL 仓库(会话/记忆/审批/计划/...)
-    tools/                   9 个模型工具 + 注册表(read/write/grep/run_shell/...)
-    workspace.ts             路径沙箱 + 危险命令策略 + argv 执行
-    agent/                   turn 循环、工具续跑、context 装配、harness
-    routes/                  可注入的路由逻辑(chat/sessions/approvals/...)
-    execution/               命令执行后端(本地 / Vercel Sandbox)
+src/kodeks/                  Python/FastAPI 后端(端口 8000)
+  app.py                     FastAPI app + 路由挂载
+  server.py                  uvicorn 入口(kodeks-server)
+  api/                       chat/session/approval/bridge/workspace 路由
+    sse.py, ui_transport.py  SSE 帧编码 + runtime/UI 事件传输
+  runtime.py, responses_runtime.py, responses_tool_loop.py, harness.py
+                             agent 循环(turn 循环、工具续跑、context 装配)
+  tools/                     模型工具:registry / schemas / helpers
+  storage/                   db / session / memory(SQLite)
+  providers/bridge.py        MoonBridge:Responses <-> Chat Completions(DeepSeek)
+  config.py, model_config.py env/dotenv/模型目录/provider 解析
+  workspace.py               路径沙箱 + 危险命令策略 + argv 执行
+  plans.py                   plan 模式状态
+frontend/                    Next.js/React 前端(端口 3000)
+  app/                       Next.js App Router:page.tsx, layout.tsx
+  components/                React UI
+  hooks/                     useModels / useSessions / useChatStream /
+                             useApprovals / useBridgePreflight
+  stores/                    Zustand 状态
+  lib/                       api.ts / sse.ts / events.ts / i18n.ts / format.ts
+                             (纯客户端)
+  next.config.ts             rewrites() 把 /api/* 反代到 127.0.0.1:8000
 oracle/                      行为黄金基准 fixtures(见 oracle/README.md)
 ```
 
-模型上游**进程内**到达:运行时直接调桥
-(`fromDeepseekStream(fetchChatCompletionsStream(toDeepseekChatRequest(...)))`),无自调 HTTP 跳转。
-默认上游是经 MoonBridge 的 DeepSeek。
+前端如何到达后端:React 客户端(`frontend/lib/api.ts`)调用相对路径 `/api/*`。
+`frontend/next.config.ts` 的 `rewrites()` 把 `/api/*`(以及 `/health`、`/v1/*`、`/responses`、
+`/models`、`/bridge/health`)反代到 `http://127.0.0.1:8000`(可用环境变量 `KODEKS_API_ORIGIN`
+覆盖)。聊天流是 POST + `fetch` `ReadableStream` SSE。默认模型上游是经 MoonBridge 的 DeepSeek。
 
 ## 快速开始
 
+两半都要装——Python 后端(仓库根目录)与 Next.js 前端(`frontend/`):
+
 ```bash
-cd frontend
-npm install
+uv sync                 # Python 后端依赖(仓库根目录)
+cd frontend && npm install && cd ..
 ```
 
-把 DeepSeek 凭据放进 `frontend/.env.local`(Next.js 会自动加载):
+把 DeepSeek 凭据放进**仓库根目录的 `.env`**(Python 后端从其 cwd / 仓库根读 `.env`)。
+复制模板并填入 key:
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 DEEPSEEK_API_KEY=sk-...
@@ -66,17 +85,31 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
 ```
 
-启动开发服务器,打开 `http://localhost:3000`:
+(`DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL`会映射到
+`KODEKS_CHAT_COMPLETIONS_*`。`KODEKS_API_ORIGIN` 可选,仅前端进程读取——本地缺省即可。)
+
+一条命令同时拉起两个进程,然后打开 `http://localhost:3000`:
 
 ```bash
-npm run dev
+uv run scripts/dev.py   # 同时起 uvicorn :8000 + next dev :3000,日志加前缀,
+                        # Ctrl-C 传播到两者
 ```
 
-健康检查与一次 SSE 聊天流:
+或在两个终端里分别手动启动:
 
 ```bash
-curl http://localhost:3000/health
-curl -N -X POST http://localhost:3000/api/chat/stream \
+# 终端 1 —— Python 后端(仓库根目录)
+uv run kodeks-server --reload --port 8000
+
+# 终端 2 —— Next.js 前端
+cd frontend && npm run dev
+```
+
+打开 UI：`http://localhost:3000`。直接对 :8000 后端做冒烟检查(前端在 :3000 反代同样的路由):
+
+```bash
+curl http://127.0.0.1:8000/health
+curl -N -X POST http://127.0.0.1:8000/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"input":"你好","session_id":"s_demo","mode":"act"}'
 ```
@@ -84,11 +117,12 @@ curl -N -X POST http://localhost:3000/api/chat/stream \
 ## 配置
 
 必需:一个 OpenAI 兼容 Chat Completions API key,经 MoonBridge 路由。默认上游 DeepSeek。
+凭据放在仓库根目录的 `.env`,Python 后端从其 cwd / 仓库根加载(`config.py`)。
 
 优先级:
 
 1. 显式进程环境变量
-2. 项目 `.env`(设了 `KODEKS_WORKSPACE_ROOT` 时读工作区根 `.env`)
+2. 仓库根目录的 `.env`(由 Python 后端读取)
 3. 结构化配置文件(`.kodeks/config.json`,再 `~/.kodeks/config.json`)
 
 常用项:
@@ -98,66 +132,48 @@ curl -N -X POST http://localhost:3000/api/chat/stream \
 - `MODEL` / `DEEPSEEK_MODEL`(默认 `deepseek-v4-pro`;目录含 `deepseek-v4-pro` 与 `deepseek-v4-flash`)
 - `KODEKS_BRIDGE_REASONING_EFFORT` ∈ `none|low|medium|high|xhigh`
 - `KODEKS_WORKSPACE_ROOT`、`KODEKS_DB_PATH`
+- `KODEKS_API_ORIGIN`(仅前端进程;前端把 `/api/*` 反代到此处;默认
+  `http://127.0.0.1:8000`)。可选——若要设,可放进 `frontend/.env.local`。
 
-持久化:默认本地 libSQL 文件 `.kodeks/kodeks.sqlite3`。serverless/生产时设 `TURSO_DATABASE_URL`
-(+`TURSO_AUTH_TOKEN`)作数据库、`BLOB_READ_WRITE_TOKEN`(Vercel Blob)存大记忆 artifact,
-部署到 Vercel——见 [`frontend/DEPLOY.md`](./frontend/DEPLOY.md)。
+持久化:Python 后端默认在本地 SQLite 文件 `.kodeks/kodeks.sqlite3`(用 `KODEKS_DB_PATH` 覆盖)。
+部署相关见 [`frontend/DEPLOY.md`](./frontend/DEPLOY.md)。
 
 ## MoonBridge
 
-MoonBridge 是内部协议适配器(`frontend/lib/server/bridge/`)。运行时保持 Responses 形态契约,
+MoonBridge 是内部协议适配器(`src/kodeks/providers/bridge.py`,经
+`src/kodeks/api/bridge_routes.py` 暴露)。运行时保持 Responses 形态契约,
 同时把请求(`instructions`/`input`/`tools`/`reasoning.effort`)转成 Chat Completions,并把流式
 `chat.completion.chunk` 映射回 Responses 事件,工具调用回合上保留 DeepSeek 的 `reasoning_content`。
 
 ## 开发
 
-全部命令在 `frontend/` 下:
+后端命令在仓库根目录下:
+
+```bash
+uv sync
+uv run ruff check
+uv run mypy
+uv run pytest
+uv run python -m kodeks.smoke --in-process   # 离线冒烟检查
+uv build                                      # 构建包
+```
+
+前端命令在 `frontend/` 下:
 
 ```bash
 cd frontend
-npm test            # vitest(含 oracle 重放)
+npm install
 npm run lint        # eslint
-npx tsc --noEmit    # 类型检查
+npm test            # vitest
 npm run build       # next build
-npm run eval:live   # 真实模型 live eval runner(需先启动 Kodeks)
-npm run release:check # 测试 + lint + 类型检查 + build + live eval 结果门禁
 ```
 
-CI 跑确定性的离线门禁(`.github/workflows/ci.yml`)。发布前还应带着 fresh live eval 结果跑
-`npm run release:check`。
+CI 跑同样的门禁(`.github/workflows/ci.yml`)。
 
 ### 行为一致性(oracle)
 
-[`oracle/`](./oracle/README.md) 存放从原 Python 后端录制的行为黄金快照(事件序列、逐字节 SSE、
-审计行),覆盖 10 个场景。TS 测试重放它们并断言**逐字节等价**——这就是迁移如何证明新运行时与旧后端
-行为一致。
-
-### Live eval
-
-[`evals/live-coding-tasks.json`](./evals/live-coding-tasks.json) 提供 63 个小型真实修复任务。
-先用同一个 workspace 启动 Kodeks:
-
-```bash
-cd frontend
-KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
-npm run eval:live -- --limit 5
-```
-
-发布前跑完整 live eval,再用忽略提交的本地结果做门禁:
-
-```bash
-cd frontend
-KODEKS_WORKSPACE_ROOT=../evals/workspace-live npm run dev
-npm run eval:live -- --reset-workspace
-npm run release:check
-```
-
-如果控制面启用了 token,运行 `eval:live` 时传 `--control-token`,或设置
-`KODEKS_EVAL_CONTROL_TOKEN` / `KODEKS_CONTROL_TOKEN`。
-
-`release:check` 会在 `evals/results/live-latest.json` 缺失、超过 72 小时、未覆盖全部
-manifest case、低于阈值、出现 runtime error,或改动受保护 verifier 文件时失败。默认阈值刻意严格;
-只有显式设置 `KODEKS_LIVE_EVAL_*` 环境变量才会放宽。
+[`oracle/`](./oracle/README.md) 存放行为黄金快照(事件序列、逐字节 SSE、审计行),覆盖 14 个场景。
+Python 测试 `tests/test_route_parity.py` 重放它们并断言**逐字节等价**,把后端行为钉死在这些 fixtures 上。
 
 ## 安全模型
 
@@ -172,9 +188,9 @@ kodeks 把本地能力视为特权:
 
 ## 文档
 
-- [`frontend/DEPLOY.md`](./frontend/DEPLOY.md):Vercel 部署 runbook(Turso/Blob/Sandbox)。
+- [`frontend/DEPLOY.md`](./frontend/DEPLOY.md):部署 runbook。
 - [`oracle/README.md`](./oracle/README.md):行为黄金 fixtures。
-- [`docs/architecture.md`](./docs/architecture.md):harness 设计与产品边界(概念层,早于 TS 迁移)。
+- [`docs/architecture.md`](./docs/architecture.md):harness 设计与产品边界(概念层)。
 
 ## 许可
 
