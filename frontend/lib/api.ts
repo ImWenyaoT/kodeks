@@ -1,7 +1,7 @@
 /**
  * 类型化的后端 API 客户端。
- * 全部使用相对 URL（`/api/...`），使得开发期代理与生产期静态导出都能工作。
- * 后端返回的字段保持 camelCase，与此处类型一一对应。
+ * 全部使用相对 URL（`/api/...`），由 next.config.ts 的 rewrites 反向代理到 Python FastAPI 后端。
+ * 同源调用，无需 CORS；后端返回字段保持 camelCase，与此处类型一一对应。
  */
 
 /**
