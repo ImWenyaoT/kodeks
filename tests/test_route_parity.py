@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from kodeks.app import create_app
 from kodeks.storage import KodeksDatabase, current_timestamp
+from kodeks.workspace import command_hash
 
 
 def test_sessions_list_includes_active_plan_and_get_transcript(tmp_path, monkeypatch):
@@ -142,10 +143,12 @@ def test_approval_routes_execute_once_and_record_audit(tmp_path, monkeypatch):
         json={"decision": "reject", "reason": "not today"},
     )
     approved_response = client.post(
-        f"/api/approvals/{approved.id}", json={"decision": "approve"}
+        f"/api/approvals/{approved.id}",
+        json={"decision": "approve", "expectedCommandHash": command_hash("printf ok")},
     )
     repeated_response = client.post(
-        f"/api/approvals/{approved.id}", json={"decision": "approve"}
+        f"/api/approvals/{approved.id}",
+        json={"decision": "approve", "expectedCommandHash": command_hash("printf ok")},
     )
     malformed_response = client.post(
         f"/api/approvals/{malformed.id}", json={"decision": "approve"}
@@ -198,7 +201,11 @@ def test_approval_routes_do_not_shell_parse_approved_commands(tmp_path, monkeypa
         database.close()
 
     response = TestClient(create_app()).post(
-        f"/api/approvals/{approval.id}", json={"decision": "approve"}
+        f"/api/approvals/{approval.id}",
+        json={
+            "decision": "approve",
+            "expectedCommandHash": command_hash("pytest -q 2>&1"),
+        },
     )
 
     assert response.status_code == 200

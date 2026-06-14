@@ -49,6 +49,14 @@ async def run_responses_tool_loop(
 ) -> AsyncIterator[dict[str, Any]]:
     """Run Responses-shaped model events through local tool continuation."""
 
+    # Plan 模式下在执行层硬性限定只读工具白名单（模型 schema 已收窄，但此处强制执行，
+    # 防止模型仍发出写工具调用时被执行）。act 模式 allowed=None 即不限制。
+    allowed_tool_names: set[str] | None = (
+        {tool["name"] for tool in default_tool_definitions(read_only_only=True)}
+        if runtime_body.get("mode") == "plan"
+        else None
+    )
+
     for _turn_index in range(max_tool_loop_turns):
         runtime_body["input"] = build_responses_input_from_transcript(
             database, session_id
@@ -83,6 +91,7 @@ async def run_responses_tool_loop(
                     runtime_env,
                     session_id,
                     tool_state,
+                    allowed_tool_names,
                 ):
                     yield tool_event
                 continue

@@ -247,6 +247,21 @@ class ApprovalRepository:
         self.database.connection.commit()
         return self.get_approval(approval_id)
 
+    def mark_failed(self, approval_id: str, reason: str) -> StoredApproval:
+        """Move an approved-but-failed execution into the terminal failed state."""
+
+        approval = self.get_approval(approval_id)
+        if approval.status != "approved":
+            raise ApprovalAlreadyResolvedError(
+                f"Approval already resolved: {approval_id}"
+            )
+        self.database.connection.execute(
+            "UPDATE approvals SET status = 'failed', reason = ?, decided_at = ? WHERE id = ?",
+            (reason, current_timestamp(), approval_id),
+        )
+        self.database.connection.commit()
+        return self.get_approval(approval_id)
+
     def _resolve(self, approval_id: str, status: str, reason: str) -> StoredApproval:
         """Move one pending approval into its final user decision state."""
 

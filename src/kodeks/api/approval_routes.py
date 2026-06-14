@@ -9,7 +9,7 @@ from ..storage import (
     ApprovalAlreadyResolvedError,
     ApprovalNotFoundError,
 )
-from ..workspace import ShellCommandTimeoutError, run_approved_command
+from ..workspace import ShellCommandTimeoutError, command_hash, run_approved_command
 from .dependencies import DatabaseProvider, JsonBodyReader, WorkspaceRootResolver
 
 
@@ -63,8 +63,26 @@ def register_approval_routes(
                     {"error": "Approval does not contain an executable command."},
                     status_code=400,
                 )
+            # 把人工批准绑定到具体命令：客户端必须回传它看到的命令的 sha256，
+            # 缺失或不匹配一律 409，防止用陈旧 approval id 执行被替换的命令。
+            expected = _string(body.get("expectedCommandHash"))
+            if expected is None:
+                return JSONResponse(
+                    {"detail": "Approval command hash is required."},
+                    status_code=409,
+                )
+            if expected != command_hash(command):
+                return JSONResponse(
+                    {"detail": "Approval command hash mismatch."},
+                    status_code=409,
+                )
             approved = db.approvals.approve(approval_id)
-            result = run_approved_command(command, resolve_workspace_root())
+            # 执行失败时把记录落到终态 failed，避免停在 approved 态泄漏/悬挂。
+            try:
+                result = run_approved_command(command, resolve_workspace_root())
+            except Exception as exc:
+                db.approvals.mark_failed(approval_id, str(exc))
+                raise
             executed = db.approvals.mark_executed(approval_id)
             db.audit_log.record(
                 approved.session_id,

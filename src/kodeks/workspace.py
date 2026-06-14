@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def command_hash(command: str) -> str:
+    """Return the SHA-256 hex digest of a command string.
+
+    Single source of truth shared by the approval-required event producer
+    (responses_tool_loop) and the approve verifier (approval_routes), so the
+    human approval is bound to the exact command that was shown. Input is the
+    raw command string only (no session id / salt), matching the stored,
+    stripped command used at execution time.
+    """
+
+    return hashlib.sha256(command.encode("utf-8")).hexdigest()
 
 BLOCKED_PATH_PARTS = {
     ".git",

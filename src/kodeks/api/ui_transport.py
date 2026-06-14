@@ -48,6 +48,8 @@ def to_ui_transport_payload(event: Mapping[str, Any]) -> dict[str, Any] | None:
             "approvalId": str(event.get("approval_id") or ""),
             "toolCallId": str(event.get("tool_call_id") or ""),
             "message": str(event.get("message") or ""),
+            "command": str(event.get("command") or ""),
+            "commandHash": str(event.get("command_hash") or ""),
             "sessionId": session_id,
         }
     if event_type == "response_completed":

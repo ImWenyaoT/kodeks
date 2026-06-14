@@ -119,7 +119,7 @@ class StoredApproval(BaseModel):
     session_id: str | None = Field(default=None, alias="sessionId")
     tool_call_id: str | None = Field(default=None, alias="toolCallId")
     command: Any
-    status: Literal["pending", "approved", "rejected", "executed"]
+    status: Literal["pending", "approved", "rejected", "executed", "failed"]
     reason: str
     created_at: str = Field(alias="createdAt")
     decided_at: str | None = Field(default=None, alias="decidedAt")

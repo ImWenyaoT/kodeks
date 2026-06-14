@@ -14,6 +14,7 @@ from .tools.types import (
     ToolExecutionResult,
     ToolExecutionStatus,
 )
+from .workspace import command_hash
 
 RuntimeToolStatus = Literal["ok", "approval_required", "error"]
 
@@ -68,8 +69,14 @@ async def handle_output_item(
     runtime_env: Mapping[str, str | None],
     session_id: str,
     tool_state: ToolRoundState,
+    allowed_tool_names: set[str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Execute completed Responses function_call items through local tools."""
+    """Execute completed Responses function_call items through local tools.
+
+    ``allowed_tool_names`` (when not None) is an execution-layer allow-list:
+    a tool call outside the set halts the loop with a tool_not_allowed_in_mode
+    error. Used to enforce plan mode's read-only tool surface.
+    """
 
     if not isinstance(item, dict) or item.get("type") != "function_call":
         return
@@ -119,6 +126,24 @@ async def handle_output_item(
         }
         yield _error_event(output, session_id, "model_requested_unknown_tool")
         return
+    if allowed_tool_names is not None and tool_name not in allowed_tool_names:
+        output = f"Tool not allowed in the current mode: {tool_name}"
+        tool_state.halt_tool_loop = True
+        database.audit_log.record(
+            session_id,
+            "tool_failed",
+            {"toolCallId": tool_call_id, "toolName": tool_name, "reason": output},
+        )
+        yield {
+            "type": "tool_result",
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "tool_status": "error",
+            "tool_output": output,
+            "session_id": session_id,
+        }
+        yield _error_event(output, session_id, "tool_not_allowed_in_mode")
+        return
     result = registry.execute(
         tool_name, tool_arguments, ToolExecutionContext(session_id, tool_call_id)
     )
@@ -166,11 +191,16 @@ async def handle_output_item(
     )
     if mapped_status == "approval_required":
         tool_state.waiting_for_approval = True
+        # 把待审批命令与其 sha256 一并下发：UI 展示命令、批准时回传 hash，
+        # 后端据此核验批准的正是用户看到的命令（防 TOCTOU/命令替换）。
+        command_text = str(parsed_output.get("command") or "")
         yield {
             "type": "approval_required",
             "approval_id": str(parsed_output.get("approvalId") or ""),
             "tool_call_id": tool_call_id,
             "message": str(parsed_output.get("reason") or "Command requires approval"),
+            "command": command_text,
+            "command_hash": command_hash(command_text),
             "session_id": session_id,
         }
 
