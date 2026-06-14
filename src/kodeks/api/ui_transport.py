@@ -13,6 +13,13 @@ def to_ui_transport_payload(event: Mapping[str, Any]) -> dict[str, Any] | None:
     session_id = str(event.get("session_id") or "")
     if event_type == "session_created":
         return {"type": "session", "sessionId": session_id}
+    if event_type == "plan_artifact":
+        return {
+            "type": "plan",
+            "action": str(event.get("action") or ""),
+            "plan": event.get("plan"),
+            "sessionId": session_id,
+        }
     if event_type == "assistant_status":
         return {
             "type": "status",

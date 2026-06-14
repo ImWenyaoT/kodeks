@@ -207,9 +207,11 @@ class MemoryRepository:
             "contentHash": content_hash,
             "createdAt": current_timestamp(),
         }
-        self.database.connection.execute(
+        # ref_id = sha256(content) 前缀，同内容 → 同 ref_id。用 INSERT OR IGNORE
+        # 保证幂等：agent 循环重复产出相同大输出时不再触发 UNIQUE(ref_id) 冲突中断整轮。
+        cursor = self.database.connection.execute(
             """
-            INSERT INTO memory_artifacts
+            INSERT OR IGNORE INTO memory_artifacts
               (id, ref_id, session_id, tool_call_id, tool_name, summary, file_path, byte_length, content_hash, created_at, deleted_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
             """,
@@ -227,6 +229,24 @@ class MemoryRepository:
             ),
         )
         self.database.connection.commit()
+        if cursor.rowcount == 0:
+            # 已存在同 ref_id：复用既有记录（返回真实落库的那行，而非新建 id）。
+            row = self.database.connection.execute(
+                "SELECT * FROM memory_artifacts WHERE ref_id = ?", (ref_id,)
+            ).fetchone()
+            if row is not None:
+                return {
+                    "id": row["id"],
+                    "refId": row["ref_id"],
+                    "sessionId": row["session_id"],
+                    "toolCallId": row["tool_call_id"],
+                    "toolName": row["tool_name"],
+                    "summary": row["summary"],
+                    "filePath": row["file_path"],
+                    "byteLength": row["byte_length"],
+                    "contentHash": row["content_hash"],
+                    "createdAt": row["created_at"],
+                }
         return artifact
 
     def _recall_layer(
