@@ -7,9 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "eval:live": "node scripts/run-live-evals.mjs",
-    "eval:live:check": "node scripts/check-live-eval-result.mjs",
-    "release:check": "npm test && npm run lint && npx tsc --noEmit && npm run build && npm run eval:live:check",
     "test": "vitest run",
     "test:watch": "vitest"
   },
